@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History Dashboard - ประวัติการโหลด AAF</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://bossanova.uk/jspreadsheet/v4/jexcel.js"></script>
+    <link rel="stylesheet" href="https://bossanova.uk/jspreadsheet/v4/jexcel.css" type="text/css" />
+    <script src="https://jsuites.net/v4/jsuites.js"></script>
+    <link rel="stylesheet" href="https://jsuites.net/v4/jsuites.css" type="text/css" />
+
+    <style>
+        body { font-family: 'Prompt', sans-serif; background-color: #f1f5f9; overflow-y: auto; overflow-x: hidden; } 
+        
+        .jexcel { border-collapse: separate !important; border-spacing: 0; }
+        .jexcel > thead > tr > td { 
+            font-family: 'Prompt', sans-serif; font-weight: 500; color: #ffffff !important; 
+            padding: 8px 4px !important; font-size: 11.5px !important; line-height: 1.3 !important; 
+            text-align: center; vertical-align: middle !important; 
+            border-right: 1px solid rgba(255,255,255,0.15) !important; 
+            border-bottom: 3px solid rgba(0,0,0,0.15) !important; 
+            letter-spacing: 0.2px; 
+            position: sticky; top: 0; z-index: 10; 
+            background-color: #334155 !important; 
+        }
+
+        .jexcel > tbody > tr > td {
+            font-family: 'Prompt', sans-serif; font-size: 11.5px !important; color: #475569;
+            padding: 6px 8px !important; vertical-align: middle !important; 
+            border-right: 1px solid #e2e8f0 !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+            white-space: pre-wrap !important; word-wrap: break-word !important; line-height: 1.4 !important; 
+            background-color: #f8fafc; 
+        }
+        
+        .jexcel > tbody > tr:nth-child(even) > td { background-color: #f1f5f9 !important; }
+        .jexcel > tbody > tr:hover > td { background-color: #e2e8f0 !important; }
+
+        .jexcel > thead > tr > td.jexcel_freezed { z-index: 30 !important; }
+        .jexcel > tbody > tr > td.jexcel_freezed { 
+            z-index: 20 !important; border-right: 2px solid #cbd5e1 !important; background-color: #f8fafc !important; 
+        }
+
+        .jexcel_content::-webkit-scrollbar { width: 8px; height: 8px; }
+        .jexcel_content::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .jexcel_content::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .jexcel_content::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* 🟢 ปกติความสูงตารางจำกัดไว้ที่ 450px */
+        .jexcel_content { border-radius: 8px; box-shadow: inset 0 0 5px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; max-height: 450px !important; }
+
+        .accordion-content { transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out; }
+
+        /* 🟢 คลาสพิเศษสำหรับโหมดเต็มจอ (Fullscreen) ดันตารางให้สุดขอบ 100vh */
+        .fullscreen-active {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 99999 !important;
+            border-radius: 0 !important;
+            background-color: #ffffff !important;
+            margin: 0 !important;
+            border: none !important;
+        }
+        .fullscreen-active .jexcel_content {
+            max-height: 100vh !important; /* ปลดล็อกความสูง */
+            height: 100vh !important;     /* ยืดตารางให้เต็มหน้าจอ */
+            border-radius: 0 !important;
+            border: none !important;
+        }
+    </style>
+</head>
+<body class="p-4 flex flex-col min-h-screen">
+
+    <div class="max-w-[1640px] mx-auto w-full flex flex-col space-y-6 pb-10">
+        
+        <!-- Header & Navigation -->
+        <div class="flex flex-col md:flex-row justify-between items-end border-b-2 border-slate-200 pb-4 shrink-0 sticky top-0 bg-[#f1f5f9] z-40 pt-2">
+            <div>
+                <div class="flex items-center space-x-3 mb-1">
+                    <a href="sales_manager.html" class="text-slate-400 hover:text-indigo-600 transition-colors bg-white border border-slate-200 p-1.5 rounded-md shadow-sm">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    </a>
+                    <h1 class="text-2xl font-bold text-slate-800 tracking-tight">📊 History Dashboard</h1>
+                </div>
+                <p class="text-sm text-slate-500 font-medium">คลังประวัติการโหลดสินค้าและสรุปยอดขายรายเดือน</p>
+            </div>
+            <div class="mt-2 md:mt-0 flex items-center space-x-2">
+                <span class="text-xs bg-slate-200 text-slate-600 px-3 py-1 rounded-full font-semibold border border-slate-300">โหมดอ่านอย่างเดียว (Read-only)</span>
+            </div>
+        </div>
+
+        <!-- พื้นที่สำหรับใส่ List สรุปรายเดือนแบบ Accordion -->
+        <div id="history-container" class="flex flex-col space-y-5">
+            <!-- จะถูก Generate อัตโนมัติด้วย JavaScript -->
+        </div>
+
+        <!-- ข้อความเมื่อไม่มีข้อมูล -->
+        <div id="no-data-msg" class="hidden flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-slate-200">
+            <svg class="w-16 h-16 text-slate-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+            <h2 class="text-lg font-bold text-slate-500">คลังประวัติยังว่างเปล่า</h2>
+            <p class="text-sm text-slate-400 mt-1">ยังไม่มีการปิดยอดประจำเดือนจากระบบแผนโหลด AAF</p>
+        </div>
+
+    </div>
+
+    <script>
+        // โครงสร้างคอลัมน์ของตารางประวัติ
+        let archiveColumns = [
+            { type: 'checkbox', title: 'ยืนยัน', width: 35, readOnly: true }, 
+            { type: 'checkbox', title: 'โหลดแล้ว', width: 45, readOnly: true }, 
+            { type: 'text', title: 'จัดคิว', width: 1, readOnly: true }, // ซ่อน
+            { type: 'text', title: 'Sale', width: 60, readOnly: true }, 
+            { type: 'text', title: 'Customer', width: 130, readOnly: true, wordWrap: true }, 
+            { type: 'text', title: 'PI/QT', width: 75, readOnly: true }, 
+            { type: 'text', title: 'INV', width: 75, readOnly: true }, 
+            { type: 'text', title: 'หมายเหตุ', width: 110, readOnly: true, wordWrap: true }, 
+            { type: 'text', title: 'กว้าง(W)', width: 50, readOnly: true }, 
+            { type: 'text', title: 'ยาว(L)', width: 50, readOnly: true }, 
+            { type: 'text', title: 'หนา(T)', width: 45, readOnly: true }, 
+            { type: 'text', title: 'Grade', width: 55, readOnly: true }, 
+            { type: 'text', title: 'Country', width: 95, readOnly: true, wordWrap: true }, 
+            { type: 'text', title: 'Port', width: 95, readOnly: true, wordWrap: true }, 
+            { type: 'text', title: 'Term', width: 75, readOnly: true }, 
+            { type: 'text', title: 'การจ่ายเงิน', width: 70, readOnly: true }, 
+            { type: 'text', title: 'สถานะจ่าย', width: 70, readOnly: true }, 
+            { type: 'text', title: 'วันที่จ่ายเงิน', width: 85, readOnly: true }, 
+            { type: 'text', title: 'สถานะมัดจำ', width: 70, readOnly: true },
+            { type: 'text', title: 'วันที่มัดจำ', width: 85, readOnly: true },
+            { type: 'numeric', title: 'มัดจำ(USD)', width: 85, mask: '#,##0.00', readOnly: true },
+            { type: 'numeric', title: '%มัดจำ', width: 50, mask: '#,##0.0', readOnly: true }, 
+            { type: 'text', title: 'สถานะ ETD', width: 80, readOnly: true },
+            { type: 'text', title: 'ETD Load', width: 85, readOnly: true },     
+            { type: 'text', title: 'Closing', width: 85, readOnly: true },
+            { type: 'text', title: 'CY Date', width: 85, readOnly: true },
+            { type: 'text', title: 'สต๊อกคงเหลือ', width: 1, readOnly: true }, // ซ่อน
+            { type: 'text', title: 'สถานะของ', width: 1, readOnly: true }, // ซ่อน
+            { type: 'text', title: 'ต้องผลิตเพิ่ม', width: 1, readOnly: true }, // ซ่อน
+            { type: 'numeric', title: 'แผ่น/ตู้(S)', width: 60, mask: '#,##0', readOnly: true },
+            { type: 'numeric', title: 'ตู้(T)', width: 60, readOnly: true },
+            { type: 'numeric', title: 'รวมแผ่น', width: 75, mask: '#,##0', readOnly: true },
+            { type: 'numeric', title: 'ราคา(L)', width: 75, mask: '#,##0.000', readOnly: true },
+            { type: 'numeric', title: 'Frt(P)', width: 65, mask: '#,##0.00', readOnly: true },
+            { type: 'numeric', title: 'Ins(Q)', width: 65, mask: '#,##0.00', readOnly: true },
+            { type: 'numeric', title: 'Comm(R)', width: 60, mask: '#,##0.00', readOnly: true },
+            { type: 'numeric', title: 'เรทเงิน', width: 65, mask: '#,##0.00', readOnly: true }, 
+            { type: 'numeric', title: 'Net USD/แผ่น', width: 75, mask: '#,##0.000', readOnly: true },
+            { type: 'numeric', title: 'Net USD/แผ่น 2.5', width: 80, mask: '#,##0.000', readOnly: true },
+            { type: 'numeric', title: 'แปลง 4x8', width: 75, mask: '#,##0.00', readOnly: true },
+            { type: 'numeric', title: 'แปลง 2.5', width: 75, mask: '#,##0.00', readOnly: true },
+            { type: 'numeric', title: 'USD ก่อนหัก', width: 85, mask: '#,##0.00', readOnly: true },
+            { type: 'numeric', title: 'USD สุทธิ', width: 85, mask: '#,##0.00', readOnly: true },
+            { type: 'numeric', title: 'บาท ก่อนหัก', width: 85, mask: '#,##0.00', readOnly: true },
+            { type: 'numeric', title: 'บาท สุทธิ', width: 85, mask: '#,##0.00', readOnly: true },
+            { type: 'text', title: 'Del', width: 1, readOnly: true }, // ซ่อน
+            { type: 'text', title: 'Archive Period', width: 1, readOnly: true } // ซ่อน
+        ];
+
+        const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+        let monthlyDataCache = {};
+        let activeSheets = {};
+
+        window.onload = () => {
+            renderDashboard();
+        };
+
+        function formatNumber(num, decimals = 2) {
+            return parseFloat(num).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+        }
+
+        // ดึงและคำนวณข้อมูลทั้งหมด
+        function renderDashboard() {
+            let archiveRaw = localStorage.getItem('salesDB_Archive');
+            let archive = {};
+            try { archive = archiveRaw ? JSON.parse(archiveRaw) : {}; } catch(e) { archive = {}; }
+
+            let container = document.getElementById('history-container');
+            let noDataMsg = document.getElementById('no-data-msg');
+            container.innerHTML = '';
+
+            // archive = { "2026-06": { data: [rows], archivedAt: "..." }, ... }
+            let periodKeys = Object.keys(archive).filter(k => archive[k] && archive[k].data && archive[k].data.length > 0);
+
+            if(periodKeys.length === 0) {
+                noDataMsg.classList.remove('hidden');
+                noDataMsg.classList.add('flex');
+                return;
+            }
+            noDataMsg.classList.add('hidden');
+            noDataMsg.classList.remove('flex');
+
+            // จัดกลุ่มข้อมูลตามเดือน-ปี — period คือ KEY ของ archive object
+            monthlyDataCache = {};
+            periodKeys.forEach(period => {
+                monthlyDataCache[period] = archive[period].data.filter(r => r && (r[4] || r[5]));
+            });
+
+            // เรียงลำดับจากเดือนใหม่สุด ไปเก่าสุด
+            let periods = Object.keys(monthlyDataCache).sort((a,b) => b.localeCompare(a));
+
+            periods.forEach(period => {
+                let [yearStr, monthStr] = period.split('-');
+                let thaiMonthName = thaiMonths[parseInt(monthStr)-1];
+                let thaiYear = parseInt(yearStr) + 543;
+                let data = monthlyDataCache[period];
+
+                // คำนวณ KPI
+                let totalT = 0, total4x8 = 0, total25 = 0, totalUSD = 0, totalTHB = 0;
+                data.forEach(r => {
+                    totalT += parseFloat(r[30]) || 0;     
+                    total4x8 += parseFloat(r[39]) || 0;   
+                    total25 += parseFloat(r[40]) || 0;    
+                    totalUSD += parseFloat(r[42]) || 0;   
+                    totalTHB += parseFloat(r[44]) || 0;   
+                });
+
+                // HTML การ์ด
+                let cardHTML = `
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-300 hover:shadow-md">
+                        
+                        <!-- Header ที่กดพับได้ -->
+                        <div class="cursor-pointer group" onclick="toggleAccordion('${period}')">
+                            <div class="px-5 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50 group-hover:bg-slate-100 transition-colors">
+                                <div class="flex items-center space-x-3">
+                                    <div class="bg-slate-700 text-white w-10 h-10 rounded-lg flex items-center justify-center font-bold shadow-sm">
+                                        ${monthStr}
+                                    </div>
+                                    <div>
+                                        <h2 class="text-lg font-bold text-slate-800">สรุปยอดเดือน ${thaiMonthName} ${thaiYear}</h2>
+                                        <p class="text-xs text-slate-500 font-medium mt-0.5">คลิกเพื่อดูรายละเอียดตาราง / ซ่อน</p>
+                                    </div>
+                                </div>
+                                <div id="icon-chevron-${period}" class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 transition-transform duration-300 shadow-sm">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </div>
+                            </div>
+
+                            <!-- กล่อง KPI -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-0 divide-y md:divide-y-0 md:divide-x divide-slate-100 bg-white">
+                                <div class="p-5 flex items-center justify-between">
+                                    <div>
+                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">ตู้โหลดทั้งหมด</p>
+                                        <h3 class="text-2xl font-extrabold text-slate-800">${formatNumber(totalT, 0)} <span class="text-xs font-medium text-slate-500 ml-1">ตู้</span></h3>
+                                    </div>
+                                    <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100"><span class="text-xl">🚢</span></div>
+                                </div>
+
+                                <div class="p-5 flex items-center justify-between">
+                                    <div>
+                                        <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">จำนวนแผ่นรวม (แปลงไซส์)</p>
+                                        <div class="flex flex-col space-y-0.5">
+                                            <h3 class="text-[15px] font-extrabold text-indigo-700 leading-none">4x8: <span class="text-lg">${formatNumber(total4x8, 0)}</span> <span class="text-xs font-medium text-indigo-400">แผ่น</span></h3>
+                                            <h3 class="text-[15px] font-extrabold text-indigo-700 leading-none">2.5: <span class="text-lg">${formatNumber(total25, 0)}</span> <span class="text-xs font-medium text-indigo-400">แผ่น</span></h3>
+                                        </div>
+                                    </div>
+                                    <div class="bg-indigo-50 p-2.5 rounded-lg border border-indigo-100"><span class="text-xl">📄</span></div>
+                                </div>
+
+                                <div class="p-5 flex items-center justify-between">
+                                    <div>
+                                        <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">ยอดขายสุทธิ (USD)</p>
+                                        <h3 class="text-2xl font-extrabold text-emerald-600"><span class="text-lg font-medium mr-0.5">$</span>${formatNumber(totalUSD, 2)}</h3>
+                                    </div>
+                                    <div class="bg-emerald-50 p-2.5 rounded-lg border border-emerald-100"><span class="text-xl">💵</span></div>
+                                </div>
+
+                                <div class="p-5 flex items-center justify-between">
+                                    <div>
+                                        <p class="text-[10px] font-bold text-amber-500 uppercase tracking-wider mb-1">ยอดขายสุทธิ (THB)</p>
+                                        <h3 class="text-2xl font-extrabold text-amber-600"><span class="text-lg font-medium mr-0.5">฿</span>${formatNumber(totalTHB, 2)}</h3>
+                                    </div>
+                                    <div class="bg-amber-50 p-2.5 rounded-lg border border-amber-100"><span class="text-xl">💰</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 🟢 รายละเอียดตาราง -->
+                        <div id="detail-${period}" class="hidden border-t-2 border-slate-200 bg-slate-100 p-2">
+                            <div class="flex justify-end mb-2 px-2 pt-1">
+                                <button onclick="window.openFullscreen('sheet-container-${period}')" class="text-[11px] text-slate-500 hover:text-indigo-600 font-medium bg-white px-3 py-1 rounded border border-slate-300 shadow-sm transition flex items-center">
+                                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                                    ขยายเต็มจอ
+                                </button>
+                            </div>
+                            <div id="sheet-container-${period}" class="w-full bg-white rounded-lg overflow-hidden border border-slate-300 shadow-sm relative">
+                                <div id="sheet-${period}"></div>
+                            </div>
+                        </div>
+
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHTML);
+            });
+        }
+
+        function toggleAccordion(period) {
+            let detailDiv = document.getElementById(`detail-${period}`);
+            let chevron = document.getElementById(`icon-chevron-${period}`);
+
+            if (detailDiv.classList.contains('hidden')) {
+                detailDiv.classList.remove('hidden');
+                chevron.style.transform = 'rotate(180deg)';
+                chevron.classList.add('bg-indigo-50', 'text-indigo-600', 'border-indigo-200');
+
+                if (!activeSheets[period]) {
+                    activeSheets[period] = jspreadsheet(document.getElementById(`sheet-${period}`), {
+                        data: monthlyDataCache[period],
+                        columns: archiveColumns,
+                        editable: false,           
+                        selectionCopy: true,       
+                        rowDrag: false,
+                        tableOverflow: true, 
+                        tableWidth: '100%', 
+                        defaultColAlign: 'left', 
+                        freezeColumns: 5,          
+                        wordWrap: true
+                    });
+
+                    activeSheets[period].hideColumn(2);  
+                    activeSheets[period].hideColumn(26); 
+                    activeSheets[period].hideColumn(27); 
+                    activeSheets[period].hideColumn(28); 
+                    activeSheets[period].hideColumn(45); 
+                    activeSheets[period].hideColumn(46); 
+                }
+            } else {
+                detailDiv.classList.add('hidden');
+                chevron.style.transform = 'rotate(0deg)';
+                chevron.classList.remove('bg-indigo-50', 'text-indigo-600', 'border-indigo-200');
+            }
+        }
+
+        // 🟢 ฟังก์ชันขยายตารางเต็มจอ พร้อม CSS ที่ช่วยให้ดันสุดจอ 100vh
+        window.openFullscreen = function(containerId) {
+            let container = document.getElementById(containerId);
+            if (!container) return;
+
+            if (!container.classList.contains('fullscreen-active')) {
+                // ขยายเต็มจอ
+                container.classList.add('fullscreen-active');
+                document.body.style.overflow = 'hidden'; // ล็อก Scrollbar ของหน้าเว็บหลัก
+                
+                // สร้างปุ่มปิดโหมดเต็มจอ
+                let closeBtn = document.createElement('button');
+                closeBtn.id = `close-fs-${containerId}`;
+                closeBtn.className = 'absolute top-3 right-4 z-[100000] bg-rose-600 hover:bg-rose-500 text-white px-4 py-1.5 rounded-lg shadow-lg font-semibold text-sm flex items-center transition';
+                closeBtn.innerHTML = `
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    ปิดหน้าต่าง
+                `;
+                closeBtn.onclick = function() {
+                    container.classList.remove('fullscreen-active');
+                    document.body.style.overflow = '';
+                    closeBtn.remove();
+                };
+                container.appendChild(closeBtn);
+            }
+        }
+    </script>
+</body>
+</html>
