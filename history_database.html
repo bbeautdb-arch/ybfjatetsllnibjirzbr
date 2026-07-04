@@ -95,15 +95,12 @@
   <button class="tab-btn" onclick="switchTab('customer')" id="tab-customer">👥 ลูกค้า</button>
   <button class="tab-btn" onclick="switchTab('salesman')" id="tab-salesman">🏆 เซลส์</button>
   <button class="tab-btn" onclick="switchTab('area')" id="tab-area">🌍 ตลาด</button>
+  <button class="tab-btn" onclick="switchTab('port')" id="tab-port">🚢 พอร์ตเรือ</button>
   <button class="tab-btn" onclick="switchTab('product')" id="tab-product">📦 สินค้า</button>
   <button class="tab-btn" onclick="switchTab('timeline')" id="tab-timeline">📋 Timeline</button>
   <button class="tab-btn" onclick="switchTab('insight')" id="tab-insight">🔬 Insights</button>
   <button class="tab-btn" onclick="switchTab('editor')" id="tab-editor" style="margin-left:auto;background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.3)">🗂️ แก้ไขลูกค้า</button>
   <a href="sales_analytics.html" style="margin-left:6px;font-size:12px;background:rgba(168,85,247,.12);color:#c084fc;border:1px solid rgba(168,85,247,.3);border-radius:6px;padding:6px 12px;text-decoration:none;white-space:nowrap">🏆 Sales View</a>
-  <button onclick="showUpdateModal()" id="btn-update-from-sm"
-    style="margin-left:6px;font-size:12px;background:rgba(34,197,94,.12);color:#4ade80;border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:6px 12px;cursor:pointer;white-space:nowrap">
-    🔄 อัปเดตจาก Sales Manager
-  </button>
 </div>
 
 <!-- Content -->
@@ -137,9 +134,6 @@
 
   <!-- TAB: Yearly -->
   <div id="section-yearly">
-    <!-- Last Update Badge -->
-    <div id="last-update-badge" style="display:none;font-size:10px;color:#4b5563;padding:4px 0;text-align:right"></div>
-
     <!-- Shared Live Orders Badge -->
     <div id="shared-recent-badge" style="display:none;flex-direction:column;gap:4px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px"></div>
 
@@ -445,6 +439,47 @@
       </div>
     </div>
   </div>
+  <!-- TAB: Port -->
+  <div id="section-port" class="hidden">
+    <!-- Summary cards -->
+    <div id="port-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px"></div>
+
+    <!-- Controls -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+      <input type="text" id="port-search" oninput="renderPort()" placeholder="🔍 ค้นหาพอร์ต / ประเทศ..."
+        style="background:#1a1f2e;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:6px 12px;font-size:12px;width:220px">
+      <select id="port-year" onchange="renderPort()" style="background:#1a1f2e;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:6px 10px;font-size:12px">
+        <option value="all">ทุกปี</option>
+      </select>
+      <select id="port-area" onchange="renderPort()" style="background:#1a1f2e;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:6px 10px;font-size:12px">
+        <option value="all">ทุกตลาด</option>
+      </select>
+      <span id="port-count" style="font-size:11px;color:#6b7280;margin-left:auto"></span>
+    </div>
+
+    <!-- Port table -->
+    <div class="card overflow-x-auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:1px solid #1f2937">
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:#4b5563;font-weight:600">#</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:#4b5563;font-weight:600">พอร์ต</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:#4b5563;font-weight:600">ประเทศ</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:#4b5563;font-weight:600">ตลาด</th>
+          <th style="padding:8px 12px;text-align:right;font-size:10px;color:#4b5563;font-weight:600">ลูกค้า</th>
+          <th style="padding:8px 12px;text-align:right;font-size:10px;color:#4b5563;font-weight:600">Orders</th>
+          <th style="padding:8px 12px;text-align:right;font-size:10px;color:#4b5563;font-weight:600">แผ่น 2.5</th>
+          <th style="padding:8px 12px;text-align:right;font-size:10px;color:#4b5563;font-weight:600">Net USD</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:#4b5563;font-weight:600">สัดส่วน</th>
+          <th style="padding:8px 12px"></th>
+        </tr></thead>
+        <tbody id="port-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Port detail panel -->
+    <div id="port-detail" class="card hidden mt-4 p-4"></div>
+  </div>
+
   <!-- TAB: Insights -->
   <div id="section-insight" class="hidden">
 
@@ -550,6 +585,7 @@
 <script>
 const DB_STATS = {}
 const CUST_MONTHLY = {};
+const PORT_DATA = {};
 const YEARS = Object.keys(DB_STATS.year_stats).sort();
 const SALESMEN = Object.keys(DB_STATS.salesman_year);
 const AREAS = ['Africa','Oceania','South Asia','South East Asia','China','Europe','Unknown','East Asia','NORTH & SOUTH AMERICA','Middle East','Other/Port'];
@@ -819,18 +855,7 @@ function renderProduct(yr) {
 
   // Thickness by year
   let tc = '';
-  const thickColorPalette = ['#22c55e','#3b82f6','#f59e0b','#a855f7','#f43f5e','#06b6d4','#eab308','#ec4899','#84cc16','#6366f1','#f97316','#14b8a6','#d946ef','#0ea5e9','#facc15','#ef4444','#10b981','#8b5cf6','#fb923c','#2dd4bf','#e879f9','#65a30d','#0891b2','#dc2626','#7c3aed','#ca8a04'];
-  const thickColorCache = {};
-  let thickColorIdx = 0;
-  function getThickColor(t) {
-    if(!thickColorCache[t]) {
-      thickColorCache[t] = thickColorPalette[thickColorIdx % thickColorPalette.length];
-      thickColorIdx++;
-    }
-    return thickColorCache[t];
-  }
-  // Proxy เพื่อให้โค้ดเดิมที่เรียก thickColors[t] ยังใช้ได้ — สีต่างกันชัดเจนทุกความหนา
-  const thickColors = new Proxy({}, { get: (_, t) => getThickColor(t) });
+  const thickColors = {'1.6':'#22c55e','1.8':'#16a34a','2':'#4ade80','2.1':'#86efac','2.3':'#3b82f6','2.5':'#60a5fa','2.8':'#93c5fd','3':'#f59e0b','3.2':'#fbbf24','4.5':'#a855f7','5.5':'#f43f5e'};
   displayYears.forEach(y => {
     if(!ty[y]) return;
     const total = Object.values(ty[y]).reduce((a,v)=>a+v,0);
@@ -868,13 +893,14 @@ function renderProduct(yr) {
 }
 
 function switchTab(tab) {
-  ['yearly','monthly','customer','salesman','area','product','timeline','insight','editor'].forEach(t => {
+  ['yearly','monthly','customer','salesman','area','port','product','timeline','insight','editor'].forEach(t => {
     document.getElementById('section-'+t).classList.toggle('hidden', t!==tab);
     document.getElementById('tab-'+t).classList.toggle('active', t===tab);
   });
   if(tab==='editor')   edRender();
   if(tab==='timeline') tlRender();
   if(tab==='insight')  renderInsight();
+  if(tab==='port')     renderPort();
   if(tab==='yearly')   renderDashboard();
 }
 
@@ -2220,266 +2246,135 @@ window.addEventListener('storage', (e) => {
 });
 
 
-// ===== UPDATE FROM SALES MANAGER =====
-let _pendingArchiveData = null;
+// ===== PORT TAB =====
+let _portSelected = null;
 
-function showUpdateModal() {
-  document.getElementById('update-modal').style.display = 'flex';
-  scanArchive();
-}
-
-function closeUpdateModal() {
-  document.getElementById('update-modal').style.display = 'none';
-  _pendingArchiveData = null;
-}
-
-function scanArchive() {
-  const resultEl  = document.getElementById('update-scan-result');
-  const previewEl = document.getElementById('update-preview');
-  const btnUpdate = document.getElementById('btn-do-update');
-  btnUpdate.style.display = 'none';
-  _pendingArchiveData = null;
-
-  // อ่าน salesDB_Archive จาก localStorage
-  let archive = {};
-  try { archive = JSON.parse(localStorage.getItem('salesDB_Archive') || '{}'); }
-  catch(e) { archive = {}; }
-
-  const archiveKeys = Object.keys(archive).sort();
-
-  if(!archiveKeys.length) {
-    resultEl.innerHTML = `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:12px;font-size:12px;color:#f87171">
-      ❌ ไม่พบข้อมูล Archive ใน Sales Manager<br>
-      <span style="color:#6b7280;font-size:11px">กด "ปิดยอดเดือน" ใน sales_manager.html ก่อนครับ</span>
-    </div>`;
-    return;
+function renderPort() {
+  // init selectors ครั้งแรก
+  const yrSel = document.getElementById('port-year');
+  if(yrSel && yrSel.options.length <= 1) {
+    Object.keys(DB_STATS.year_stats).sort().reverse().forEach(y => {
+      const o=document.createElement('option'); o.value=y; o.textContent=y; yrSel.appendChild(o);
+    });
+    const areas = [...new Set(Object.values(PORT_DATA).map(p=>p.area).filter(a=>a))].sort();
+    const aSel = document.getElementById('port-area');
+    areas.forEach(a => { const o=document.createElement('option'); o.value=a; o.textContent=a; aSel.appendChild(o); });
   }
 
-  // เช็คว่าเดือนไหนใหม่กว่าที่มีอยู่แล้วใน DB
-  const existingMonths = new Set(Object.keys(DB_STATS.month_stats));
-  const newMonths = archiveKeys.filter(ym => !existingMonths.has(ym));
-  const existingMonths2 = archiveKeys.filter(ym => existingMonths.has(ym));
+  const q    = ((document.getElementById('port-search')||{}).value||'').toLowerCase();
+  const yr   = (document.getElementById('port-year')||{}).value||'all';
+  const area = (document.getElementById('port-area')||{}).value||'all';
 
-  resultEl.innerHTML = `
-    <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:12px;margin-bottom:10px">
-      <p style="font-size:12px;font-weight:600;color:#4ade80;margin-bottom:6px">📦 พบ Archive ทั้งหมด ${archiveKeys.length} เดือน</p>
-      <p style="font-size:11px;color:#22c55e">✅ เดือนใหม่ที่ยังไม่มีใน DB: <b>${newMonths.length} เดือน</b> → ${newMonths.join(', ')||'ไม่มี'}</p>
-      <p style="font-size:11px;color:#6b7280">♻️ เดือนที่มีอยู่แล้ว (จะ overwrite): ${existingMonths2.length} เดือน → ${existingMonths2.slice(-3).join(', ')||'ไม่มี'}</p>
-    </div>`;
-
-  if(!newMonths.length && !existingMonths2.length) return;
-
-  // Preview: parse archive data แล้วแสดงตัวเลข
-  const parsed = parseArchiveData(archive, [...newMonths, ...existingMonths2]);
-  _pendingArchiveData = { archive, months: [...newMonths, ...existingMonths2], parsed };
-
-  let previewHTML = `<p style="font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">📊 Preview ข้อมูลที่จะเพิ่ม:</p>
-    <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="border-bottom:1px solid #374151">
-        <th style="padding:5px 8px;text-align:left;color:#4b5563">เดือน</th>
-        <th style="padding:5px 8px;text-align:right;color:#4b5563">Orders</th>
-        <th style="padding:5px 8px;text-align:right;color:#4b5563">แผ่น 2.5</th>
-        <th style="padding:5px 8px;text-align:right;color:#4b5563">Net USD</th>
-        <th style="padding:5px 8px;text-align:right;color:#4b5563">ตู้</th>
-        <th style="padding:5px 8px;text-align:center;color:#4b5563">สถานะ</th>
-      </tr></thead><tbody>`;
-
-  parsed.monthStats.forEach(ms => {
-    const isNew = newMonths.includes(ms.ym);
-    previewHTML += `<tr style="border-bottom:1px solid #111827">
-      <td style="padding:5px 8px;color:#e2e8f0;font-family:monospace">${ms.ym}</td>
-      <td style="padding:5px 8px;text-align:right;color:#e2e8f0">${ms.orders}</td>
-      <td style="padding:5px 8px;text-align:right;color:#60a5fa">${fK(ms.eq25)}</td>
-      <td style="padding:5px 8px;text-align:right;color:#4ade80">$${fK(ms.net_usd)}</td>
-      <td style="padding:5px 8px;text-align:right;color:#9ca3af">${ms.cont.toFixed(0)}</td>
-      <td style="padding:5px 8px;text-align:center">
-        <span style="font-size:9px;padding:2px 6px;border-radius:3px;${isNew?'background:rgba(34,197,94,.15);color:#22c55e':'background:rgba(245,158,11,.15);color:#f59e0b'}">
-          ${isNew?'✅ ใหม่':'♻️ overwrite'}
-        </span>
-      </td>
-    </tr>`;
-  });
-
-  previewHTML += `</tbody><tfoot><tr style="border-top:1px solid #374151">
-    <td style="padding:6px 8px;font-weight:700;color:#e2e8f0">รวม</td>
-    <td style="padding:6px 8px;text-align:right;font-weight:700;color:#e2e8f0">${parsed.total.orders}</td>
-    <td style="padding:6px 8px;text-align:right;font-weight:700;color:#60a5fa">${fK(parsed.total.eq25)}</td>
-    <td style="padding:6px 8px;text-align:right;font-weight:700;color:#4ade80">$${fK(parsed.total.net_usd)}</td>
-    <td style="padding:6px 8px;text-align:right;font-weight:700;color:#9ca3af">${parsed.total.cont.toFixed(0)}</td>
-    <td></td>
-  </tr></tfoot></table>
-
-  <p style="font-size:11px;color:#4b5563;margin-top:8px">
-    👥 ลูกค้าใหม่ที่จะเพิ่ม: <span style="color:#22c55e">${parsed.newCustomers.length} ราย</span>
-    &nbsp;·&nbsp; ลูกค้าที่จะอัปเดต: <span style="color:#f59e0b">${parsed.updateCustomers.length} ราย</span>
-  </p>`;
-
-  previewEl.innerHTML = previewHTML;
-  btnUpdate.style.display = 'block';
-}
-
-function parseArchiveData(archive, months) {
-  // col mapping จาก sales_manager jSpreadsheet
-  const COL = {
-    sale: 3, customer: 4, country: 12, port: 13,
-    etd: 23, spc: 29, cont: 30,
-    eq25: 40, net_usd: 42, net_thb: 44,
-    w: 8, h: 9, t: 10, grade: 11,
-  };
-
-  const monthStats = [];
-  const custData   = {}; // name → {orders,eq25,net_usd,months:[]}
-
-  months.forEach(ym => {
-    const rows = (archive[ym]?.data || []).filter(r => r && r[COL.customer]);
-    let mOrd=0, mEq=0, mUsd=0, mCont=0;
-
-    rows.forEach(row => {
-      const cust    = String(row[COL.customer]||'').trim();
-      const sale    = String(row[COL.sale]||'').trim();
-      const country = String(row[COL.country]||'').trim();
-      const eq25    = parseFloat(String(row[COL.eq25]||0).replace(/,/g,'')) || 0;
-      const net_usd = parseFloat(String(row[COL.net_usd]||0).replace(/,/g,'')) || 0;
-      const net_thb = parseFloat(String(row[COL.net_thb]||0).replace(/,/g,'')) || 0;
-      const cont    = parseFloat(String(row[COL.cont]||0).replace(/,/g,'')) || 0;
-      const grade   = String(row[COL.grade]||'').trim();
-      const t       = parseFloat(row[COL.t]||0) || 0;
-      if(!cust || eq25<=0) return;
-
-      mOrd++; mEq+=eq25; mUsd+=net_usd; mCont+=cont;
-
-      if(!custData[cust]) custData[cust]={orders:0,eq25:0,net_usd:0,net_thb:0,months:new Set(),sale,country,grade,t};
-      custData[cust].orders++;
-      custData[cust].eq25    += eq25;
-      custData[cust].net_usd += net_usd;
-      custData[cust].net_thb += net_thb;
-      custData[cust].months.add(ym);
-      if(sale) custData[cust].sale = sale;
-      if(country) custData[cust].country = country;
-    });
-
-    if(mOrd>0) monthStats.push({ym,orders:mOrd,eq25:Math.round(mEq),net_usd:Math.round(mUsd),cont:mCont});
-  });
-
-  // แยก new vs update customers
-  const newCustomers    = Object.keys(custData).filter(n => !DB_STATS.top_customers[n]);
-  const updateCustomers = Object.keys(custData).filter(n =>  DB_STATS.top_customers[n]);
-
-  const total = monthStats.reduce((s,m)=>({
-    orders:s.orders+m.orders, eq25:s.eq25+m.eq25, net_usd:s.net_usd+m.net_usd, cont:s.cont+m.cont
-  }), {orders:0,eq25:0,net_usd:0,cont:0});
-
-  return {monthStats, custData, newCustomers, updateCustomers, total};
-}
-
-function doUpdate() {
-  if(!_pendingArchiveData) return;
-  const {archive, months, parsed} = _pendingArchiveData;
-  const {monthStats, custData} = parsed;
-
-  // 0. IDEMPOTENT: ลบ contribution เดิมของเดือนที่กำลัง update ออกก่อน (กันนับซ้ำถ้ากด 2 ครั้ง)
-  const updatingMonths = new Set(months);
-  Object.entries(CUST_MONTHLY).forEach(([cust, cmonths]) => {
-    Object.keys(cmonths).forEach(ym => {
-      if(updatingMonths.has(ym)) {
-        const old = cmonths[ym];
-        // ลบออกจาก top_customers
-        const s = DB_STATS.top_customers[cust];
-        if(s) {
-          s.orders  = Math.max(0, (s.orders||0) - (old.o||0));
-          s.eq25    = Math.max(0, Math.round((s.eq25||0) - (old.e||0)));
-          s.net_usd = Math.max(0, Math.round((s.net_usd||0) - (old.u||0)));
-          s.active_months = Math.max(0, (s.active_months||0) - 1);
-        }
-        // ลบเดือนนั้นออกจาก CUST_MONTHLY
-        delete cmonths[ym];
-      }
-    });
-  });
-
-  // 1. อัปเดต month_stats (overwrite — ถูกต้อง)
-  monthStats.forEach(ms => {
-    DB_STATS.month_stats[ms.ym] = {orders:ms.orders, eq25:ms.eq25, net_usd:ms.net_usd, cont:ms.cont};
-  });
-
-  // 2. อัปเดต year_stats (รวมใหม่จาก month_stats)
-  const newYrStats = {};
-  Object.entries(DB_STATS.month_stats).forEach(([ym,s]) => {
-    const yr = ym.slice(0,4);
-    if(!newYrStats[yr]) newYrStats[yr]={orders:0,eq25:0,net_usd:0,cont:0.0};
-    newYrStats[yr].orders  += s.orders||0;
-    newYrStats[yr].eq25    += s.eq25||0;
-    newYrStats[yr].net_usd += s.net_usd||0;
-    newYrStats[yr].cont    += s.cont||0;
-  });
-  Object.keys(newYrStats).forEach(yr => {
-    newYrStats[yr].eq25    = Math.round(newYrStats[yr].eq25);
-    newYrStats[yr].net_usd = Math.round(newYrStats[yr].net_usd);
-    newYrStats[yr].cont    = Math.round(newYrStats[yr].cont*10)/10;
-    DB_STATS.year_stats[yr] = newYrStats[yr];
-  });
-
-  // 3. อัปเดต top_customers + CUST_MONTHLY
-  Object.entries(custData).forEach(([cust, d]) => {
-    // อัปเดต top_customers
-    if(DB_STATS.top_customers[cust]) {
-      const s = DB_STATS.top_customers[cust];
-      s.orders  += d.orders;
-      s.eq25    = Math.round((s.eq25||0) + d.eq25);
-      s.net_usd = Math.round((s.net_usd||0) + d.net_usd);
-      s.active_months = (s.active_months||0) + d.months.size;
-      // อัปเดต last_order
-      const lastMo = [...d.months].sort().pop();
-      if(!s.last_order || lastMo > s.last_order) s.last_order = lastMo;
-    } else {
-      // ลูกค้าใหม่
-      const sortedMos = [...d.months].sort();
-      DB_STATS.top_customers[cust] = {
-        orders: d.orders, eq25: Math.round(d.eq25),
-        net_usd: Math.round(d.net_usd), net_thb: Math.round(d.net_thb),
-        area: '', country: d.country||'', salesman: d.sale ? [d.sale] : [],
-        first_order: sortedMos[0]||'', last_order: sortedMos[sortedMos.length-1]||'',
-        active_months: d.months.size, top_grade: d.grade||'', top_thickness: d.t||0,
-        no_data: false,
-      };
-    }
-
-    // อัปเดต CUST_MONTHLY
-    if(!CUST_MONTHLY[cust]) CUST_MONTHLY[cust] = {};
-    d.months.forEach(ym => {
-      const rows = (archive[ym]?.data||[]).filter(r=>r&&String(r[4]||'').trim()===cust);
-      let o=0,e=0,u=0;
-      rows.forEach(row=>{
-        o++;
-        e += parseFloat(String(row[40]||0).replace(/,/g,''))||0;
-        u += parseFloat(String(row[42]||0).replace(/,/g,''))||0;
+  // สร้าง list พร้อมยอดตามปีที่เลือก
+  let list = Object.entries(PORT_DATA).map(([port,p]) => {
+    let o,e,u;
+    if(yr==='all'){ o=p.o; e=p.e; u=p.u; }
+    else {
+      o=0;e=0;u=0;
+      Object.entries(p.months).forEach(([ym,m]) => {
+        if(ym.startsWith(yr)){ o+=m.o; e+=m.e; u+=m.u; }
       });
-      if(CUST_MONTHLY[cust][ym]) {
-        CUST_MONTHLY[cust][ym].o += o;
-        CUST_MONTHLY[cust][ym].e  = Math.round(CUST_MONTHLY[cust][ym].e + e);
-        CUST_MONTHLY[cust][ym].u  = Math.round(CUST_MONTHLY[cust][ym].u + u);
-      } else {
-        CUST_MONTHLY[cust][ym] = {o, e:Math.round(e), u:Math.round(u)};
-      }
-    });
+    }
+    return {port, country:p.country, area:p.area, nCust:Object.keys(p.customers).length, o, e, u};
+  }).filter(x => {
+    if(x.e === 0 && yr!=='all') return false;
+    if(area!=='all' && x.area!==area) return false;
+    if(q && !x.port.toLowerCase().includes(q) && !(x.country||'').toLowerCase().includes(q)) return false;
+    return true;
+  }).sort((a,b)=>b.e-a.e);
+
+  document.getElementById('port-count').textContent = list.length+' พอร์ต';
+
+  // Summary cards
+  const totE = list.reduce((s,x)=>s+x.e,0);
+  const totU = list.reduce((s,x)=>s+x.u,0);
+  const top = list[0];
+  document.getElementById('port-summary').innerHTML = `
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">พอร์ตทั้งหมด</p><p style="font-size:22px;font-weight:700;color:#e2e8f0;font-family:monospace">${list.length}</p></div>
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">แผ่น 2.5 รวม</p><p style="font-size:22px;font-weight:700;color:#60a5fa;font-family:monospace">${fK(totE)}</p></div>
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">Net USD รวม</p><p style="font-size:22px;font-weight:700;color:#4ade80;font-family:monospace">$${fK(totU)}</p></div>
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">พอร์ตอันดับ 1</p><p style="font-size:14px;font-weight:700;color:#f59e0b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${top?top.port:''}">${top?top.port:'—'}</p><p style="font-size:10px;color:#6b7280">${top?fK(top.e)+' แผ่น':''}</p></div>`;
+
+  const maxE = Math.max(...list.map(x=>x.e),1);
+  document.getElementById('port-tbody').innerHTML = list.map((x,i) => {
+    const pct = Math.round(x.e/maxE*100);
+    const isSel = _portSelected===x.port;
+    return `<tr style="border-bottom:1px solid #111827;background:${isSel?'rgba(99,102,241,.06)':''}">
+      <td style="padding:7px 12px;color:#374151;font-size:10px">${i+1}</td>
+      <td style="padding:7px 12px;color:#e2e8f0;font-weight:600;cursor:pointer" onclick="portDrill('${x.port.replace(/'/g,"\\'")}')" title="คลิกดูรายเดือน">🚢 ${x.port}</td>
+      <td style="padding:7px 12px;color:#9ca3af">${x.country||'—'}</td>
+      <td style="padding:7px 12px;color:#6b7280;font-size:10px">${x.area||'—'}</td>
+      <td style="padding:7px 12px;text-align:right;color:#9ca3af;font-family:monospace">${x.nCust}</td>
+      <td style="padding:7px 12px;text-align:right;color:#e2e8f0;font-family:monospace">${x.o.toLocaleString()}</td>
+      <td style="padding:7px 12px;text-align:right;color:#60a5fa;font-family:monospace">${fK(x.e)}</td>
+      <td style="padding:7px 12px;text-align:right;color:#4ade80;font-family:monospace">$${fK(x.u)}</td>
+      <td style="padding:7px 12px"><div style="height:6px;background:#1f2937;border-radius:3px;width:120px"><div style="height:100%;width:${pct}%;background:#3b82f6;border-radius:3px"></div></div></td>
+      <td style="padding:7px 12px"><button onclick="portDrill('${x.port.replace(/'/g,"\\'")}')" style="font-size:9px;background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3);border-radius:4px;padding:2px 8px;cursor:pointer">รายเดือน →</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="10" style="text-align:center;padding:30px;color:#4b5563">ไม่มีข้อมูล</td></tr>';
+}
+
+function portDrill(port) {
+  const p = PORT_DATA[port];
+  const panel = document.getElementById('port-detail');
+  if(!p){ panel.classList.add('hidden'); return; }
+  if(_portSelected===port){ _portSelected=null; panel.classList.add('hidden'); renderPort(); return; }
+  _portSelected = port;
+  panel.classList.remove('hidden');
+
+  const thaiMo=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const years = Object.keys(DB_STATS.year_stats).sort();
+
+  // Heatmap ปี×เดือน
+  let maxEq=0;
+  years.forEach(y=>{for(let m=1;m<=12;m++){const d=p.months[y+'-'+String(m).padStart(2,'0')];if(d&&d.e>maxEq)maxEq=d.e;}});
+
+  let heat='<div style="overflow-x:auto"><table style="border-collapse:separate;border-spacing:3px"><thead><tr><td style="min-width:40px"></td>';
+  thaiMo.forEach(m=>{heat+=`<td style="min-width:50px;text-align:center;font-size:9px;color:#4b5563;font-weight:600;padding-bottom:4px">${m}</td>`;});
+  heat+='</tr></thead><tbody>';
+  years.forEach(y=>{
+    let yHas=false;
+    for(let m=1;m<=12;m++){if(p.months[y+'-'+String(m).padStart(2,'0')]?.o){yHas=true;break;}}
+    heat+=`<tr><td style="text-align:right;padding-right:6px;font-size:10px;font-family:monospace;color:${yHas?'#9ca3af':'#374151'};font-weight:${yHas?700:400}">${y}</td>`;
+    for(let m=1;m<=12;m++){
+      const ym=y+'-'+String(m).padStart(2,'0');
+      const d=p.months[ym];
+      const has=!!(d&&d.o>0);
+      let bg='#0f172a',tc='transparent';
+      if(has){const t=0.18+0.82*(d.e/maxEq);bg=`rgb(${Math.round(59*t)},${Math.round(130*t)},${Math.round(246*t)})`;tc=t>0.5?'#0c1a33':'#93c5fd';}
+      const tip=has?`${ym}: ${d.o} orders · ${fK(d.e)} แผ่น · $${fK(d.u)}`:`${ym}: ไม่มี`;
+      heat+=`<td style="padding:0"><div title="${tip}" style="width:50px;height:26px;background:${bg};border-radius:3px;display:flex;align-items:center;justify-content:center"><span style="font-size:8px;font-weight:700;color:${tc};font-family:monospace">${has?fK(d.e):''}</span></div></td>`;
+    }
+    heat+='</tr>';
   });
+  heat+='</tbody></table></div>';
 
-  // 4. บันทึก timestamp ล่าสุดที่ update
-  const updatedMonths = monthStats.map(m=>m.ym).join(', ');
-  localStorage.setItem('aaf_last_db_update', JSON.stringify({
-    ts: new Date().toISOString(),
-    months: monthStats.map(m=>m.ym),
-    orders_added: parsed.total.orders,
-  }));
+  // ลูกค้าในพอร์ต
+  const custs = Object.entries(p.customers).slice(0,15);
+  const maxC = custs.length ? custs[0][1] : 1;
+  const custList = custs.map(([c,v],i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #111827">
+      <span style="font-size:10px;color:#374151;width:18px">${i+1}</span>
+      <span style="font-size:11px;color:#e2e8f0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="${c}" onclick="switchTab('timeline');setTimeout(()=>{const s=document.getElementById('tl-search');if(s){s.value='${c.replace(/'/g,"\\'").slice(0,20)}';tlFilter();}},150)">${c}</span>
+      <div style="width:120px;height:5px;background:#1f2937;border-radius:3px"><div style="height:100%;width:${Math.round(v/maxC*100)}%;background:#3b82f6;border-radius:3px"></div></div>
+      <span style="font-size:10px;color:#60a5fa;font-family:monospace;width:60px;text-align:right">${fK(v)}</span>
+    </div>`).join('');
 
-  // 5. Re-render
-  renderAll();
-  if(typeof renderDashboard === 'function') renderDashboard();
-
-  closeUpdateModal();
-
-  // Toast
-  showToastEd(`✅ อัปเดตสำเร็จ! เพิ่ม ${parsed.total.orders} orders จาก ${months.length} เดือน (${updatedMonths})`);
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+      <div>
+        <p style="font-size:15px;font-weight:700;color:#e2e8f0">🚢 ${port}</p>
+        <p style="font-size:11px;color:#6b7280">${p.country||'—'} · ${p.area||'—'} · ลูกค้า ${Object.keys(p.customers).length} ราย · รวม ${fK(p.e)} แผ่น · $${fK(p.u)}</p>
+      </div>
+      <button onclick="_portSelected=null;document.getElementById('port-detail').classList.add('hidden');renderPort()" style="color:#6b7280;font-size:22px;background:none;border:none;cursor:pointer;line-height:1">×</button>
+    </div>
+    <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;margin-bottom:8px">🗓 การซื้อ ปี × เดือน (สีเข้ม=น้อย สว่าง=มาก)</p>
+    ${heat}
+    <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;margin:16px 0 8px">👥 ลูกค้าในพอร์ตนี้ (คลิกชื่อเพื่อดู Timeline)</p>
+    ${custList}
+    ${Object.keys(p.customers).length>15?`<p style="font-size:10px;color:#374151;margin-top:6px">+${Object.keys(p.customers).length-15} รายอื่น</p>`:''}`;
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  renderPort();
 }
 
 
@@ -2487,40 +2382,7 @@ function doUpdate() {
 initFilters();
 renderAll();
 renderDashboard();
-
-// แสดง last update timestamp
-(function() {
-  try {
-    const lu = JSON.parse(localStorage.getItem('aaf_last_db_update') || 'null');
-    const el = document.getElementById('last-update-badge');
-    if(lu && el) {
-      const d = new Date(lu.ts);
-      const fmt = d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}) + ' ' +
-                  d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
-      el.style.display = 'block';
-      el.innerHTML = `🔄 อัปเดตล่าสุดจาก Sales Manager: <span style="color:#22c55e">${fmt}</span> · เพิ่ม ${lu.orders_added||0} orders จาก ${(lu.months||[]).join(', ')}`;
-    }
-  } catch(e) {}
-})();
 </script>
 <div id="ed-toast" style="position:fixed;bottom:24px;right:24px;background:#1f2937;border:1px solid #374151;border-radius:8px;padding:10px 16px;font-size:12px;opacity:0;transform:translateY(10px);transition:all .2s;z-index:999;color:#e2e8f0;pointer-events:none"></div>
-
-<!-- Update from Sales Manager Modal -->
-<div id="update-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center">
-  <div style="background:#161b22;border:1px solid #21262d;border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:85vh;overflow-y:auto">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <p style="font-size:15px;font-weight:700;color:#e2e8f0">🔄 อัปเดตฐานข้อมูลจาก Sales Manager</p>
-      <button onclick="closeUpdateModal()" style="color:#6b7280;font-size:22px;background:none;border:none;cursor:pointer;line-height:1">×</button>
-    </div>
-    <div id="update-scan-result" style="margin-bottom:16px"></div>
-    <div id="update-preview" style="margin-bottom:16px"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="closeUpdateModal()" style="font-size:11px;background:#374151;color:#9ca3af;border:none;border-radius:6px;padding:8px 16px;cursor:pointer">ยกเลิก</button>
-      <button id="btn-do-update" onclick="doUpdate()" style="font-size:11px;background:rgba(34,197,94,.2);color:#4ade80;border:1px solid rgba(34,197,94,.4);border-radius:6px;padding:8px 16px;cursor:pointer;display:none">
-        ✅ อัปเดตเลย
-      </button>
-    </div>
-  </div>
-</div>
 </body>
 </html>
