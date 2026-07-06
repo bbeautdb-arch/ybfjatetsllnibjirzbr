@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AAF — ย้ายข้อมูลเก่าเข้า Supabase</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    background: #0d1117; color: #e6edf3;
+    max-width: 720px; margin: 40px auto; padding: 0 20px;
+  }
+  h1 { font-size: 20px; }
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  label { display:block; font-size: 13px; color:#8b949e; margin-bottom: 6px; }
+  input[type=text], input[type=url] {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #30363d;
+    background: #0d1117; color: #e6edf3; font-size: 13px; margin-bottom: 14px;
+  }
+  input[type=file] { color: #e6edf3; margin-bottom: 14px; }
+  button {
+    background: linear-gradient(180deg,#3b82f6,#1d4ed8); color:white; border:none;
+    padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight:600; cursor:pointer;
+  }
+  button:disabled { opacity:.5; cursor:default; }
+  #log {
+    background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:14px;
+    font-family: ui-monospace, monospace; font-size:12.5px; height:340px; overflow-y:auto;
+    white-space: pre-wrap; line-height:1.6;
+  }
+  .bar-outer { background:#30363d; border-radius:6px; height:10px; overflow:hidden; margin:10px 0; }
+  .bar-inner { background:#3b82f6; height:100%; width:0%; transition: width .2s; }
+  .ok{color:#4ade80} .err{color:#f87171} .warn{color:#fbbf24}
+</style>
+</head>
+<body>
+
+<h1>🪵 AAF — ย้ายข้อมูลเก่าเข้า Supabase (ครั้งเดียว)</h1>
+
+<div class="card">
+  <label>Supabase Project URL</label>
+  <input type="url" id="sb-url" placeholder="https://xxxx.supabase.co" value="https://zsuigpopobxtwhvsnzoo.supabase.co">
+  <label>Supabase anon/publishable key</label>
+  <input type="text" id="sb-key" placeholder="sb_publishable_..." value="sb_publishable_EHSBlZqRTmmz62_df631Jw_mXPuBdGA">
+  <label>ไฟล์ Excel ต้นฉบับ (Sheet: export + dometic)</label>
+  <input type="file" id="file-input" accept=".xlsx">
+  <div>
+    <button id="btn-start">เริ่มย้ายข้อมูล</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="bar-outer"><div class="bar-inner" id="bar"></div></div>
+  <div id="log">รอไฟล์และกด "เริ่มย้ายข้อมูล"...</div>
+</div>
+
+<script>
+const logEl = document.getElementById('log');
+const barEl = document.getElementById('bar');
+function log(msg, cls) {
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function setProgress(pct) { barEl.style.width = pct + '%'; }
+
+function excelDateToISO(v) {
+  if (v == null) return null;
+  if (v instanceof Date) return v.toISOString().slice(0,10);
+  return null;
+}
+function num(v) {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.\-]/g,''));
+  return isNaN(n) ? null : n;
+}
+function str(v) { return (v == null || v === '') ? null : String(v).trim(); }
+function parseThickness(v) {
+  if (v == null) return null;
+  const n = parseFloat(String(v));
+  return isNaN(n) ? null : n;
+}
+function parseSize(v) {
+  if (!v) return null;
+  const m = String(v).toLowerCase().match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  return { w: parseFloat(m[1]), h: parseFloat(m[2]) };
+}
+
+const STD_W = 1220, STD_H = 2440, STD_THICK = 2.5;
+
+function buildRow(cols, saleType, rowIdx) {
+  const invoice_date   = excelDateToISO(cols[0]);
+  const invoice_no     = str(cols[1]);
+  const post_invoice_date = excelDateToISO(cols[2]);
+  const post_invoice_no   = str(cols[3]);
+  const packing_list   = str(cols[4]);
+  const customer_code  = str(cols[5]);
+  const customer_name  = str(cols[6]);
+  const country_port_raw = str(cols[7]);
+  const delivery_term  = str(cols[8]);
+  const salesman       = str(cols[9]);
+  const item_code      = str(cols[10]);
+  const size           = str(cols[11]);
+  const thickness_raw  = str(cols[12]);
+  const grade          = str(cols[13]);
+  const item_name      = str(cols[14]);
+  const qty_sheets     = num(cols[15]);
+  const price          = num(cols[16]);
+  const unit           = str(cols[17]);
+  const m3             = num(cols[18]);
+  const pack_pallet    = num(cols[19]);
+  const amount         = num(cols[20]);
+  const currency       = str(cols[21]);
+  const ex_rate        = num(cols[22]);
+  const amount_mst     = num(cols[23]);
+  const gross_weight   = num(cols[24]);
+  const net_weight     = num(cols[25]);
+  const commission_agency = num(cols[26]) || 0;
+  const com_per_sheet   = num(cols[27]) || 0;
+  const total_com_staff = num(cols[28]) || 0;
+  const freight_per_sheet = num(cols[29]) || 0;
+  const freight_total   = num(cols[30]) || 0;
+  const insurance_per_sheet = num(cols[31]) || 0;
+  const insurance_total = num(cols[32]) || 0;
+  const qt_date        = excelDateToISO(cols[33]);
+  const qt_number      = str(cols[34]);
+  const sales_order    = str(cols[35]);
+  const blanket_order  = str(cols[36]);
+  const lc_number      = str(cols[37]);
+  const convert_rate   = num(cols[38]);
+  const convert_out    = num(cols[39]);
+  const payment        = str(cols[40]);
+
+  let port_fixed=null, country_fixed=null, area=null, agency_name=null;
+  if (saleType === 'export') {
+    port_fixed    = str(cols[41]);
+    country_fixed = str(cols[42]);
+    area          = str(cols[43]);
+    agency_name   = str(cols[44]) || null; // future template only
+  } else {
+    port_fixed = 'ในประเทศ'; country_fixed = 'THAILAND'; area = 'ในประเทศ';
+    agency_name = str(cols[41]) || null; // future template only
+  }
+
+  if (!invoice_date && !customer_name) return null; // ข้ามแถวว่าง
+
+  const dims = parseSize(size);
+  const thickMm = parseThickness(thickness_raw);
+  let eq25_sheets = null;
+  if (dims && thickMm && qty_sheets) {
+    let normalizedQty;
+    const isNarrowWood = (dims.w === 25 && dims.h === 2052);
+    if (isNarrowWood) {
+      // สูตรพิเศษ: ไม้นิ้ว 25x2052 -> 41 แผ่น = 1 แผ่นมาตรฐาน 1220x2440
+      normalizedQty = qty_sheets / 41;
+    } else {
+      const areaRatio = (dims.w * dims.h) / (STD_W * STD_H);
+      normalizedQty = qty_sheets * areaRatio;
+    }
+    eq25_sheets = normalizedQty * thickMm / STD_THICK;
+  }
+
+  const totalCost = commission_agency + total_com_staff + freight_total + insurance_total;
+  const net_usd = (amount != null) ? (amount - totalCost) : null;
+  const price_per_eq25 = (net_usd != null && eq25_sheets) ? (net_usd / eq25_sheets) : null;
+  const net_thb = (net_usd != null && ex_rate != null) ? (net_usd * ex_rate) : null;
+
+  const row_hash = `${saleType}_${invoice_no}_${item_code}_${rowIdx}`;
+
+  return {
+    sale_type: saleType, invoice_date, invoice_no, post_invoice_date, post_invoice_no, packing_list,
+    customer_code, customer_name, country_port_raw, delivery_term, salesman,
+    item_code, size, thickness_raw, thickness_mm: thickMm, grade, item_name,
+    qty_sheets, price, unit, m3, pack_pallet, amount, currency, ex_rate, amount_mst,
+    gross_weight, net_weight,
+    commission_agency, com_per_sheet, total_com_staff, freight_per_sheet, freight_total,
+    insurance_per_sheet, insurance_total,
+    qt_date, qt_number, sales_order, blanket_order, lc_number, convert_rate, convert_out, payment,
+    port_fixed, country_fixed, area, agency_name,
+    eq25_sheets, net_usd, price_per_eq25, net_thb,
+    row_hash, uploaded_by: 'migration-script'
+  };
+}
+
+document.getElementById('btn-start').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-start');
+  const fileInput = document.getElementById('file-input');
+  const url = document.getElementById('sb-url').value.trim();
+  const key = document.getElementById('sb-key').value.trim();
+  if (!fileInput.files[0]) { log('❌ กรุณาเลือกไฟล์ Excel ก่อน', 'err'); return; }
+  if (!url || !key) { log('❌ กรุณากรอก Supabase URL และ Key', 'err'); return; }
+
+  btn.disabled = true;
+  logEl.innerHTML = '';
+  log('📖 กำลังอ่านไฟล์ Excel...');
+
+  const supabase = window.supabase.createClient(url, key);
+
+  const buf = await fileInput.files[0].arrayBuffer();
+  const wb = XLSX.read(buf, { cellDates: true });
+
+  let allRows = [];
+  for (const sheetName of wb.SheetNames) {
+    const saleType = sheetName.toLowerCase().includes('export') ? 'export' : 'domestic';
+    const ws = wb.Sheets[sheetName];
+    const arr = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    log(`📄 Sheet "${sheetName}" → ประเภท: ${saleType}, แถวทั้งหมด: ${arr.length}`);
+    for (let i = 3; i < arr.length; i++) {
+      const built = buildRow(arr[i], saleType, i);
+      if (built) allRows.push(built);
+    }
+  }
+
+  log(`✅ แปลงข้อมูลสำเร็จ ${allRows.length} แถว กำลังส่งเข้า Supabase...`, 'ok');
+
+  const BATCH = 500;
+  let inserted = 0, failed = 0;
+  for (let i = 0; i < allRows.length; i += BATCH) {
+    const batch = allRows.slice(i, i + BATCH);
+    const { error, count } = await supabase.from('invoices')
+      .upsert(batch, { onConflict: 'row_hash', ignoreDuplicates: true });
+    if (error) {
+      failed += batch.length;
+      log(`❌ ล็อต ${i}-${i+batch.length}: ${error.message}`, 'err');
+    } else {
+      inserted += batch.length;
+      log(`✅ ส่งแล้ว ${Math.min(i+BATCH, allRows.length)}/${allRows.length} แถว`, 'ok');
+    }
+    setProgress(Math.round(Math.min(i+BATCH, allRows.length) / allRows.length * 100));
+  }
+
+  log(`\n🎉 เสร็จสิ้น! สำเร็จ ${inserted} แถว, ล้มเหลว ${failed} แถว`, failed ? 'warn' : 'ok');
+  btn.disabled = false;
+});
+</script>
+</body>
+</html>
