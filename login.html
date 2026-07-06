@@ -8,14 +8,23 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
   body {
+    position: relative;
     background: url('login-bg.png') center center / cover no-repeat;
     min-height: 100vh;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    padding: 0 6vw;
+    justify-content: center;
+  }
+  body::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(13,17,23,0.45) 0%, rgba(13,17,23,0.08) 30%, rgba(13,17,23,0.08) 60%, rgba(13,17,23,0.55) 100%);
+    pointer-events: none;
   }
   .login-card {
+    position: relative;
+    z-index: 1;
     width: 320px;
     background: rgba(255,255,255,0.16);
     backdrop-filter: blur(16px) saturate(140%);
@@ -23,14 +32,15 @@
     border: 1px solid rgba(255,255,255,0.35);
     border-radius: 18px;
     padding: 28px 24px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    margin-top: 18vh;
   }
   .login-card input {
     width: 100%;
     padding: 13px 16px;
     border-radius: 10px;
     border: none;
-    background: rgba(255,255,255,0.38);
+    background: rgba(255,255,255,0.4);
     color: #0d1117;
     font-size: 14px;
     margin-bottom: 14px;
@@ -38,8 +48,8 @@
     transition: background 0.2s;
   }
   .login-card input::placeholder { color: #374151; }
-  .login-card input:focus { background: rgba(255,255,255,0.55); }
-  .login-card button {
+  .login-card input:focus { background: rgba(255,255,255,0.58); }
+  .login-card button#btn-login {
     width: 100%;
     padding: 13px;
     border-radius: 24px;
@@ -53,11 +63,11 @@
     box-shadow: 0 4px 14px rgba(29,78,216,0.5);
     transition: transform 0.15s, box-shadow 0.15s;
   }
-  .login-card button:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(29,78,216,0.6); }
-  .login-card button:active { transform: scale(0.98); }
-  .login-card button:disabled { opacity: 0.6; cursor: default; transform: none; }
+  .login-card button#btn-login:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(29,78,216,0.6); }
+  .login-card button#btn-login:active { transform: scale(0.98); }
+  .login-card button#btn-login:disabled { opacity: 0.6; cursor: default; transform: none; }
   .err-msg {
-    background: rgba(239,68,68,0.25);
+    background: rgba(239,68,68,0.28);
     border: 1px solid rgba(239,68,68,0.5);
     color: #fecaca;
     font-size: 12.5px;
@@ -72,11 +82,11 @@
     position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
     background: none; border: none; width: auto; padding: 0;
     color: #374151; font-size: 12px; cursor: pointer; box-shadow: none;
+    font-weight: 600;
   }
   .pw-toggle:hover { transform: translateY(-50%); box-shadow: none; }
   @media (max-width: 640px) {
-    body { justify-content: center; padding: 0 20px; }
-    .login-card { width: 100%; max-width: 320px; }
+    .login-card { width: 88%; max-width: 320px; margin-top: 22vh; }
   }
 </style>
 </head>
