@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+<!DOCTYP
+  <button onclick="xlOpenModal()" style="margin-left:6px;font-size:12px;background:rgba(59,130,246,.12);color:#60a5fa;border:1px solid rgba(59,130,246,.3);border-radius:6px;padding:6px 12px;cursor:pointer;white-space:nowrap">📥 อัปเดตจาก Excel</button>E html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
@@ -38,6 +39,7 @@
   ::-webkit-scrollbar-track { background: #111; }
   ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body class="min-h-screen">
 
@@ -96,6 +98,8 @@
   <button class="tab-btn" onclick="switchTab('salesman')" id="tab-salesman">🏆 เซลส์</button>
   <button class="tab-btn" onclick="switchTab('area')" id="tab-area">🌍 ตลาด</button>
   <button class="tab-btn" onclick="switchTab('port')" id="tab-port">🚢 พอร์ตเรือ</button>
+  <button class="tab-btn" onclick="switchTab('comm')" id="tab-comm">💰 ค่าคอม</button>
+  <button class="tab-btn" onclick="switchTab('exec')" id="tab-exec">📋 สรุปผู้บริหาร</button>
   <button class="tab-btn" onclick="switchTab('product')" id="tab-product">📦 สินค้า</button>
   <button class="tab-btn" onclick="switchTab('timeline')" id="tab-timeline">📋 Timeline</button>
   <button class="tab-btn" onclick="switchTab('insight')" id="tab-insight">🔬 Insights</button>
@@ -478,6 +482,44 @@
 
     <!-- Port detail panel -->
     <div id="port-detail" class="card hidden mt-4 p-4"></div>
+  </div>
+
+  <!-- TAB: Commission -->
+  <div id="section-comm" class="hidden">
+    <div id="comm-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+      <select id="comm-year" onchange="renderComm()" style="background:#1a1f2e;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:6px 10px;font-size:12px"></select>
+      <span style="font-size:10px;color:#6b7280">💡 ค่าคอมเอเจนซี่ (ช่อง AA + ชื่อใน AS) จะแสดงเมื่อฝ่ายขายกรอกข้อมูลใน Excel แล้วอัปโหลดเข้ามา</span>
+    </div>
+    <div class="card p-4 mb-4">
+      <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;margin-bottom:10px">📅 ค่าใช้จ่ายรายเดือน (USD)</p>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:1px solid #1f2937">
+          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#4b5563">เดือน</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#4b5563">ยอดขาย Gross</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#f59e0b">คอมเอเจนซี่ (AA)</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#a78bfa">คอมพนักงาน (AC)</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#60a5fa">ค่าเฟรท (AE)</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#6b7280">ประกัน (AG)</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#4ade80">NET สุทธิ</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#4b5563">คอม/แผ่น2.5</th>
+        </tr></thead><tbody id="comm-tbody"></tbody></table></div>
+    </div>
+    <div class="card p-4">
+      <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;margin-bottom:10px">🤝 เอเจนซี่ (ขายผ่านใคร)</p>
+      <div id="comm-agency"></div>
+    </div>
+  </div>
+
+  <!-- TAB: Executive Summary -->
+  <div id="section-exec" class="hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <p style="font-size:11px;color:#6b7280">📋 ภาพรวมทุกมิติในตารางเดียว — เทียบทุกปีข้างกัน</p>
+      <button onclick="execExportCSV()" style="font-size:11px;background:rgba(34,197,94,.12);color:#4ade80;border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:6px 14px;cursor:pointer">⬇️ Export CSV</button>
+    </div>
+    <div class="card overflow-x-auto">
+      <table id="exec-table" style="width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap"></table>
+    </div>
   </div>
 
   <!-- TAB: Insights -->
@@ -893,7 +935,7 @@ function renderProduct(yr) {
 }
 
 function switchTab(tab) {
-  ['yearly','monthly','customer','salesman','area','port','product','timeline','insight','editor'].forEach(t => {
+  ['yearly','monthly','customer','salesman','area','port','comm','exec','product','timeline','insight','editor'].forEach(t => {
     document.getElementById('section-'+t).classList.toggle('hidden', t!==tab);
     document.getElementById('tab-'+t).classList.toggle('active', t===tab);
   });
@@ -901,6 +943,8 @@ function switchTab(tab) {
   if(tab==='timeline') tlRender();
   if(tab==='insight')  renderInsight();
   if(tab==='port')     renderPort();
+  if(tab==='comm')     renderComm();
+  if(tab==='exec')     renderExec();
   if(tab==='yearly')   renderDashboard();
 }
 
@@ -2378,11 +2422,521 @@ function portDrill(port) {
 }
 
 
+// ===== COMMISSION TAB =====
+function renderComm() {
+  const sel = document.getElementById('comm-year');
+  if(sel && !sel.options.length) {
+    const yrs = [...new Set(Object.keys(DB_STATS.com_month||{}).map(m=>m.slice(0,4)))].sort().reverse();
+    yrs.forEach(y=>{const o=document.createElement('option');o.value=y;o.textContent='ปี '+y;sel.appendChild(o);});
+  }
+  const yr = sel?.value || '2026';
+  const cmn = DB_STATS.com_month||{};
+  const months = Object.keys(cmn).filter(m=>m.startsWith(yr)).sort();
+
+  let tG=0,tA=0,tS=0,tF=0,tI=0,tN=0,tE=0;
+  const rows = months.map(ym=>{
+    const d=cmn[ym];
+    tG+=d.gross; tA+=d.agency_com; tS+=d.staff_com; tF+=d.freight; tI+=d.insurance; tN+=d.net; tE+=d.eq25||0;
+    const eq = (DB_STATS.month_stats[ym]||{}).eq25||0;
+    const comPer = eq>0 ? (d.agency_com+d.staff_com)/eq : 0;
+    return `<tr style="border-bottom:1px solid #111827">
+      <td style="padding:6px 10px;color:#e2e8f0;font-family:monospace">${ym}</td>
+      <td style="padding:6px 10px;text-align:right;color:#9ca3af;font-family:monospace">$${fK(d.gross)}</td>
+      <td style="padding:6px 10px;text-align:right;color:#f59e0b;font-family:monospace">${d.agency_com>0?'$'+fK(d.agency_com):'—'}</td>
+      <td style="padding:6px 10px;text-align:right;color:#a78bfa;font-family:monospace">$${d.staff_com.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td style="padding:6px 10px;text-align:right;color:#60a5fa;font-family:monospace">$${fK(d.freight)}</td>
+      <td style="padding:6px 10px;text-align:right;color:#6b7280;font-family:monospace">$${d.insurance.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td style="padding:6px 10px;text-align:right;color:#4ade80;font-family:monospace;font-weight:700">$${fK(d.net)}</td>
+      <td style="padding:6px 10px;text-align:right;color:#4b5563;font-family:monospace">$${comPer.toFixed(3)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('comm-tbody').innerHTML = rows +
+    `<tr style="border-top:2px solid #374151;font-weight:700">
+      <td style="padding:7px 10px;color:#e2e8f0">รวม ${yr}</td>
+      <td style="padding:7px 10px;text-align:right;color:#e2e8f0;font-family:monospace">$${fK(tG)}</td>
+      <td style="padding:7px 10px;text-align:right;color:#f59e0b;font-family:monospace">${tA>0?'$'+fK(tA):'—'}</td>
+      <td style="padding:7px 10px;text-align:right;color:#a78bfa;font-family:monospace">$${fK(tS)}</td>
+      <td style="padding:7px 10px;text-align:right;color:#60a5fa;font-family:monospace">$${fK(tF)}</td>
+      <td style="padding:7px 10px;text-align:right;color:#6b7280;font-family:monospace">$${fK(tI)}</td>
+      <td style="padding:7px 10px;text-align:right;color:#4ade80;font-family:monospace">$${fK(tN)}</td><td></td></tr>`;
+
+  const yrEq = (DB_STATS.year_stats[yr]||{}).eq25||1;
+  document.getElementById('comm-summary').innerHTML = `
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">Gross ปี ${yr}</p><p style="font-size:20px;font-weight:700;color:#e2e8f0;font-family:monospace">$${fK(tG)}</p></div>
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">ค่าใช้จ่ายรวม</p><p style="font-size:20px;font-weight:700;color:#f87171;font-family:monospace">$${fK(tA+tS+tF+tI)}</p><p style="font-size:9px;color:#6b7280">${((tA+tS+tF+tI)/Math.max(tG,1)*100).toFixed(1)}% ของ Gross</p></div>
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">NET สุทธิ</p><p style="font-size:20px;font-weight:700;color:#4ade80;font-family:monospace">$${fK(tN)}</p></div>
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">คอมรวม/แผ่น 2.5</p><p style="font-size:20px;font-weight:700;color:#f59e0b;font-family:monospace">$${((tA+tS)/yrEq).toFixed(3)}</p></div>`;
+
+  // Agency
+  const ag = DB_STATS.agency||{};
+  const agEl = document.getElementById('comm-agency');
+  const names = Object.keys(ag);
+  if(!names.length) {
+    agEl.innerHTML = `<p style="font-size:11px;color:#4b5563;text-align:center;padding:20px">ยังไม่มีข้อมูลเอเจนซี่ — เมื่อฝ่ายขายกรอกค่าคอม (ช่อง AA) และชื่อเอเจนซี่ (ช่อง AS) ในไฟล์ Excel แล้วอัปโหลดผ่านปุ่ม "📥 อัปเดตจาก Excel" ข้อมูลจะแสดงที่นี่อัตโนมัติ</p>`;
+  } else {
+    agEl.innerHTML = names.sort((a,b)=>ag[b].com_usd-ag[a].com_usd).map((n,i)=>{
+      const a=ag[n];
+      const per = a.eq25>0 ? a.com_usd/a.eq25 : 0;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #111827">
+        <span style="font-size:10px;color:#374151;width:20px">${i+1}</span>
+        <div style="flex:1"><p style="font-size:12px;color:#e2e8f0;font-weight:600">${n}</p>
+          <p style="font-size:9px;color:#6b7280">ลูกค้า: ${Object.keys(a.customers||{}).slice(0,4).join(', ')}</p></div>
+        <div style="text-align:right"><p style="font-size:13px;color:#f59e0b;font-family:monospace;font-weight:700">$${fK(a.com_usd)}</p>
+          <p style="font-size:9px;color:#6b7280">${fK(a.eq25)} แผ่น · $${per.toFixed(3)}/แผ่น</p></div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ===== EXCEL UPLOAD =====
+let _xlParsed = null;
+
+function xlOpenModal(){ document.getElementById('xl-modal').style.display='flex'; }
+function xlCloseModal(){ document.getElementById('xl-modal').style.display='none'; _xlParsed=null;
+  document.getElementById('xl-preview').innerHTML=''; document.getElementById('xl-status').innerHTML='';
+  document.getElementById('xl-btn-apply').style.display='none'; document.getElementById('xl-btn-download').style.display='none'; }
+
+function xlNum(v){ if(v==null||v==='')return 0; const f=parseFloat(String(v).replace(/,/g,'')); return isNaN(f)?0:f; }
+function xlThick(v){ const m=String(v||'').match(/([\d.]+)/); return m?parseFloat(m[1]):null; }
+function xlSize(v){ const m=String(v||'').match(/^\s*([\d.]+)\s*[xX*]\s*([\d.]+)/); return m?[parseFloat(m[1]),parseFloat(m[2])]:[null,null]; }
+function xlDate(v){
+  if(v==null) return null;
+  if(typeof v==='number'){ const d=XLSX.SSF.parse_date_code(v); return d?new Date(d.y,d.m-1,d.d):null; }
+  const d=new Date(v); return isNaN(d)?null:d;
+}
+
+function xlHandleFile(file){
+  if(!file) return;
+  const st=document.getElementById('xl-status');
+  st.innerHTML='<p style="font-size:11px;color:#60a5fa">⏳ กำลังอ่านไฟล์...</p>';
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try {
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:false});
+      const recs=[];
+      wb.SheetNames.forEach(sn=>{
+        const isDom=/dome/i.test(sn);
+        if(!/export|dome/i.test(sn)) return;
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null});
+        // หา header row (แถวที่มี 'Invoice Date')
+        let hIdx=-1;
+        for(let i=0;i<Math.min(6,rows.length);i++){
+          if((rows[i]||[]).some(c=>String(c||'').trim()==='Invoice Date')){hIdx=i;break;}
+        }
+        if(hIdx<0) return;
+        const H=rows[hIdx].map(c=>String(c||'').trim());
+        const col=n=>H.indexOf(n);
+        // Customer.1 = ชื่อคอลัมน์ Customer ตัวที่สอง
+        let custIdx=-1,seen=0;
+        H.forEach((h,i)=>{if(h==='Customer'){seen++;if(seen===2)custIdx=i;}});
+        if(custIdx<0) custIdx=col('Customer');
+        const iDate=col('Invoice Date'),iPost=col('Post Invoice Date'),iQT=col('QT Date');
+        const iQty=col('QTY(Pcs.)'),iT=col('Thickness'),iSz=col('Size'),iGr=col('Grade');
+        const iAmt=col('Amount'),iCur=col('Currency'),iEx=col('Ex.Rate'),iMST=col('Amount MST');
+        const iComA=col('Commission'),iComT=col('TOTAL COM ($)'),iFr=col('Freight Total'),iIn=col('Insurance Total');
+        const iSale=col('Salesman'),iPort=col('Port (แก้แล้ว)'),iCty=col('Country (แก้แล้ว)'),iArea=col('Area');
+        const iAg=H.findIndex(h=>/^(Agency|Agent|AS)$/i.test(h));
+        const iInv=col('Invoice'),iItem=col('Item Code'),iPostNo=col('Post Invoice No.');
+        for(let i=hIdx+1;i<rows.length;i++){
+          const r=rows[i]; if(!r) continue;
+          const cust=String(r[custIdx]||'').trim();
+          if(!cust) continue;
+          let dt=null;
+          for(const ii of [iDate,iPost,iQT]){ if(ii>=0&&r[ii]!=null){dt=xlDate(r[ii]); if(dt)break;} }
+          if(!dt||dt.getFullYear()<2014||dt.getFullYear()>2035) continue;
+          const qty=xlNum(r[iQty]); if(!qty) continue;
+          // กันซ้ำระดับแถว: กุญแจเฉพาะจาก Invoice + Post Invoice No + Item Code + qty
+          // (ตรงกับ invoice/item เดิม = แถวเดียวกันแน่นอน ไม่นับซ้ำ)
+          const invKey = [
+            iInv>=0?String(r[iInv]||''):'',
+            iPostNo>=0?String(r[iPostNo]||''):'',
+            iItem>=0?String(r[iItem]||''):'',
+            qty
+          ].join('|');
+          recs.push({
+            ym:dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'),
+            yr:String(dt.getFullYear()), cust, isDom, invKey,
+            qty, t:xlThick(r[iT]), wh:xlSize(r[iSz]),
+            grade:String(r[iGr]||'').trim(),
+            gross:xlNum(r[iAmt]), curr:String(r[iCur]||'').trim().toUpperCase(),
+            exrate:xlNum(r[iEx]), mst:xlNum(r[iMST]),
+            comA:xlNum(r[iComA]), comT:xlNum(r[iComT]), fr:xlNum(r[iFr]), ins:xlNum(r[iIn]),
+            sale:String(r[iSale]||'').trim(),
+            port:iPort>=0?String(r[iPort]||'').trim():'', country:iCty>=0?String(r[iCty]||'').trim():'',
+            area:iArea>=0?String(r[iArea]||'').trim():'', agency:iAg>=0?String(r[iAg]||'').trim():''
+          });
+        }
+      });
+      // ===== ชั้นป้องกันที่ 1: กันแถวซ้ำแท้ๆ ภายในไฟล์เดียวกัน (invKey ซ้ำ) =====
+      const seenInFile = new Set();
+      let dupInFile = 0;
+      const dedupedRecs = recs.filter(r=>{
+        if(!r.invKey || r.invKey==='|||'+r.qty){ return true; } // ไม่มี invoice no → ปล่อยผ่าน (ไม่พอจะเช็ค)
+        if(seenInFile.has(r.invKey)){ dupInFile++; return false; }
+        seenInFile.add(r.invKey); return true;
+      });
+      recs.length = 0; recs.push(...dedupedRecs);
+      if(!recs.length){ st.innerHTML='<p style="font-size:11px;color:#f87171">❌ ไม่พบข้อมูล — ตรวจว่าไฟล์มี sheet ชื่อ export/dometic และ header "Invoice Date"</p>'; return; }
+      _xlParsed=recs;
+      // Preview
+      const byMonth={};
+      recs.forEach(r=>{
+        if(!byMonth[r.ym]) byMonth[r.ym]={n:0,qty:0};
+        byMonth[r.ym].n++; byMonth[r.ym].qty+=r.qty;
+      });
+      const months=Object.keys(byMonth).sort();
+      const dupWarn = dupInFile>0 ? `<br><span style="color:#f59e0b">⚠️ พบแถวซ้ำภายในไฟล์ ${dupInFile} รายการ (Invoice+Item+จำนวนเดียวกัน) — ตัดออกให้อัตโนมัติแล้ว ไม่นับซ้ำ</span>` : '';
+      st.innerHTML=`<p style="font-size:11px;color:#4ade80">✅ อ่านไฟล์สำเร็จ — ${recs.length.toLocaleString()} รายการ ${months.length} เดือน${dupWarn}</p>`;
+      document.getElementById('xl-preview').innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:1px solid #374151">
+          <th style="padding:5px 8px;text-align:left;color:#4b5563;font-size:10px">เดือน</th>
+          <th style="padding:5px 8px;text-align:right;color:#4b5563;font-size:10px">รายการ</th>
+          <th style="padding:5px 8px;text-align:right;color:#4b5563;font-size:10px">แผ่นจริง</th>
+          <th style="padding:5px 8px;text-align:center;color:#4b5563;font-size:10px">สถานะ</th></tr></thead><tbody>` +
+        months.map(m=>{
+          const has=!!DB_STATS.month_stats[m];
+          return `<tr style="border-bottom:1px solid #111827">
+            <td style="padding:5px 8px;color:#e2e8f0;font-family:monospace">${m}</td>
+            <td style="padding:5px 8px;text-align:right;color:#9ca3af;font-family:monospace">${byMonth[m].n}</td>
+            <td style="padding:5px 8px;text-align:right;color:#60a5fa;font-family:monospace">${fK(byMonth[m].qty)}</td>
+            <td style="padding:5px 8px;text-align:center"><span style="font-size:9px;padding:2px 7px;border-radius:3px;${has?'background:rgba(245,158,11,.15);color:#f59e0b':'background:rgba(34,197,94,.15);color:#22c55e'}">${has?'♻️ แทนที่ของเดิม':'✅ เดือนใหม่'}</span></td></tr>`;
+        }).join('')+'</tbody></table>';
+      document.getElementById('xl-btn-apply').style.display='inline-block';
+    } catch(err){ st.innerHTML='<p style="font-size:11px;color:#f87171">❌ อ่านไฟล์ไม่สำเร็จ: '+err.message+'</p>'; }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function xlApply(){
+  if(!_xlParsed) return;
+  let recs=_xlParsed;
+  const updMonths=new Set(recs.map(r=>r.ym));
+
+  // ===== ชั้นป้องกันที่ 2: Invoice Registry ถาวร (กันซ้ำข้ามเดือน/ข้ามรอบอัปโหลด) =====
+  // เก็บ invKey ทุกอันที่เคยนำเข้าแล้ว ผูกไว้กับ DB_STATS โดยตรง (ติดไปกับไฟล์เว็บเวลาดาวน์โหลด)
+  if(!DB_STATS._invoice_registry) DB_STATS._invoice_registry = {};
+  const REG = DB_STATS._invoice_registry;
+
+  // ก่อนอื่น: ถอน registry ของ invKey ที่อยู่ในเดือนที่กำลังจะแทนที่ (เพื่อให้ correction เดือนเดิมทำได้ปกติ)
+  Object.keys(REG).forEach(k=>{ if(updMonths.has(REG[k])) delete REG[k]; });
+
+  // กรอง: ถ้า invKey นี้เคยถูกนำเข้าไปแล้วในเดือนอื่น (ที่ไม่ได้ถูกแทนที่รอบนี้) → เป็น invoice ซ้ำจริง ห้ามเบิ้ล
+  let blockedCrossMonth = 0;
+  recs = recs.filter(r=>{
+    if(!r.invKey || r.invKey.startsWith('|||')) return true; // ไม่มีเลขที่ invoice ให้เช็ค → ปล่อยผ่าน
+    if(REG[r.invKey] && REG[r.invKey]!==r.ym){ blockedCrossMonth++; return false; }
+    return true;
+  });
+  if(blockedCrossMonth>0){
+    document.getElementById('xl-status').innerHTML += `<br><span style="font-size:11px;color:#f87171">🛑 พบ ${blockedCrossMonth} invoice ที่เคยนำเข้าไปแล้วในเดือนอื่นก่อนหน้า — บล็อกไม่ให้เพิ่มซ้ำ</span>`;
+  }
+  if(!recs.length){
+    document.getElementById('xl-status').innerHTML += `<br><span style="font-size:11px;color:#f59e0b">⚠️ ไม่มีข้อมูลใหม่ให้เพิ่ม (ทั้งหมดซ้ำกับที่มีอยู่แล้ว)</span>`;
+    return;
+  }
+
+  // 1) ลบ contribution เดือนที่จะแทนที่ (idempotent — รองรับกรณีแก้ไขข้อมูลเดือนเดิม)
+  updMonths.forEach(ym=>{
+    delete DB_STATS.month_stats[ym];
+    if(DB_STATS.com_month) delete DB_STATS.com_month[ym];
+    Object.entries(CUST_MONTHLY).forEach(([c,ms])=>{
+      if(ms[ym]){
+        const old=ms[ym], s=DB_STATS.top_customers[c];
+        if(s){ s.orders=Math.max(0,(s.orders||0)-(old.o||0));
+          s.eq25=Math.max(0,Math.round((s.eq25||0)-(old.e||0)));
+          s.net_usd=Math.max(0,Math.round((s.net_usd||0)-(old.u||0)));
+          s.active_months=Math.max(0,(s.active_months||0)-1); }
+        delete ms[ym];
+      }
+    });
+    Object.values(PORT_DATA).forEach(p=>{
+      if(p.months[ym]){ const m=p.months[ym];
+        p.o-=m.o; p.e=Math.round(p.e-m.e); p.u=Math.round(p.u-m.u);
+        delete p.months[ym]; }
+    });
+  });
+
+  // 2) เพิ่มข้อมูลใหม่
+  const FXA=DB_STATS.fx_rates_annual||{};
+  recs.forEach(r=>{
+    // ลงทะเบียน invoice key ว่านำเข้าแล้ว (กันซ้ำในอนาคต)
+    if(r.invKey && !r.invKey.startsWith('|||')) REG[r.invKey]=r.ym;
+    const fx=FXA[r.yr]||33.0;
+    let sheets=r.qty, eq25=r.qty;
+    if(r.t&&r.wh[0]&&r.wh[1]&&r.wh[0]>50){ sheets=r.qty*(r.wh[0]/1220)*(r.wh[1]/2440); eq25=sheets*(r.t/2.5); }
+    // สกุลเงินจากช่อง V + Ex.Rate ช่อง W (สกุล→บาท) — ทุก sheet เหมือนกัน
+    const netRaw=r.gross-r.comA-r.comT-r.fr-r.ins;         // สกุลตามช่อง V
+    let exr=r.exrate>0?r.exrate:(r.curr==='THB'?1.0:fx);
+    const net_thb=netRaw*exr;
+    const net_usd=r.curr==='USD'?netRaw:net_thb/fx;
+    const div=r.curr==='USD'?1.0:fx/exr;                    // expense→USD: หารด้วย div
+    const isPos=r.qty>0;
+    const port=r.isDom?'ในประเทศ':(String(r.port).toUpperCase().replace(/\s+/g,' ').replace(' PORT','').trim()||'(ไม่ระบุพอร์ต)');
+    let area;
+    if(r.isDom){ area='ในประเทศ'; }
+    else { area=r.area||((DB_STATS.top_customers[r.cust]||{}).area||''); if(area==='ในประเทศ') area=''; }
+    const country=r.isDom?'THAILAND':r.country;
+    const sale=((DB_STATS.top_customers[r.cust]||{}).salesman||[])[0]||(r.isDom?'ในประเทศ':'K.Angkana');
+
+    // month_stats
+    if(!DB_STATS.month_stats[r.ym]) DB_STATS.month_stats[r.ym]={orders:0,eq25:0,net_usd:0,cont:0};
+    const ms=DB_STATS.month_stats[r.ym];
+    ms.orders+=isPos?1:0; ms.eq25=Math.round(ms.eq25+eq25); ms.net_usd=Math.round(ms.net_usd+net_usd);
+    // com_month
+    if(!DB_STATS.com_month) DB_STATS.com_month={};
+    if(!DB_STATS.com_month[r.ym]) DB_STATS.com_month[r.ym]={agency_com:0,staff_com:0,freight:0,insurance:0,gross:0,net:0,eq25:0};
+    const cmm=DB_STATS.com_month[r.ym];
+    cmm.agency_com+=r.comA/div; cmm.staff_com+=r.comT/div; cmm.freight+=r.fr/div; cmm.insurance+=r.ins/div;
+    cmm.gross+=r.gross/div; cmm.net+=netRaw/div;
+    // CUST_MONTHLY + top_customers
+    if(!CUST_MONTHLY[r.cust]) CUST_MONTHLY[r.cust]={};
+    if(!CUST_MONTHLY[r.cust][r.ym]) CUST_MONTHLY[r.cust][r.ym]={o:0,e:0,u:0};
+    const cmo=CUST_MONTHLY[r.cust][r.ym];
+    cmo.o+=isPos?1:0; cmo.e=Math.round(cmo.e+eq25); cmo.u=Math.round(cmo.u+net_usd);
+    if(!DB_STATS.top_customers[r.cust]){
+      DB_STATS.top_customers[r.cust]={orders:0,eq25:0,net_usd:0,net_thb:0,area,salesman:[sale],country,port,
+        first_order:r.ym,last_order:r.ym,active_months:0,top_grade:r.grade||'',top_thickness:r.t||0};
+    }
+    const tc=DB_STATS.top_customers[r.cust];
+    tc.orders+=isPos?1:0; tc.eq25=Math.round(tc.eq25+eq25); tc.net_usd=Math.round(tc.net_usd+net_usd);
+    if(r.ym<tc.first_order) tc.first_order=r.ym;
+    if(r.ym>tc.last_order) tc.last_order=r.ym;
+    // PORT
+    if(!PORT_DATA[port]) PORT_DATA[port]={country,area,o:0,e:0,u:0,months:{},customers:{}};
+    const pp=PORT_DATA[port];
+    pp.o+=isPos?1:0; pp.e=Math.round(pp.e+eq25); pp.u=Math.round(pp.u+net_usd);
+    if(!pp.months[r.ym]) pp.months[r.ym]={o:0,e:0,u:0};
+    pp.months[r.ym].o+=isPos?1:0; pp.months[r.ym].e=Math.round(pp.months[r.ym].e+eq25); pp.months[r.ym].u=Math.round(pp.months[r.ym].u+net_usd);
+    pp.customers[r.cust]=Math.round((pp.customers[r.cust]||0)+eq25);
+    // Agency (ข้อ 6)
+    if(r.agency){
+      if(!DB_STATS.agency) DB_STATS.agency={};
+      if(!DB_STATS.agency[r.agency]) DB_STATS.agency[r.agency]={com_usd:0,sheets:0,eq25:0,months:{},customers:{}};
+      const ag=DB_STATS.agency[r.agency];
+      ag.com_usd+=r.comA/div; ag.sheets+=sheets; ag.eq25=Math.round(ag.eq25+eq25);
+      if(!ag.months[r.ym]) ag.months[r.ym]={com:0,e:0};
+      ag.months[r.ym].com+=r.comA/div; ag.months[r.ym].e=Math.round(ag.months[r.ym].e+eq25);
+      ag.customers[r.cust]=(ag.customers[r.cust]||0)+1;
+    }
+    // grade/thick/area/salesman year
+    if(r.grade){ if(!DB_STATS.grade_year[r.yr]) DB_STATS.grade_year[r.yr]={};
+      DB_STATS.grade_year[r.yr][r.grade]=Math.round((DB_STATS.grade_year[r.yr][r.grade]||0)+eq25); }
+    if(r.t){ const tk=String(r.t).replace(/\.?0+$/,'');
+      if(!DB_STATS.thick_year[r.yr]) DB_STATS.thick_year[r.yr]={};
+      DB_STATS.thick_year[r.yr][tk]=Math.round((DB_STATS.thick_year[r.yr][tk]||0)+sheets); }
+    if(area){ if(!DB_STATS.area_year[r.yr]) DB_STATS.area_year[r.yr]={};
+      if(!DB_STATS.area_year[r.yr][area]) DB_STATS.area_year[r.yr][area]={eq25:0,net_usd:0};
+      const ay=DB_STATS.area_year[r.yr][area];
+      ay.eq25=Math.round(ay.eq25+eq25); ay.net_usd=Math.round(ay.net_usd+net_usd); }
+    if(!DB_STATS.salesman_year[sale]) DB_STATS.salesman_year[sale]={};
+    if(!DB_STATS.salesman_year[sale][r.yr]) DB_STATS.salesman_year[sale][r.yr]={orders:0,eq25:0,net_usd:0};
+    const sy=DB_STATS.salesman_year[sale][r.yr];
+    sy.orders+=isPos?1:0; sy.eq25=Math.round(sy.eq25+eq25); sy.net_usd=Math.round(sy.net_usd+net_usd);
+  });
+
+  // 3) year_stats รวมใหม่จาก month_stats (idempotent)
+  const ny={};
+  Object.entries(DB_STATS.month_stats).forEach(([ym,s])=>{
+    const y=ym.slice(0,4);
+    if(!ny[y]) ny[y]={orders:0,eq25:0,net_usd:0,cont:0};
+    ny[y].orders+=s.orders; ny[y].eq25+=s.eq25; ny[y].net_usd+=s.net_usd; ny[y].cont+=s.cont||0;
+  });
+  Object.keys(ny).forEach(y=>{ ny[y].eq25=Math.round(ny[y].eq25); ny[y].net_usd=Math.round(ny[y].net_usd); DB_STATS.year_stats[y]=ny[y]; });
+
+  // 4) เก็บลง localStorage เพื่อคงข้อมูลเมื่อ reload บนเครื่องนี้
+  try { localStorage.setItem('aaf_xl_updates', JSON.stringify({ts:new Date().toISOString(),months:[...updMonths]})); } catch(e){}
+
+  renderAll();
+  if(typeof renderDashboard==='function') renderDashboard();
+  document.getElementById('xl-status').innerHTML=`<p style="font-size:11px;color:#4ade80">✅ เพิ่มข้อมูล ${recs.length.toLocaleString()} รายการ (${[...updMonths].sort().join(', ')}) เข้าเว็บแล้ว${blockedCrossMonth>0?` · บล็อกซ้ำ ${blockedCrossMonth} รายการ`:''} — กดดาวน์โหลดไฟล์ฉบับอัปเดตเพื่อเอาไปอัปขึ้น GitHub</p>`;
+  document.getElementById('xl-btn-apply').style.display='none';
+  document.getElementById('xl-btn-download').style.display='inline-block';
+}
+
+function xlDownloadUpdated(){
+  // สร้างไฟล์ HTML ใหม่ที่ฝังข้อมูลปัจจุบัน (หลัง merge) — เอาไปอัป GitHub ได้เลย
+  fetch(location.href).then(r=>r.text()).catch(()=>null).then(src=>{
+    let html = src || document.documentElement.outerHTML;
+    const njs = 'const DB_STATS = '';\nconst CUST_MONTHLY = '+JSON.stringify(CUST_MONTHLY)+';\nconst PORT_DATA = '+JSON.stringify(PORT_DATA)+';';
+    // แทนที่บล็อกข้อมูลเดิมด้วยของใหม่
+    const re=/const DB_STATS = []*?;\s*\nconst CUST_MONTHLY = [\s\S]*?;\s*\nconst PORT_DATA = [\s\S]*?;/;
+    if(re.test(html)) html=html.replace(re,njs);
+    const blob=new Blob([html],{type:'text/html'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='history_database.html'; a.click();
+    URL.revokeObjectURL(a.href);
+  });
+}
+
+
+// ===== EXECUTIVE SUMMARY TAB =====
+function execExportCSV() {
+  const table = document.getElementById('exec-table');
+  if(!table) return;
+  let csv = [];
+  table.querySelectorAll('tr').forEach(tr=>{
+    const cells = [...tr.querySelectorAll('th,td')].map(td=>{
+      let t = td.textContent.trim().replace(/,/g,'');
+      return '"'+t+'"';
+    });
+    csv.push(cells.join(','));
+  });
+  const blob = new Blob(['\ufeff'+csv.join('\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'AAF_สรุปผู้บริหาร_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+function renderExec() {
+  const YEARS_SORTED = Object.keys(DB_STATS.year_stats).sort();
+  const GRADES = ['AAA','A','B','C','F','AV','UN','CTS'];
+  const SALESMEN = Object.keys(DB_STATS.salesman_year).sort((a,b)=>{
+    if(a==='ในประเทศ') return 1; if(b==='ในประเทศ') return -1;
+    return a.localeCompare(b);
+  });
+
+  // ===== คำนวณ area (ต่างประเทศ/ในประเทศ) ต่อปี =====
+  const areaPerYear = {};
+  YEARS_SORTED.forEach(y=>{
+    let dom=0, exp=0;
+    Object.entries(DB_STATS.area_year[y]||{}).forEach(([a,d])=>{
+      if(a==='ในประเทศ') dom+=d.eq25; else exp+=d.eq25;
+    });
+    areaPerYear[y]={dom,exp};
+  });
+
+  // ===== ความหนาเฉลี่ย (weighted) ต่อปี — จาก thick_year (sheets ที่ area-normalized) =====
+  const avgThickPerYear = {};
+  YEARS_SORTED.forEach(y=>{
+    const ts = DB_STATS.thick_year[y]||{};
+    let num=0, den=0;
+    Object.entries(ts).forEach(([t,sheets])=>{
+      const tv = parseFloat(t); if(isNaN(tv)) return;
+      num += tv*sheets; den += sheets;
+    });
+    avgThickPerYear[y] = den>0 ? num/den : 0;
+  });
+
+  // ===== % เกรดต่อปี =====
+  const gradePctPerYear = {};
+  YEARS_SORTED.forEach(y=>{
+    const gs = DB_STATS.grade_year[y]||{};
+    const tot = Object.values(gs).reduce((s,v)=>s+v,0) || 1;
+    gradePctPerYear[y] = {};
+    GRADES.forEach(g=>{ gradePctPerYear[y][g] = (gs[g]||0)/tot*100; });
+  });
+
+  // ===== ราคาเฉลี่ย/แผ่น 2.5 ต่อปี =====
+  const priceP25PerYear = {};
+  YEARS_SORTED.forEach(y=>{
+    const s = DB_STATS.year_stats[y];
+    priceP25PerYear[y] = s.eq25>0 ? s.net_usd/s.eq25 : 0;
+  });
+
+  // ===== แผ่น 2.5 ต่อเซลส์ต่อปี =====
+  const salePerYear = {};
+  SALESMEN.forEach(sl=>{
+    salePerYear[sl] = {};
+    YEARS_SORTED.forEach(y=>{
+      salePerYear[sl][y] = (DB_STATS.salesman_year[sl]?.[y]?.eq25) || 0;
+    });
+    salePerYear[sl]._sum = YEARS_SORTED.reduce((s,y)=>s+salePerYear[sl][y],0);
+  });
+
+  // ===== Build table =====
+  const yrLabel = YEARS_SORTED.map(y=>`<th style="padding:7px 10px;text-align:right;color:#9ca3af;font-family:monospace;font-weight:700;border-bottom:2px solid #374151">${y}</th>`).join('');
+  let html = `<thead><tr style="background:#0d1117">
+    <th style="padding:7px 10px;text-align:left;color:#e2e8f0;border-bottom:2px solid #374151;position:sticky;left:0;background:#0d1117">รายการ</th>
+    ${yrLabel}
+    <th style="padding:7px 10px;text-align:right;color:#f59e0b;font-weight:700;border-bottom:2px solid #374151">Sum/Avg</th>
+  </tr></thead><tbody>`;
+
+  const sectionRow = (label) => `<tr><td colspan="${YEARS_SORTED.length+2}" style="padding:10px 10px 4px;color:#60a5fa;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #1f2937">${label}</td></tr>`;
+  const dataRow = (label, vals, fmt, sumFn, highlight) => {
+    const cells = vals.map(v=>`<td style="padding:6px 10px;text-align:right;font-family:monospace;color:${highlight?'#e2e8f0':'#9ca3af'}">${fmt(v)}</td>`).join('');
+    const sumVal = sumFn ? sumFn(vals) : '';
+    return `<tr style="border-bottom:1px solid #111827">
+      <td style="padding:6px 10px;color:#e2e8f0;position:sticky;left:0;background:#0b0f17">${label}</td>
+      ${cells}
+      <td style="padding:6px 10px;text-align:right;font-family:monospace;color:#f59e0b;font-weight:700">${sumVal!==''?fmt(sumVal):''}</td>
+    </tr>`;
+  };
+
+  // --- ยอดขายรวม ---
+  html += sectionRow('📦 ยอดขายรวม (แผ่น 2.5)');
+  html += dataRow('รวมทั้งหมด', YEARS_SORTED.map(y=>DB_STATS.year_stats[y].eq25), v=>fK(v), a=>a.reduce((s,v)=>s+v,0), true);
+  html += dataRow('Orders', YEARS_SORTED.map(y=>DB_STATS.year_stats[y].orders), v=>v.toLocaleString(), a=>a.reduce((s,v)=>s+v,0));
+
+  // --- ต่างประเทศ vs ในประเทศ ---
+  html += sectionRow('🌍 ต่างประเทศ vs ในประเทศ (แผ่น 2.5)');
+  html += dataRow('ต่างประเทศ (Export)', YEARS_SORTED.map(y=>areaPerYear[y].exp), v=>fK(v), a=>a.reduce((s,v)=>s+v,0), true);
+  html += dataRow('ในประเทศ (Domestic)', YEARS_SORTED.map(y=>areaPerYear[y].dom), v=>fK(v), a=>a.reduce((s,v)=>s+v,0));
+  html += dataRow('% ต่างประเทศ', YEARS_SORTED.map(y=>{const t=areaPerYear[y].exp+areaPerYear[y].dom; return t>0?areaPerYear[y].exp/t*100:0;}), v=>v.toFixed(1)+'%', null);
+
+  // --- ความหนาเฉลี่ย ---
+  html += sectionRow('📏 ความหนาเฉลี่ยที่ขาย (mm)');
+  html += dataRow('ความหนาเฉลี่ย', YEARS_SORTED.map(y=>avgThickPerYear[y]), v=>v.toFixed(2), null, true);
+
+  // --- % เกรด ---
+  html += sectionRow('🏷️ สัดส่วนเกรดที่ขาย (%)');
+  GRADES.forEach(g=>{
+    const vals = YEARS_SORTED.map(y=>gradePctPerYear[y][g]);
+    if(vals.every(v=>v<0.05)) return; // ข้ามเกรดที่ไม่มีเลย
+    html += dataRow('% '+g, vals, v=>v.toFixed(2)+'%', null);
+  });
+
+  // --- ราคาเฉลี่ย ---
+  html += sectionRow('💰 ราคาเฉลี่ยขาย ณ ความหนา 2.5mm (USD/แผ่น)');
+  html += dataRow('ราคาเฉลี่ย/แผ่น 2.5', YEARS_SORTED.map(y=>priceP25PerYear[y]), v=>'$'+v.toFixed(2), null, true);
+  html += dataRow('อัตราแลกเปลี่ยนเฉลี่ย', YEARS_SORTED.map(y=>DB_STATS.fx_rates_annual[y]||0), v=>v.toFixed(2), null);
+
+  // --- เซลส์ ---
+  html += sectionRow('👥 แผ่น 2.5 แยกตามเซลส์');
+  SALESMEN.forEach(sl=>{
+    html += dataRow(sl, YEARS_SORTED.map(y=>salePerYear[sl][y]), v=>v>0?fK(v):'—', ()=>salePerYear[sl]._sum);
+  });
+  const totalCheck = YEARS_SORTED.map(y=>SALESMEN.reduce((s,sl)=>s+salePerYear[sl][y],0));
+  html += dataRow('รวมทุกเซลส์', totalCheck, v=>fK(v), a=>a.reduce((s,v)=>s+v,0), true);
+
+  html += '</tbody>';
+  document.getElementById('exec-table').innerHTML = html;
+}
+
+
 // Boot
 initFilters();
 renderAll();
 renderDashboard();
 </script>
 <div id="ed-toast" style="position:fixed;bottom:24px;right:24px;background:#1f2937;border:1px solid #374151;border-radius:8px;padding:10px 16px;font-size:12px;opacity:0;transform:translateY(10px);transition:all .2s;z-index:999;color:#e2e8f0;pointer-events:none"></div>
+
+<!-- Excel Update Modal -->
+<div id="xl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#161b22;border:1px solid #21262d;border-radius:12px;padding:24px;max-width:600px;width:92%;max-height:88vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <p style="font-size:15px;font-weight:700;color:#e2e8f0">📥 อัปเดตข้อมูลจากไฟล์ Excel</p>
+      <button onclick="xlCloseModal()" style="color:#6b7280;font-size:22px;background:none;border:none;cursor:pointer">×</button>
+    </div>
+    <div id="xl-dropzone" ondragover="event.preventDefault();this.style.borderColor='#3b82f6'" ondragleave="this.style.borderColor='#374151'"
+      ondrop="event.preventDefault();this.style.borderColor='#374151';xlHandleFile(event.dataTransfer.files[0])"
+      onclick="document.getElementById('xl-file-input').click()"
+      style="border:2px dashed #374151;border-radius:10px;padding:34px;text-align:center;cursor:pointer;margin-bottom:14px">
+      <p style="font-size:28px;margin-bottom:8px">📄</p>
+      <p style="font-size:13px;color:#9ca3af">ลากไฟล์ Excel มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</p>
+      <p style="font-size:10px;color:#4b5563;margin-top:6px">รองรับไฟล์บัญชีรูปแบบเดียวกับ data_sale v2 (sheets: export / dometic, header แถว 3)</p>
+    </div>
+    <input type="file" id="xl-file-input" accept=".xlsx,.xls" style="display:none" onchange="xlHandleFile(this.files[0])">
+    <div id="xl-status" style="margin-bottom:12px"></div>
+    <div id="xl-preview" style="margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button onclick="xlCloseModal()" style="font-size:11px;background:#374151;color:#9ca3af;border:none;border-radius:6px;padding:8px 16px;cursor:pointer">ยกเลิก</button>
+      <button id="xl-btn-apply" onclick="xlApply()" style="display:none;font-size:11px;background:rgba(34,197,94,.2);color:#4ade80;border:1px solid rgba(34,197,94,.4);border-radius:6px;padding:8px 16px;cursor:pointer">✅ เพิ่มข้อมูลเข้าเว็บ</button>
+      <button id="xl-btn-download" onclick="xlDownloadUpdated()" style="display:none;font-size:11px;background:rgba(59,130,246,.2);color:#60a5fa;border:1px solid rgba(59,130,246,.4);border-radius:6px;padding:8px 16px;cursor:pointer">💾 ดาวน์โหลดไฟล์เว็บฉบับอัปเดต (เอาไปอัป GitHub)</button>
+    </div>
+    <p style="font-size:10px;color:#4b5563;margin-top:10px">📌 ข้อมูลเดือนที่มีอยู่แล้วจะถูกแทนที่ด้วยข้อมูลใหม่ (กดซ้ำได้ไม่นับซ้ำ) เดือนอื่นๆ ไม่ถูกแตะต้อง — เพื่อให้ทุกคนเห็นข้อมูลใหม่ ให้กดดาวน์โหลดไฟล์เว็บฉบับอัปเดตแล้วอัปขึ้น GitHub ทับไฟล์เดิม</p>
+  </div>
+</div>
 </body>
 </html>
