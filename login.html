@@ -13,7 +13,8 @@
     min-height: 100vh;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-end;
+    padding-right: 6vw;
   }
   body::before {
     content: '';
@@ -25,7 +26,7 @@
   .login-card {
     position: relative;
     z-index: 1;
-    width: 320px;
+    width: 300px;
     background: rgba(255,255,255,0.16);
     backdrop-filter: blur(16px) saturate(140%);
     -webkit-backdrop-filter: blur(16px) saturate(140%);
@@ -33,7 +34,6 @@
     border-radius: 18px;
     padding: 28px 24px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-    margin-top: 18vh;
   }
   .login-card input {
     width: 100%;
@@ -86,7 +86,8 @@
   }
   .pw-toggle:hover { transform: translateY(-50%); box-shadow: none; }
   @media (max-width: 640px) {
-    .login-card { width: 88%; max-width: 320px; margin-top: 22vh; }
+    body { justify-content: center; padding-right: 0; }
+    .login-card { width: 88%; max-width: 300px; margin-top: 55vh; }
   }
 </style>
 </head>
