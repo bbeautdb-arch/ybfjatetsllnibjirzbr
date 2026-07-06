@@ -12,9 +12,9 @@
     background: url('login-bg.png') center center / cover no-repeat;
     min-height: 100vh;
     display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding-right: 6vw;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 6vh;
   }
   body::before {
     content: '';
@@ -86,8 +86,8 @@
   }
   .pw-toggle:hover { transform: translateY(-50%); box-shadow: none; }
   @media (max-width: 640px) {
-    body { justify-content: center; padding-right: 0; }
-    .login-card { width: 88%; max-width: 300px; margin-top: 55vh; }
+    .login-card { width: 88%; max-width: 300px; }
+    body { padding-top: 5vh; }
   }
 </style>
 </head>
