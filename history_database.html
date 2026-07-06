@@ -2858,11 +2858,11 @@ function renderExec() {
   });
 
   // ===== Build table =====
-  const yrLabel = YEARS_SORTED.map(y=>`<th style="padding:7px 10px;text-align:right;color:#9ca3af;font-family:monospace;font-weight:700;border-bottom:2px solid #374151">${y}</th>`).join('');
+  const yrLabel = YEARS_SORTED.map(y=>`<th style="padding:7px 10px;text-align:right;color:#9ca3af;font-family:monospace;font-weight:700;border-bottom:2px solid #374151;position:sticky;top:0;background:#0d1117;z-index:5">${y}</th>`).join('');
   let html = `<thead><tr style="background:#0d1117">
-    <th style="padding:7px 10px;text-align:left;color:#e2e8f0;border-bottom:2px solid #374151;position:sticky;left:0;background:#0d1117">รายการ</th>
+    <th style="padding:7px 10px;text-align:left;color:#e2e8f0;border-bottom:2px solid #374151;position:sticky;left:0;top:0;background:#0d1117;z-index:6">รายการ</th>
     ${yrLabel}
-    <th style="padding:7px 10px;text-align:right;color:#f59e0b;font-weight:700;border-bottom:2px solid #374151">Sum/Avg</th>
+    <th style="padding:7px 10px;text-align:right;color:#f59e0b;font-weight:700;border-bottom:2px solid #374151;position:sticky;top:0;background:#0d1117;z-index:5">Sum/Avg</th>
   </tr></thead><tbody>`;
 
   const sectionRow = (label) => `<tr><td colspan="${YEARS_SORTED.length+2}" style="padding:10px 10px 4px;color:#60a5fa;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #1f2937">${label}</td></tr>`;
