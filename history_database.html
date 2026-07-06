@@ -1,5 +1,4 @@
-<!DOCTYP
-  <button onclick="xlOpenModal()" style="margin-left:6px;font-size:12px;background:rgba(59,130,246,.12);color:#60a5fa;border:1px solid rgba(59,130,246,.3);border-radius:6px;padding:6px 12px;cursor:pointer;white-space:nowrap">📥 อัปเดตจาก Excel</button>E html>
+<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
@@ -49,7 +48,9 @@
     <h1 class="text-lg font-bold text-green-400">📊 AAF Sales History Database</h1>
     <p class="text-xs text-gray-500 mt-0.5">ข้อมูลย้อนหลัง 2014–2026 · <span id="total-records" class="text-green-500 font-mono">7,056</span> รายการ · <span id="total-customers" class="text-blue-400 font-mono">291</span> ลูกค้า</p>
   </div>
-  <div class="flex gap-2">
+  <div class="flex gap-2 items-center">
+    <span id="admin-badge" style="display:none;font-size:10px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3);border-radius:6px;padding:5px 10px">👑 ผู้บริหาร</span>
+    <button id="xl-upload-btn" onclick="xlOpenModal()" style="display:none;font-size:12px;background:rgba(59,130,246,.12);color:#60a5fa;border:1px solid rgba(59,130,246,.3);border-radius:6px;padding:6px 12px;cursor:pointer;white-space:nowrap">📥 อัปเดตจาก Excel</button>
     <select id="year-filter" onchange="applyFilters()">
       <option value="all">ทุกปี</option>
     </select>
@@ -60,6 +61,21 @@
       class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 w-48 focus:outline-none focus:border-green-500">
   </div>
 </div>
+
+<script>
+(function(){
+  try {
+    const raw = sessionStorage.getItem('aaf_user');
+    const sess = raw ? JSON.parse(raw) : null;
+    if (sess && sess.role === 'admin') {
+      const btn = document.getElementById('xl-upload-btn');
+      const badge = document.getElementById('admin-badge');
+      if (btn) btn.style.display = 'inline-block';
+      if (badge) badge.style.display = 'inline-block';
+    }
+  } catch(e) { /* ไม่มี session หรืออ่านไม่ได้ -> ไม่แสดงปุ่ม */ }
+})();
+</script>
 
 <!-- KPI Row -->
 <div class="grid grid-cols-5 gap-3 px-6 py-4">
@@ -517,7 +533,7 @@
       <p style="font-size:11px;color:#6b7280">📋 ภาพรวมทุกมิติในตารางเดียว — เทียบทุกปีข้างกัน</p>
       <button onclick="execExportCSV()" style="font-size:11px;background:rgba(34,197,94,.12);color:#4ade80;border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:6px 14px;cursor:pointer">⬇️ Export CSV</button>
     </div>
-    <div class="card overflow-x-auto">
+    <div class="card overflow-x-auto" style="max-height:75vh;overflow-y:auto">
       <table id="exec-table" style="width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap"></table>
     </div>
   </div>
@@ -2672,9 +2688,11 @@ function xlApply(){
     if(r.invKey && !r.invKey.startsWith('|||')) REG[r.invKey]=r.ym;
     const fx=FXA[r.yr]||33.0;
     let sheets=r.qty, eq25=r.qty;
-    const isNarrow = r.wh[0]!=null && r.wh[0]<=100;   // ไม้เส้น/บัว (กว้าง≤100mm) ไม่ใช่แผ่นมาตรฐาน — ไม่นับ eq25
-    if(isNarrow){ sheets=0; eq25=0; }
+    // ไม้นิ้ว (25x2052): 41 แผ่น = 1 แผ่นมาตรฐาน 1220x2440 (สูตรพิเศษ กันการเสียเนื้อไม้จากรอยตัด)
+    const isNarrowWood = r.wh[0]===25 && r.wh[1]===2052;
+    if(isNarrowWood){ sheets=r.qty/41; eq25=r.t?sheets*(r.t/2.5):sheets; }
     else if(r.t&&r.wh[0]&&r.wh[1]&&r.wh[0]>50){ sheets=r.qty*(r.wh[0]/1220)*(r.wh[1]/2440); eq25=sheets*(r.t/2.5); }
+    const isNarrow=false; // ค่านี้เดิมใช้กันไม้เส้นออกจากสถิติ eq25 — ตอนนี้ไม้นิ้วนับรวมแล้วด้วยสูตรข้างบน
     // สกุลเงินจากช่อง V + Ex.Rate ช่อง W (สกุล→บาท) — ทุก sheet เหมือนกัน
     const netRaw=r.gross-r.comA-r.comT-r.fr-r.ins;         // สกุลตามช่อง V
     let exr=r.exrate>0?r.exrate:(r.curr==='THB'?1.0:fx);
