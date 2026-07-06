@@ -13,14 +13,12 @@
 <body class="min-h-screen flex items-center justify-center p-4">
 
 <div class="w-full max-w-sm">
-  <!-- Logo -->
   <div class="text-center mb-8">
     <div class="text-5xl mb-3">🪵</div>
     <h1 class="text-2xl font-bold text-white">AAF Sales System</h1>
     <p class="text-gray-500 text-sm mt-1">กรุณาเข้าสู่ระบบ</p>
   </div>
 
-  <!-- Card -->
   <div class="bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl">
     <div id="error-msg" class="hidden mb-4 bg-red-900/40 border border-red-500/40 text-red-400 text-sm rounded-lg px-4 py-3 text-center">
       ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง
@@ -42,7 +40,7 @@
           <button onclick="togglePw()" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-xs">👁</button>
         </div>
       </div>
-      <button onclick="doLogin()"
+      <button id="btn-login" onclick="doLogin()"
         class="w-full bg-green-600 hover:bg-green-500 active:bg-green-700 text-white font-semibold py-3 rounded-lg transition text-sm mt-2">
         เข้าสู่ระบบ
       </button>
@@ -53,32 +51,60 @@
 </div>
 
 <script>
-// ===== USER DATABASE =====
-// role: admin = ดูได้ทุกหน้า | sales = ดูเฉพาะที่กำหนด
+// ⚙️ ตั้งค่า Log Endpoint (ใส่ URL จาก Google Apps Script ที่ deploy แล้ว)
+const LOG_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwcerDqFFb0cYXmCsIz3LX79-IF_eX4XEA5CK_vgtpXCObS8xKrBDvfLFNSSArEy8KZ/exec';
+const LOG_SECRET    = '';  // ต้องตรงกับใน AppsScript_Code.gs
+
 const USERS = {};
-
-// ===== PAGES BY ROLE =====
-const PAGES = {
-  admin: [
-    { href: 'history_database.html', icon: '📊', title: 'ฐานข้อมูลประวัติการขาย',  desc: 'ยอดขาย 2014–2026 · Timeline · Insights · Health Score', color: 'green' },
-    { href: 'sales_analytics.html',  icon: '🏆', title: 'Sales Analytics',          desc: 'ยอดขายแยกตามเซลส์ · Follow-up list · Export CSV',       color: 'purple' },
-    { href: 'history_dashboard.html',icon: '📜', title: 'ประวัติการโหลด',           desc: 'Archive ยอดปิดเดือนย้อนหลัง',                            color: 'blue' },
-  ],
-  sales: [
-    { href: 'history_database.html', icon: '📊', title: 'ฐานข้อมูลประวัติการขาย',  desc: 'ยอดขาย · Timeline · Insights',                           color: 'green' },
-    { href: 'sales_analytics.html',  icon: '🏆', title: 'Sales Analytics',          desc: 'ยอดขายของฉัน · Follow-up list',                          color: 'purple' },
-  ],
-};
-
-const COLOR = {
-  green:  'border-green-500/30 hover:border-green-400/60 group-hover:text-green-400',
-  purple: 'border-purple-500/30 hover:border-purple-400/60 group-hover:text-purple-400',
-  blue:   'border-blue-500/30 hover:border-blue-400/60 group-hover:text-blue-400',
-};
 
 function togglePw() {
   const pw = document.getElementById('password');
   pw.type = pw.type === 'password' ? 'text' : 'password';
+}
+
+function detectDevice() {
+  const ua = navigator.userAgent;
+  let os = 'Unknown OS';
+  if (/Windows/.test(ua)) os = 'Windows';
+  else if (/Mac OS/.test(ua) && !/iPhone|iPad/.test(ua)) os = 'Mac';
+  else if (/iPhone/.test(ua)) os = 'iPhone';
+  else if (/iPad/.test(ua)) os = 'iPad';
+  else if (/Android/.test(ua)) os = 'Android';
+  else if (/Linux/.test(ua)) os = 'Linux';
+  let browser = 'Unknown';
+  if (/Edg\//.test(ua)) browser = 'Edge';
+  else if (/Chrome\//.test(ua) && !/Edg\//.test(ua)) browser = 'Chrome';
+  else if (/Safari\//.test(ua) && !/Chrome/.test(ua)) browser = 'Safari';
+  else if (/Firefox\//.test(ua)) browser = 'Firefox';
+  return `${browser} on ${os}`;
+}
+
+// ยิง log แบบ fire-and-forget ไม่บล็อก UX (ไม่รอผลลัพธ์)
+function logAttempt(username, success, role) {
+  if (!LOG_ENDPOINT || LOG_ENDPOINT.includes('PASTE_YOUR')) return; // ยังไม่ได้ตั้งค่า — ข้าม
+
+  const payload = {
+    username: username, success: success, role: role || '',
+    device: detectDevice(), ua: navigator.userAgent,
+  };
+
+  // พยายามดึง IP + ที่ตั้งคร่าวๆ ก่อนส่ง (ฟรี ไม่ต้อง API key)
+  fetch('https://ipapi.co/json/')
+    .then(r => r.json())
+    .then(geo => {
+      payload.ip = geo.ip || '';
+      payload.city = geo.city || '';
+      payload.country = geo.country_name || '';
+    })
+    .catch(() => {})
+    .finally(() => {
+      fetch(LOG_ENDPOINT, {
+        method: 'POST',
+        mode: 'no-cors', // Apps Script ไม่รองรับ CORS preflight ปกติ ใช้ no-cors แทน (fire-and-forget)
+        headers: {'Content-Type': 'text/plain'},
+        body: JSON.stringify(payload),
+      }).catch(()=>{});
+    });
 }
 
 function doLogin() {
@@ -89,30 +115,30 @@ function doLogin() {
   if(!user || !pass) { errEl.classList.remove('hidden'); return; }
 
   const found = USERS[user];
+  const btn = document.getElementById('btn-login');
+  btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
+
   if(!found || found.password !== pass) {
     errEl.classList.remove('hidden');
     document.getElementById('password').value = '';
+    logAttempt(user, false, '');
+    setTimeout(()=>{ btn.disabled=false; btn.textContent='เข้าสู่ระบบ'; }, 600);
     return;
   }
 
-  // บันทึก session
+  logAttempt(user, true, found.role);
+
   sessionStorage.setItem('aaf_user', JSON.stringify({
-    username: user,
-    name: found.name,
-    role: found.role,
-    salesman: found.salesman,
-    loginAt: new Date().toISOString(),
+    username: user, name: found.name, role: found.role,
+    salesman: found.salesman, loginAt: new Date().toISOString(),
   }));
 
-  // ไปหน้า dashboard
-  window.location.href = 'dashboard_home.html';
+  setTimeout(()=>{ window.location.href = 'dashboard_home.html'; }, 300);
 }
 
-// ถ้า login อยู่แล้ว ไปหน้า dashboard เลย
 const sess = sessionStorage.getItem('aaf_user');
 if(sess) window.location.href = 'dashboard_home.html';
 
-// focus username
 document.getElementById('username').focus();
 </script>
 </body>

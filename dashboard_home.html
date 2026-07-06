@@ -8,7 +8,6 @@
 </head>
 <body class="bg-gray-900 min-h-screen">
 
-<!-- Header -->
 <div class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
   <div class="flex items-center gap-3">
     <span class="text-2xl">🪵</span>
@@ -26,12 +25,9 @@
   </div>
 </div>
 
-<!-- Content -->
 <div class="max-w-2xl mx-auto px-6 py-10">
   <p class="text-gray-500 text-sm mb-6">เลือกหน้าที่ต้องการ</p>
   <div id="pages-container" class="grid grid-cols-1 gap-4"></div>
-
-  <!-- Sales: filter note -->
   <div id="sales-note" class="hidden mt-6 bg-amber-900/20 border border-amber-500/20 rounded-xl p-4">
     <p class="text-amber-400 text-xs font-semibold mb-1">📌 หมายเหตุ</p>
     <p class="text-amber-200/60 text-xs">ข้อมูลที่แสดงจะ filter เฉพาะของคุณอัตโนมัติ</p>
@@ -50,6 +46,9 @@ const PAGES = {
     { href: 'history_dashboard.html',icon: '📜', title: 'ประวัติการโหลด',
       desc: 'Archive ยอดปิดเดือนย้อนหลัง',
       color: 'blue', badge: 'Admin' },
+    { href: 'access_log.html',icon: '🔒', title: 'บันทึกการเข้าใช้งาน',
+      desc: 'ใครเข้าเมื่อไร · ความถี่ · พยายามเข้าไม่สำเร็จ',
+      color: 'red', badge: 'Admin เท่านั้น' },
   ],
   sales: [
     { href: 'history_database.html', icon: '📊', title: 'ฐานข้อมูลประวัติการขาย',
@@ -62,18 +61,16 @@ const PAGES = {
 };
 
 const COLORS = {
-  green:  { border: 'border-green-500/30',  hover: 'hover:border-green-400/60',  text: 'text-green-400',  arrow: 'group-hover:text-green-400' },
-  purple: { border: 'border-purple-500/30', hover: 'hover:border-purple-400/60', text: 'text-purple-400', arrow: 'group-hover:text-purple-400' },
-  blue:   { border: 'border-blue-500/30',   hover: 'hover:border-blue-400/60',   text: 'text-blue-400',   arrow: 'group-hover:text-blue-400' },
+  green:  { border: 'border-green-500/30',  hover: 'hover:border-green-400/60',  arrow: 'group-hover:text-green-400' },
+  purple: { border: 'border-purple-500/30', hover: 'hover:border-purple-400/60', arrow: 'group-hover:text-purple-400' },
+  blue:   { border: 'border-blue-500/30',   hover: 'hover:border-blue-400/60',   arrow: 'group-hover:text-blue-400' },
+  red:    { border: 'border-red-500/30',    hover: 'hover:border-red-400/60',    arrow: 'group-hover:text-red-400' },
 };
 
-// โหลด session
 const sess = sessionStorage.getItem('aaf_user');
 if(!sess) { window.location.href = 'login.html'; }
-
 const user = JSON.parse(sess);
 
-// แสดงข้อมูล user
 document.getElementById('welcome-text').textContent = `สวัสดี, ${user.name}`;
 const badge = document.getElementById('role-badge');
 if(user.role === 'admin') {
@@ -85,14 +82,9 @@ if(user.role === 'admin') {
   document.getElementById('sales-note').classList.remove('hidden');
 }
 
-// บันทึก salesman สำหรับ filter
-if(user.salesman) {
-  sessionStorage.setItem('aaf_filter_salesman', user.salesman);
-} else {
-  sessionStorage.removeItem('aaf_filter_salesman');
-}
+if(user.salesman) sessionStorage.setItem('aaf_filter_salesman', user.salesman);
+else sessionStorage.removeItem('aaf_filter_salesman');
 
-// render pages
 const pages = PAGES[user.role] || PAGES.sales;
 const container = document.getElementById('pages-container');
 container.innerHTML = pages.map(p => {
