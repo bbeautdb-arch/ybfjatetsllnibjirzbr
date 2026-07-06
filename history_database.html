@@ -728,7 +728,7 @@ function renderYearly(yr, sl) {
     if(yr !== 'all' && y !== yr) return;
     const pct = (s.eq25/totalEq25*100).toFixed(1);
     const barW = (s.eq25/maxEq25*100).toFixed(1);
-    const avgP = s.eq25 > 0 ? (s.net_usd/s.eq25).toFixed(2) : 0;
+    const avgP = s.eq25 > 0 ? ((s.net_usd_sheets!=null?s.net_usd_sheets:s.net_usd)/s.eq25).toFixed(2) : 0;
     const fxRate = DB_STATS.fx_rates_annual[y] || 0;
     const fxColor = fxRate >= 35 ? '#f43f5e' : fxRate <= 32 ? '#22c55e' : '#f59e0b';
     rows += `<tr>
@@ -2186,7 +2186,7 @@ function renderPrice() {
   if(area==='all' && sale==='all') {
     prices = YEARS.map(yr => {
       const s = DB_STATS.year_stats[yr];
-      return s.eq25>0 && s.net_usd>0 ? s.net_usd/s.eq25 : 0;
+      return s.eq25>0 && s.net_usd>0 ? (s.net_usd_sheets!=null?s.net_usd_sheets:s.net_usd)/s.eq25 : 0;
     });
   } else {
     // Filter from CUST_MONTHLY
@@ -2234,7 +2234,7 @@ function renderPrice() {
       if(sale!=='all' && !(s.salesman||[]).map(x=>x.trim()).includes(sale)) return false;
       return s.eq25>50000 && s.net_usd>0;
     })
-    .map(([n,s]) => ({n, price: s.net_usd/s.eq25, eq25: s.eq25, area: s.area}))
+    .map(([n,s]) => ({n, price: (s.net_usd_sheets!=null?s.net_usd_sheets:s.net_usd)/s.eq25, eq25: s.eq25, area: s.area}))
     .sort((a,b)=>b.price-a.price);
 
   const renderPriceList = (arr, color) => arr.map((x,i) =>
@@ -2672,7 +2672,9 @@ function xlApply(){
     if(r.invKey && !r.invKey.startsWith('|||')) REG[r.invKey]=r.ym;
     const fx=FXA[r.yr]||33.0;
     let sheets=r.qty, eq25=r.qty;
-    if(r.t&&r.wh[0]&&r.wh[1]&&r.wh[0]>50){ sheets=r.qty*(r.wh[0]/1220)*(r.wh[1]/2440); eq25=sheets*(r.t/2.5); }
+    const isNarrow = r.wh[0]!=null && r.wh[0]<=100;   // ไม้เส้น/บัว (กว้าง≤100mm) ไม่ใช่แผ่นมาตรฐาน — ไม่นับ eq25
+    if(isNarrow){ sheets=0; eq25=0; }
+    else if(r.t&&r.wh[0]&&r.wh[1]&&r.wh[0]>50){ sheets=r.qty*(r.wh[0]/1220)*(r.wh[1]/2440); eq25=sheets*(r.t/2.5); }
     // สกุลเงินจากช่อง V + Ex.Rate ช่อง W (สกุล→บาท) — ทุก sheet เหมือนกัน
     const netRaw=r.gross-r.comA-r.comT-r.fr-r.ins;         // สกุลตามช่อง V
     let exr=r.exrate>0?r.exrate:(r.curr==='THB'?1.0:fx);
@@ -2691,6 +2693,7 @@ function xlApply(){
     if(!DB_STATS.month_stats[r.ym]) DB_STATS.month_stats[r.ym]={orders:0,eq25:0,net_usd:0,cont:0};
     const ms=DB_STATS.month_stats[r.ym];
     ms.orders+=isPos?1:0; ms.eq25=Math.round(ms.eq25+eq25); ms.net_usd=Math.round(ms.net_usd+net_usd);
+    if(!isNarrow) ms.net_usd_sheets=Math.round((ms.net_usd_sheets||0)+net_usd);
     // com_month
     if(!DB_STATS.com_month) DB_STATS.com_month={};
     if(!DB_STATS.com_month[r.ym]) DB_STATS.com_month[r.ym]={agency_com:0,staff_com:0,freight:0,insurance:0,gross:0,net:0,eq25:0};
@@ -2703,11 +2706,12 @@ function xlApply(){
     const cmo=CUST_MONTHLY[r.cust][r.ym];
     cmo.o+=isPos?1:0; cmo.e=Math.round(cmo.e+eq25); cmo.u=Math.round(cmo.u+net_usd);
     if(!DB_STATS.top_customers[r.cust]){
-      DB_STATS.top_customers[r.cust]={orders:0,eq25:0,net_usd:0,net_thb:0,area,salesman:[sale],country,port,
+      DB_STATS.top_customers[r.cust]={orders:0,eq25:0,net_usd:0,net_usd_sheets:0,net_thb:0,area,salesman:[sale],country,port,
         first_order:r.ym,last_order:r.ym,active_months:0,top_grade:r.grade||'',top_thickness:r.t||0};
     }
     const tc=DB_STATS.top_customers[r.cust];
     tc.orders+=isPos?1:0; tc.eq25=Math.round(tc.eq25+eq25); tc.net_usd=Math.round(tc.net_usd+net_usd);
+    if(!isNarrow) tc.net_usd_sheets=Math.round((tc.net_usd_sheets||0)+net_usd);
     if(r.ym<tc.first_order) tc.first_order=r.ym;
     if(r.ym>tc.last_order) tc.last_order=r.ym;
     // PORT
@@ -2747,10 +2751,10 @@ function xlApply(){
   const ny={};
   Object.entries(DB_STATS.month_stats).forEach(([ym,s])=>{
     const y=ym.slice(0,4);
-    if(!ny[y]) ny[y]={orders:0,eq25:0,net_usd:0,cont:0};
-    ny[y].orders+=s.orders; ny[y].eq25+=s.eq25; ny[y].net_usd+=s.net_usd; ny[y].cont+=s.cont||0;
+    if(!ny[y]) ny[y]={orders:0,eq25:0,net_usd:0,net_usd_sheets:0,cont:0};
+    ny[y].orders+=s.orders; ny[y].eq25+=s.eq25; ny[y].net_usd+=s.net_usd; ny[y].net_usd_sheets+=(s.net_usd_sheets||s.net_usd); ny[y].cont+=s.cont||0;
   });
-  Object.keys(ny).forEach(y=>{ ny[y].eq25=Math.round(ny[y].eq25); ny[y].net_usd=Math.round(ny[y].net_usd); DB_STATS.year_stats[y]=ny[y]; });
+  Object.keys(ny).forEach(y=>{ ny[y].eq25=Math.round(ny[y].eq25); ny[y].net_usd=Math.round(ny[y].net_usd); ny[y].net_usd_sheets=Math.round(ny[y].net_usd_sheets); DB_STATS.year_stats[y]=ny[y]; });
 
   // 4) เก็บลง localStorage เพื่อคงข้อมูลเมื่อ reload บนเครื่องนี้
   try { localStorage.setItem('aaf_xl_updates', JSON.stringify({ts:new Date().toISOString(),months:[...updMonths]})); } catch(e){}
@@ -2840,7 +2844,7 @@ function renderExec() {
   const priceP25PerYear = {};
   YEARS_SORTED.forEach(y=>{
     const s = DB_STATS.year_stats[y];
-    priceP25PerYear[y] = s.eq25>0 ? s.net_usd/s.eq25 : 0;
+    priceP25PerYear[y] = s.eq25>0 ? (s.net_usd_sheets!=null?s.net_usd_sheets:s.net_usd)/s.eq25 : 0;
   });
 
   // ===== แผ่น 2.5 ต่อเซลส์ต่อปี =====
