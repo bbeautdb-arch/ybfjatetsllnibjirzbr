@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AAF Sales System — Login</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
+  body {
+    position: relative;
+    background: url('login-bg.png') center center / cover no-repeat;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 6vh;
+  }
+  body::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(13,17,23,0.45) 0%, rgba(13,17,23,0.08) 30%, rgba(13,17,23,0.08) 60%, rgba(13,17,23,0.55) 100%);
+    pointer-events: none;
+  }
+  .login-card {
+    position: relative;
+    z-index: 1;
+    width: 300px;
+    background: rgba(255,255,255,0.16);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 18px;
+    padding: 28px 24px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  .login-card input {
+    width: 100%;
+    padding: 13px 16px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(255,255,255,0.4);
+    color: #0d1117;
+    font-size: 14px;
+    margin-bottom: 14px;
+    outline: none;
+    transition: background 0.2s;
+  }
+  .login-card input::placeholder { color: #374151; }
+  .login-card input:focus { background: rgba(255,255,255,0.58); }
+  .login-card button#btn-login {
+    width: 100%;
+    padding: 13px;
+    border-radius: 24px;
+    border: none;
+    background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(29,78,216,0.5);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .login-card button#btn-login:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(29,78,216,0.6); }
+  .login-card button#btn-login:active { transform: scale(0.98); }
+  .login-card button#btn-login:disabled { opacity: 0.6; cursor: default; transform: none; }
+  .err-msg {
+    background: rgba(239,68,68,0.28);
+    border: 1px solid rgba(239,68,68,0.5);
+    color: #fecaca;
+    font-size: 12.5px;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    text-align: center;
+    display: none;
+  }
+  .pw-wrap { position: relative; }
+  .pw-toggle {
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; width: auto; padding: 0;
+    color: #374151; font-size: 12px; cursor: pointer; box-shadow: none;
+    font-weight: 600;
+  }
+  .pw-toggle:hover { transform: translateY(-50%); box-shadow: none; }
+  @media (max-width: 640px) {
+    .login-card { width: 88%; max-width: 300px; }
+    body { padding-top: 5vh; }
+  }
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <div id="error-msg" class="err-msg">ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</div>
+
+  <input id="username" type="text" placeholder="Username"
+    onkeydown="if(event.key==='Enter') document.getElementById('password').focus()">
+
+  <div class="pw-wrap">
+    <input id="password" type="password" placeholder="Password"
+      onkeydown="if(event.key==='Enter') doLogin()" style="padding-right:50px">
+    <button class="pw-toggle" onclick="togglePw()" type="button">SHOW</button>
+  </div>
+
+  <button id="btn-login" onclick="doLogin()" style="margin-top:6px">SIGN IN</button>
+</div>
+
+<p style="position:fixed;bottom:8px;left:8px;color:rgba(255,255,255,0.5);font-size:11px;z-index:5">v5-2026-07-07</p>
+
+<script>
+const LOG_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwcerDqFFb0cYXmCsIz3LX79-IF_eX4XEA5CK_vgtpXCObS8xKrBDvfLFNSSArEy8KZ/exec';
+const LOG_SECRET    = '';
+
+const USERS = {};
+
+function togglePw() {
+  const pw = document.getElementById('password');
+  const btn = document.querySelector('.pw-toggle');
+  pw.type = pw.type === 'password' ? 'text' : 'password';
+  btn.textContent = pw.type === 'password' ? 'SHOW' : 'HIDE';
+}
+
+function detectDevice() {
+  const ua = navigator.userAgent;
+  let os = 'Unknown OS';
+  if (/Windows/.test(ua)) os = 'Windows';
+  else if (/Mac OS/.test(ua) && !/iPhone|iPad/.test(ua)) os = 'Mac';
+  else if (/iPhone/.test(ua)) os = 'iPhone';
+  else if (/iPad/.test(ua)) os = 'iPad';
+  else if (/Android/.test(ua)) os = 'Android';
+  else if (/Linux/.test(ua)) os = 'Linux';
+  let browser = 'Unknown';
+  if (/Edg\//.test(ua)) browser = 'Edge';
+  else if (/Chrome\//.test(ua) && !/Edg\//.test(ua)) browser = 'Chrome';
+  else if (/Safari\//.test(ua) && !/Chrome/.test(ua)) browser = 'Safari';
+  else if (/Firefox\//.test(ua)) browser = 'Firefox';
+  return `${browser} on ${os}`;
+}
+
+function logAttempt(username, success, role) {
+  if (!LOG_ENDPOINT || LOG_ENDPOINT.includes('PASTE_YOUR')) return;
+  const payload = {
+    username: username, success: success, role: role || '',
+    device: detectDevice(), ua: navigator.userAgent,
+  };
+  fetch('https://ipapi.co/json/')
+    .then(r => r.json())
+    .then(geo => {
+      payload.ip = geo.ip || '';
+      payload.city = geo.city || '';
+      payload.country = geo.country_name || '';
+    })
+    .catch(() => {})
+    .finally(() => {
+      fetch(LOG_ENDPOINT, {
+        method: 'POST', mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain'},
+        body: JSON.stringify(payload),
+      }).catch(()=>{});
+    });
+}
+
+function doLogin() {
+  const user = document.getElementById('username').value.trim().toLowerCase();
+  const pass = document.getElementById('password').value.trim();
+  const errEl = document.getElementById('error-msg');
+
+  if(!user || !pass) { errEl.style.display = 'block'; return; }
+
+  const found = USERS[user];
+  const btn = document.getElementById('btn-login');
+  btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
+
+  if(!found || found.password !== pass) {
+    errEl.style.display = 'block';
+    document.getElementById('password').value = '';
+    logAttempt(user, false, '');
+    setTimeout(()=>{ btn.disabled=false; btn.textContent='SIGN IN'; }, 600);
+    return;
+  }
+
+  logAttempt(user, true, found.role);
+
+  sessionStorage.setItem('aaf_user', JSON.stringify({
+    username: user, name: found.name, role: found.role,
+    salesman: found.salesman, loginAt: new Date().toISOString(),
+  }));
+
+  setTimeout(()=>{ window.location.href = 'dashboard_home.html'; }, 300);
+}
+
+const sess = sessionStorage.getItem('aaf_user');
+if(sess) window.location.href = 'dashboard_home.html';
+
+document.getElementById('username').focus();
+</script>
+</body>
+</html>
