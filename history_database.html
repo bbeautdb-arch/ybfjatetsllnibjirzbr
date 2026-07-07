@@ -1,0 +1,2976 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 AAF Sales History Database</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  body { font-family: 'IBM Plex Sans Thai', sans-serif; background: #0f1117; color: #e2e8f0; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .card { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 12px; }
+  .card-green { background: #0d1f12; border: 1px solid #1a4928; }
+  .bar { background: linear-gradient(90deg, #22c55e, #16a34a); height: 100%; border-radius: 3px; transition: width 1s ease; }
+  .bar-blue { background: linear-gradient(90deg, #3b82f6, #1d4ed8); }
+  .bar-amber { background: linear-gradient(90deg, #f59e0b, #d97706); }
+  .bar-purple { background: linear-gradient(90deg, #a855f7, #7c3aed); }
+  .bar-rose { background: linear-gradient(90deg, #f43f5e, #be123c); }
+  .tab-btn { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all .2s; color: #64748b; }
+  .tab-btn.active { background: #22c55e; color: #0f1117; }
+  .tab-btn:hover:not(.active) { color: #e2e8f0; background: #2d3748; }
+  .filter-btn { padding: 4px 10px; border-radius: 20px; font-size: 11px; cursor: pointer; border: 1px solid #374151; color: #9ca3af; transition: all .15s; }
+  .filter-btn.active { border-color: #22c55e; color: #22c55e; background: rgba(34,197,94,0.1); }
+  .tbl th { font-size: 10px; font-weight: 600; color: #4b5563; text-transform: uppercase; letter-spacing: .05em; padding: 8px 12px; border-bottom: 1px solid #1f2937; }
+  .tbl td { font-size: 12px; padding: 7px 12px; border-bottom: 1px solid #111827; }
+  .tbl tr:hover td { background: rgba(34,197,94,0.04); }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+  .badge-green { background: rgba(34,197,94,.15); color: #22c55e; }
+  .badge-blue { background: rgba(59,130,246,.15); color: #60a5fa; }
+  .badge-amber { background: rgba(245,158,11,.15); color: #fbbf24; }
+  .badge-purple { background: rgba(168,85,247,.15); color: #c084fc; }
+  .badge-rose { background: rgba(244,63,94,.15); color: #fb7185; }
+  .kpi-num { font-size: 24px; font-weight: 700; line-height: 1; }
+  .sparkline-bar { display: inline-block; width: 6px; margin: 0 1px; background: #22c55e; border-radius: 2px 2px 0 0; vertical-align: bottom; }
+  input[type=range] { accent-color: #22c55e; }
+  select { background: #1a1f2e; border: 1px solid #374151; border-radius: 6px; color: #e2e8f0; padding: 5px 10px; font-size: 12px; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: #111; }
+  ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<div class="border-b border-gray-800 px-6 py-4 flex justify-between items-center">
+  <div>
+    <h1 class="text-lg font-bold text-green-400">📊 AAF Sales History Database</h1>
+    <p class="text-xs text-gray-500 mt-0.5">ข้อมูลย้อนหลัง 2014–2026 · <span id="total-records" class="text-green-500 font-mono">7,056</span> รายการ · <span id="total-customers" class="text-blue-400 font-mono">291</span> ลูกค้า</p>
+  </div>
+  <div class="flex gap-2 items-center">
+    <span id="admin-badge" style="display:none;font-size:10px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3);border-radius:6px;padding:5px 10px">👑 ผู้บริหาร</span>
+    <button id="xl-upload-btn" onclick="xlOpenModal()" style="display:none;font-size:12px;background:rgba(59,130,246,.12);color:#60a5fa;border:1px solid rgba(59,130,246,.3);border-radius:6px;padding:6px 12px;cursor:pointer;white-space:nowrap">📥 อัปเดตจาก Excel</button>
+    <select id="year-filter" onchange="applyFilters()">
+      <option value="all">ทุกปี</option>
+    </select>
+    <select id="sale-filter" onchange="applyFilters()">
+      <option value="all">ทุกเซลส์</option>
+    </select>
+    <input type="text" id="search" oninput="applyFilters()" placeholder="🔍 ค้นหาลูกค้า..." 
+      class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 w-48 focus:outline-none focus:border-green-500">
+  </div>
+</div>
+
+<script>
+(function(){
+  try {
+    const raw = sessionStorage.getItem('aaf_user');
+    const sess = raw ? JSON.parse(raw) : null;
+    if (sess && sess.role === 'admin') {
+      const btn = document.getElementById('xl-upload-btn');
+      const badge = document.getElementById('admin-badge');
+      if (btn) btn.style.display = 'inline-block';
+      if (badge) badge.style.display = 'inline-block';
+    }
+  } catch(e) { /* ไม่มี session หรืออ่านไม่ได้ -> ไม่แสดงปุ่ม */ }
+})();
+</script>
+
+<!-- KPI Row -->
+<div class="grid grid-cols-5 gap-3 px-6 py-4">
+  <div class="card p-4">
+    <p class="text-xs text-gray-500 mb-1">ยอดขายรวม (USD)</p>
+    <p class="kpi-num text-green-400 mono" id="kpi-usd">$0</p>
+    <p class="text-xs text-gray-600 mt-1" id="kpi-usd-sub"></p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-gray-500 mb-1">แผ่น 2.5 รวม</p>
+    <p class="kpi-num text-blue-400 mono" id="kpi-eq25">0</p>
+    <p class="text-xs text-gray-600 mt-1" id="kpi-eq25-sub"></p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-gray-500 mb-1">จำนวนออเดอร์</p>
+    <p class="kpi-num text-amber-400 mono" id="kpi-orders">0</p>
+    <p class="text-xs text-gray-600 mt-1" id="kpi-orders-sub"></p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-gray-500 mb-1">ลูกค้าที่ซื้อ</p>
+    <p class="kpi-num text-purple-400 mono" id="kpi-custs">0</p>
+    <p class="text-xs text-gray-600 mt-1" id="kpi-custs-sub"></p>
+  </div>
+  <div class="card p-4">
+    <p class="text-xs text-gray-500 mb-1">ราคาเฉลี่ย/แผ่น 2.5</p>
+    <p class="kpi-num text-rose-400 mono" id="kpi-avg-price">$0</p>
+    <p class="text-xs text-gray-600 mt-1" id="kpi-avg-sub"></p>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="px-6 mb-4 flex gap-2">
+  <button class="tab-btn active" onclick="switchTab('yearly')" id="tab-yearly">📈 รายปี</button>
+  <button class="tab-btn" onclick="switchTab('monthly')" id="tab-monthly">📅 รายเดือน</button>
+  <button class="tab-btn" onclick="switchTab('customer')" id="tab-customer">👥 ลูกค้า</button>
+  <button class="tab-btn" onclick="switchTab('salesman')" id="tab-salesman">🏆 เซลส์</button>
+  <button class="tab-btn" onclick="switchTab('area')" id="tab-area">🌍 ตลาด</button>
+  <button class="tab-btn" onclick="switchTab('port')" id="tab-port">🚢 พอร์ตเรือ</button>
+  <button class="tab-btn" onclick="switchTab('comm')" id="tab-comm">💰 ค่าคอม</button>
+  <button class="tab-btn" onclick="switchTab('exec')" id="tab-exec">📋 สรุปผู้บริหาร</button>
+  <button class="tab-btn" onclick="switchTab('product')" id="tab-product">📦 สินค้า</button>
+  <button class="tab-btn" onclick="switchTab('timeline')" id="tab-timeline">📋 Timeline</button>
+  <button class="tab-btn" onclick="switchTab('insight')" id="tab-insight">🔬 Insights</button>
+  <button class="tab-btn" onclick="switchTab('editor')" id="tab-editor" style="margin-left:auto;background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.3)">🗂️ แก้ไขลูกค้า</button>
+  <a href="sales_analytics.html" style="margin-left:6px;font-size:12px;background:rgba(168,85,247,.12);color:#c084fc;border:1px solid rgba(168,85,247,.3);border-radius:6px;padding:6px 12px;text-decoration:none;white-space:nowrap">🏆 Sales View</a>
+</div>
+
+<!-- Content -->
+<div class="px-6 pb-6">
+
+  <!-- TAB: Monthly -->
+  <div id="section-monthly" class="hidden">
+    <div class="flex gap-2 mb-3 flex-wrap">
+      <button class="filter-btn active" onclick="filterMonthYear('all',this)">ทุกปี</button>
+      <button class="filter-btn" onclick="filterMonthYear('2025',this)">2025</button>
+      <button class="filter-btn" onclick="filterMonthYear('2026',this)">2026</button>
+      <button class="filter-btn" onclick="filterMonthYear('2024',this)">2024</button>
+      <button class="filter-btn" onclick="filterMonthYear('2023',this)">2023</button>
+    </div>
+    <div class="card overflow-x-auto">
+      <table class="w-full tbl">
+        <thead>
+          <tr>
+            <th class="text-left">เดือน</th>
+            <th class="text-right">ออเดอร์</th>
+            <th class="text-right">แผ่น 2.5</th>
+            <th class="text-right">ตู้รวม</th>
+            <th class="text-right">Net USD</th>
+            <th class="w-40">สัดส่วนเทียบปี</th>
+          </tr>
+        </thead>
+        <tbody id="monthly-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: Yearly -->
+  <div id="section-yearly">
+    <!-- Shared Live Orders Badge -->
+    <div id="shared-recent-badge" style="display:none;flex-direction:column;gap:4px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px"></div>
+
+    <!-- Dashboard Quick Stats -->
+    <div id="dashboard-quick" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px"></div>
+    <div class="card overflow-x-auto">
+      <table class="w-full tbl">
+        <thead>
+          <tr>
+            <th class="text-left">ปี (CE)</th>
+            <th class="text-right">ออเดอร์</th>
+            <th class="text-right">แผ่น 2.5</th>
+            <th class="text-right">Net USD</th>
+            <th class="text-right">Net THB</th>
+            <th class="text-right">ราคาเฉลี่ย/2.5</th>
+            <th class="text-right">฿/USD เฉลี่ย</th>
+            <th class="w-36">สัดส่วน</th>
+          </tr>
+        </thead>
+        <tbody id="yearly-tbody"></tbody>
+      </table>
+    </div>
+    <!-- Bar chart -->
+    <div class="grid grid-cols-2 gap-4 mt-4">
+      <div class="card p-4">
+        <p class="text-xs text-gray-400 mb-3 font-semibold uppercase tracking-wider">📊 แผ่น 2.5 รายปี</p>
+        <div id="chart-eq25" class="space-y-2"></div>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs text-gray-400 mb-3 font-semibold uppercase tracking-wider">💵 Net USD รายปี</p>
+        <div id="chart-usd" class="space-y-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Customer -->
+  <div id="section-customer" class="hidden">
+    <div class="flex gap-2 mb-3 flex-wrap">
+      <button class="filter-btn active" onclick="filterArea('all',this)">ทั้งหมด</button>
+      <button class="filter-btn" onclick="filterArea('Africa',this)">🌍 Africa</button>
+      <button class="filter-btn" onclick="filterArea('Oceania',this)">🌊 Oceania</button>
+      <button class="filter-btn" onclick="filterArea('South Asia',this)">🇮🇳 South Asia</button>
+      <button class="filter-btn" onclick="filterArea('South East Asia',this)">🌏 SE Asia</button>
+      <button class="filter-btn" onclick="filterArea('China',this)">🇨🇳 China</button>
+      <button class="filter-btn" onclick="filterArea('Middle East',this)">🕌 Middle East</button>
+      <button class="filter-btn" onclick="filterArea('ในประเทศ',this)">🏠 ในประเทศ</button>
+    </div>
+    <div class="card overflow-x-auto">
+      <table class="w-full tbl">
+        <thead>
+          <tr>
+            <th class="text-left">#</th>
+            <th class="text-left">ลูกค้า</th>
+            <th class="text-left">Area</th>
+            <th class="text-left">ประเทศ</th>
+            <th class="text-left">เซลส์</th>
+            <th class="text-right">ออเดอร์</th>
+            <th class="text-right">แผ่น 2.5</th>
+            <th class="text-right">Net USD</th>
+            <th class="text-right">ช่วงเวลา</th>
+          </tr>
+        </thead>
+        <tbody id="cust-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: Customer Editor -->
+  <div id="section-editor" class="hidden">
+    <!-- Toolbar -->
+    <div class="flex gap-2 mb-3 flex-wrap items-center">
+      <input type="text" id="ed-search" oninput="edFilter()" placeholder="🔍 ค้นหาชื่อลูกค้า..." 
+        class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 w-56 focus:outline-none focus:border-yellow-500">
+      <div class="flex gap-1 flex-wrap" id="ed-area-btns">
+        <button class="filter-btn active" onclick="edSetArea('all',this)">ทั้งหมด</button>
+        <button class="filter-btn" onclick="edSetArea('Africa',this)">🌍 Africa</button>
+        <button class="filter-btn" onclick="edSetArea('Oceania',this)">🌊 Oceania</button>
+        <button class="filter-btn" onclick="edSetArea('South Asia',this)">🇮🇳 South Asia</button>
+        <button class="filter-btn" onclick="edSetArea('South East Asia',this)">🌏 SE Asia</button>
+        <button class="filter-btn" onclick="edSetArea('China',this)">🇨🇳 China</button>
+        <button class="filter-btn" onclick="edSetArea('Middle East',this)">🕌 Middle East</button>
+        <button class="filter-btn" onclick="edSetArea('ในประเทศ',this)">🏠 ในประเทศ</button>
+        <button class="filter-btn" onclick="edSetArea('flagged',this)">🚩 มี Flag</button>
+      </div>
+      <div class="ml-auto flex gap-2 text-xs" style="color:#9ca3af">
+        <span>🟡 ซ้ำ <b id="ed-stat-dup" class="text-yellow-400">0</b></span>
+        <span>🔵 Merge <b id="ed-stat-merge" class="text-blue-400">0</b></span>
+        <span>🔴 ลบ <b id="ed-stat-del" class="text-red-400">0</b></span>
+        <span>✏️ แก้ชื่อ <b id="ed-stat-rename" class="text-green-400">0</b></span>
+      </div>
+      <button onclick="edExport()" class="text-xs px-3 py-1.5 rounded-lg border font-medium" style="border-color:#3b82f6;color:#3b82f6;background:rgba(59,130,246,.1)">💾 Export JSON</button>
+      <button onclick="togglePriceEntry()" class="text-xs px-3 py-1.5 rounded-lg border font-medium" style="border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.1)">💰 ราคา 2025</button>
+      <button onclick="edSave()" class="text-xs px-3 py-1.5 rounded-lg font-medium" style="background:#22c55e;color:#000">✅ บันทึก</button>
+    </div>
+    <!-- Table (inside section-editor) -->
+    <div class="card overflow-x-auto">
+      <table class="w-full" id="ed-table" style="border-collapse:collapse">
+        <thead>
+          <tr style="border-bottom:1px solid #1f2937">
+            <th style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 10px;text-align:left;white-space:nowrap">#</th>
+            <th onclick="edSort('name')" id="ed-th-name" style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 10px;text-align:left;min-width:200px;cursor:pointer;user-select:none;white-space:nowrap">ชื่อลูกค้า <span id="ed-sort-name">↕</span></th>
+            <th onclick="edSort('area')" id="ed-th-area" style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 10px;text-align:left;cursor:pointer;user-select:none;white-space:nowrap">Area <span id="ed-sort-area">↕</span></th>
+            <th onclick="edSort('country')" id="ed-th-country" style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 10px;text-align:left;cursor:pointer;user-select:none;white-space:nowrap">ประเทศ <span id="ed-sort-country">↕</span></th>
+            <th style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 10px;text-align:left;white-space:nowrap">เซลส์</th>
+            <th onclick="edSort('orders')" id="ed-th-orders" style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 10px;text-align:right;cursor:pointer;user-select:none;white-space:nowrap">ออเดอร์ <span id="ed-sort-orders">↕</span></th>
+            <th onclick="edSort('eq25')" id="ed-th-eq25" style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 10px;text-align:right;cursor:pointer;user-select:none;white-space:nowrap">แผ่น 2.5 <span id="ed-sort-eq25">↕</span></th>
+            <th onclick="edSort('net_usd')" id="ed-th-net_usd" style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 10px;text-align:right;cursor:pointer;user-select:none;white-space:nowrap">Net USD <span id="ed-sort-net_usd">↕</span></th>
+            <th onclick="edSort('last_order')" id="ed-th-last_order" style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 10px;text-align:right;cursor:pointer;user-select:none;white-space:nowrap">ล่าสุด <span id="ed-sort-last_order">↕</span></th>
+            <th style="font-size:10px;font-weight:600;color:#f59e0b;text-transform:uppercase;padding:8px 10px;text-align:left;white-space:nowrap;min-width:180px">📜 ประวัติชื่อ / เปลี่ยนชื่อ</th>
+            <th style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 10px;text-align:center;white-space:nowrap">Flag</th>
+            <th style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 10px;text-align:left;min-width:160px">หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody id="ed-tbody"></tbody>
+      </table>
+    </div>
+    <p class="text-xs mt-2" style="color:#374151">💡 คลิก <b style="color:#9ca3af">หัวคอลัมน์</b> เพื่อเรียงลำดับ · คลิกชื่อลูกค้าเพื่อแก้ไข · ติด Flag แล้วกด Export ส่งให้แก้ฐานข้อมูล</p>
+
+  <!-- Price Entry 2025 Panel (inside section-editor) -->
+  <div id="price-entry-wrapper" class="hidden mt-4">
+    <div class="card p-4">
+      <div class="flex justify-between items-center mb-3">
+        <p class="text-xs font-semibold text-amber-400 uppercase tracking-wider">💰 กรอกราคา 2025 (ก.พ.–ส.ค.) ที่ขาดหาย</p>
+        <button onclick="document.getElementById('price-entry-wrapper').classList.add('hidden')" style="color:#6b7280;font-size:18px;background:none;border:none;cursor:pointer">×</button>
+      </div>
+      <div id="price-entry-panel"></div>
+    </div>
+  </div>
+  </div><!-- end section-editor -->
+
+
+  <div id="section-salesman" class="hidden">
+    <div class="card overflow-x-auto">
+      <table class="w-full tbl">
+        <thead>
+          <tr>
+            <th class="text-left">เซลส์</th>
+            <th class="text-right">ออเดอร์รวม</th>
+            <th class="text-right">แผ่น 2.5 รวม</th>
+            <th class="text-right">Net USD รวม</th>
+            <th class="text-right">%ของทั้งหมด</th>
+            <th>ยอดรายปี (sparkline)</th>
+          </tr>
+        </thead>
+        <tbody id="sale-tbody"></tbody>
+      </table>
+    </div>
+    <div class="grid grid-cols-3 gap-4 mt-4" id="sale-cards"></div>
+  </div>
+
+  <!-- TAB: Area -->
+  <div id="section-area" class="hidden">
+    <div class="grid grid-cols-2 gap-4">
+      <div class="card p-4">
+        <p class="text-xs text-gray-400 mb-3 font-semibold uppercase tracking-wider">🌍 ยอด USD แยกตลาด</p>
+        <div id="area-bars"></div>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs text-gray-400 mb-3 font-semibold uppercase tracking-wider">📊 แผ่น 2.5 แยกตลาด</p>
+        <div id="area-bars-eq25"></div>
+      </div>
+    </div>
+    <div class="card mt-4 overflow-x-auto">
+      <table class="w-full tbl">
+        <thead>
+          <tr>
+            <th class="text-left">ตลาด/ภูมิภาค</th>
+            <th class="text-right">ออเดอร์</th>
+            <th class="text-right">แผ่น 2.5</th>
+            <th class="text-right">Net USD</th>
+            <th class="text-right">สัดส่วน USD</th>
+            <th class="w-40">แท่ง</th>
+          </tr>
+        </thead>
+        <tbody id="area-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: Product -->
+  <div id="section-product" class="hidden">
+    <div class="grid grid-cols-2 gap-4">
+      <div class="card p-4">
+        <p class="text-xs text-gray-400 mb-3 font-semibold uppercase tracking-wider">📦 แผ่น 2.5 แยกเกรด รายปี</p>
+        <div id="grade-chart"></div>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs text-gray-400 mb-3 font-semibold uppercase tracking-wider">📏 แผ่น 2.5 แยกความหนา รายปี</p>
+        <div id="thick-chart"></div>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-4 mt-4">
+      <div class="card p-4">
+        <p class="text-xs text-gray-400 mb-3 font-semibold uppercase tracking-wider">🥇 สัดส่วนเกรดทั้งหมด</p>
+        <div id="grade-summary"></div>
+      </div>
+      <div class="card p-4">
+        <p class="text-xs text-gray-400 mb-3 font-semibold uppercase tracking-wider">📐 สัดส่วนความหนาทั้งหมด</p>
+        <div id="thick-summary"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Timeline -->
+  <div id="section-timeline" class="hidden">
+    <!-- Toolbar -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+      <input type="text" id="tl-search" oninput="tlFilter()" placeholder="🔍 ค้นหาลูกค้า..."
+        class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 w-56 focus:outline-none focus:border-green-500">
+      <select id="tl-area" onchange="tlFilter()" style="background:#1a1f2e;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:5px 10px;font-size:12px">
+        <option value="all">ทุกตลาด</option>
+        <option value="Africa">Africa</option>
+        <option value="Oceania">Oceania</option>
+        <option value="South Asia">South Asia</option>
+        <option value="South East Asia">SE Asia</option>
+        <option value="China">China</option>
+        <option value="Middle East">Middle East</option>
+        <option value="ในประเทศ">ในประเทศ</option>
+      </select>
+      <select id="tl-sort" onchange="tlFilter()" style="background:#1a1f2e;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:5px 10px;font-size:12px">
+        <option value="eq25">เรียงตาม แผ่น 2.5</option>
+        <option value="net_usd">เรียงตาม Net USD</option>
+        <option value="orders">เรียงตาม Orders</option>
+        <option value="first_order">เรียงตาม เริ่มต้น</option>
+        <option value="last_order">เรียงตาม ล่าสุด</option>
+        <option value="name">เรียงตาม ชื่อ</option>
+      </select>
+      <div style="display:flex;gap:8px;font-size:11px;color:#6b7280;align-items:center">
+        <span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:10px;background:#22c55e;border-radius:2px"></span>Active</span>
+        <span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px"></span>Follow up</span>
+        <span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:10px;background:#374151;border-radius:2px"></span>ไม่ได้ซื้อ</span>
+      </div>
+      <span id="tl-count" style="font-size:11px;color:#6b7280;margin-left:auto"></span>
+      <button onclick="exportFollowUp()" style="font-size:10px;background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap">📋 Export Follow-up List</button>
+    </div>
+
+    <!-- Table -->
+    <div class="card" style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;table-layout:fixed" id="tl-table">
+        <colgroup>
+          <col style="width:32px">   <!-- # -->
+          <col style="width:190px">  <!-- ชื่อ -->
+          <col style="width:56px">   <!-- Orders -->
+          <col style="width:68px">   <!-- แผ่น 2.5 -->
+          <col style="width:68px">   <!-- Net USD -->
+          <col id="tl-year-cols">    <!-- years = filled by JS -->
+          <col style="width:82px">   <!-- Status -->
+        </colgroup>
+        <thead>
+          <tr style="border-bottom:1px solid #1f2937">
+            <th style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 6px;text-align:left">#</th>
+            <th style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 6px;text-align:left">ลูกค้า</th>
+            <th style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 6px;text-align:right">Orders</th>
+            <th style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 6px;text-align:right">แผ่น 2.5</th>
+            <th style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 6px;text-align:right">Net USD</th>
+            <th id="tl-year-header-row" colspan="13" style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 6px;text-align:center">2014→2026</th>
+            <th style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;padding:8px 6px;text-align:center">สถานะ</th>
+          </tr>
+          <tr id="tl-year-subheader" style="border-bottom:1px solid #111827">
+            <td colspan="5"></td>
+            <!-- year sub-headers injected by JS -->
+          </tr>
+        </thead>
+        <tbody id="tl-tbody"></tbody>
+        <tfoot>
+          <tr id="tl-total-row" style="border-top:2px solid #374151;background:#111827">
+            <td colspan="2" style="font-size:11px;font-weight:700;color:#e2e8f0;padding:8px 6px">รวม (ที่แสดง)</td>
+            <td id="tl-tot-orders" style="font-size:11px;font-weight:700;color:#e2e8f0;font-family:monospace;text-align:right;padding:8px 6px">—</td>
+            <td id="tl-tot-eq25"   style="font-size:11px;font-weight:700;color:#60a5fa;font-family:monospace;text-align:right;padding:8px 6px">—</td>
+            <td id="tl-tot-usd"    style="font-size:11px;font-weight:700;color:#4ade80;font-family:monospace;text-align:right;padding:8px 6px">—</td>
+            <td id="tl-tot-years"  colspan="14" style="font-size:10px;color:#4b5563;padding:8px 6px;text-align:center">ยอดรวม Net USD รายปี</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- Customer Detail Panel -->
+    <div id="tl-detail" class="card mt-4 p-4 hidden"></div>
+
+    <!-- Summary -->
+    <div class="card mt-3 p-3">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center">
+        <div id="tl-card-active" onclick="tlFilterByStatus('active')" style="cursor:pointer;border-radius:8px;padding:10px 6px;border:2px solid transparent;transition:all .15s" onmouseenter="this.style.background='rgba(34,197,94,.08)';this.style.borderColor='rgba(34,197,94,.3)'" onmouseleave="this.style.background=tlActiveStatus==='active'?'rgba(34,197,94,.1)':'';this.style.borderColor=tlActiveStatus==='active'?'rgba(34,197,94,.4)':'transparent'">
+          <p class="text-xs text-gray-500 mb-1">Active ปัจจุบัน (≤8 เดือน)</p>
+          <p class="text-xl font-bold text-green-400 mono" id="tl-sum-active">0</p>
+          <p style="font-size:9px;color:#4b5563;margin-top:2px">คลิกเพื่อดูรายชื่อ</p>
+        </div>
+        <div id="tl-card-gap" onclick="tlFilterByStatus('gap')" style="cursor:pointer;border-radius:8px;padding:10px 6px;border:2px solid transparent;transition:all .15s" onmouseenter="this.style.background='rgba(245,158,11,.08)';this.style.borderColor='rgba(245,158,11,.3)'" onmouseleave="this.style.background=tlActiveStatus==='gap'?'rgba(245,158,11,.1)':'';this.style.borderColor=tlActiveStatus==='gap'?'rgba(245,158,11,.4)':'transparent'">
+          <p class="text-xs text-gray-500 mb-1">ควร Follow up (8–36 เดือน)</p>
+          <p class="text-xl font-bold text-amber-400 mono" id="tl-sum-gap">0</p>
+          <p style="font-size:9px;color:#4b5563;margin-top:2px">คลิกเพื่อดูรายชื่อ</p>
+        </div>
+        <div id="tl-card-dead" onclick="tlFilterByStatus('dead')" style="cursor:pointer;border-radius:8px;padding:10px 6px;border:2px solid transparent;transition:all .15s" onmouseenter="this.style.background='rgba(239,68,68,.08)';this.style.borderColor='rgba(239,68,68,.3)'" onmouseleave="this.style.background=tlActiveStatus==='dead'?'rgba(239,68,68,.1)':'';this.style.borderColor=tlActiveStatus==='dead'?'rgba(239,68,68,.4)':'transparent'">
+          <p class="text-xs text-gray-500 mb-1">หยุดถาวร (&gt;3 ปี)</p>
+          <p class="text-xl font-bold text-red-400 mono" id="tl-sum-dead">0</p>
+          <p style="font-size:9px;color:#4b5563;margin-top:2px">คลิกเพื่อดูรายชื่อ</p>
+        </div>
+        <div id="tl-card-new" onclick="tlFilterByStatus('new')" style="cursor:pointer;border-radius:8px;padding:10px 6px;border:2px solid transparent;transition:all .15s" onmouseenter="this.style.background='rgba(59,130,246,.08)';this.style.borderColor='rgba(59,130,246,.3)'" onmouseleave="this.style.background=tlActiveStatus==='new'?'rgba(59,130,246,.1)':'';this.style.borderColor=tlActiveStatus==='new'?'rgba(59,130,246,.4)':'transparent'">
+          <p class="text-xs text-gray-500 mb-1">ลูกค้าใหม่ (เริ่ม 2024+)</p>
+          <p class="text-xl font-bold text-blue-400 mono" id="tl-sum-new">0</p>
+          <p style="font-size:9px;color:#4b5563;margin-top:2px">คลิกเพื่อดูรายชื่อ</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- TAB: Port -->
+  <div id="section-port" class="hidden">
+    <!-- Summary cards -->
+    <div id="port-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px"></div>
+
+    <!-- Controls -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+      <input type="text" id="port-search" oninput="renderPort()" placeholder="🔍 ค้นหาพอร์ต / ประเทศ..."
+        style="background:#1a1f2e;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:6px 12px;font-size:12px;width:220px">
+      <select id="port-year" onchange="renderPort()" style="background:#1a1f2e;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:6px 10px;font-size:12px">
+        <option value="all">ทุกปี</option>
+      </select>
+      <select id="port-area" onchange="renderPort()" style="background:#1a1f2e;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:6px 10px;font-size:12px">
+        <option value="all">ทุกตลาด</option>
+      </select>
+      <span id="port-count" style="font-size:11px;color:#6b7280;margin-left:auto"></span>
+    </div>
+
+    <!-- Port table -->
+    <div class="card overflow-x-auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:1px solid #1f2937">
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:#4b5563;font-weight:600">#</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:#4b5563;font-weight:600">พอร์ต</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:#4b5563;font-weight:600">ประเทศ</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:#4b5563;font-weight:600">ตลาด</th>
+          <th style="padding:8px 12px;text-align:right;font-size:10px;color:#4b5563;font-weight:600">ลูกค้า</th>
+          <th style="padding:8px 12px;text-align:right;font-size:10px;color:#4b5563;font-weight:600">Orders</th>
+          <th style="padding:8px 12px;text-align:right;font-size:10px;color:#4b5563;font-weight:600">แผ่น 2.5</th>
+          <th style="padding:8px 12px;text-align:right;font-size:10px;color:#4b5563;font-weight:600">Net USD</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:#4b5563;font-weight:600">สัดส่วน</th>
+          <th style="padding:8px 12px"></th>
+        </tr></thead>
+        <tbody id="port-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Port detail panel -->
+    <div id="port-detail" class="card hidden mt-4 p-4"></div>
+  </div>
+
+  <!-- TAB: Commission -->
+  <div id="section-comm" class="hidden">
+    <div id="comm-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+      <select id="comm-year" onchange="renderComm()" style="background:#1a1f2e;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:6px 10px;font-size:12px"></select>
+      <span style="font-size:10px;color:#6b7280">💡 ค่าคอมเอเจนซี่ (ช่อง AA + ชื่อใน AS) จะแสดงเมื่อฝ่ายขายกรอกข้อมูลใน Excel แล้วอัปโหลดเข้ามา</span>
+    </div>
+    <div class="card p-4 mb-4">
+      <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;margin-bottom:10px">📅 ค่าใช้จ่ายรายเดือน (USD)</p>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:1px solid #1f2937">
+          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#4b5563">เดือน</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#4b5563">ยอดขาย Gross</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#f59e0b">คอมเอเจนซี่ (AA)</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#a78bfa">คอมพนักงาน (AC)</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#60a5fa">ค่าเฟรท (AE)</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#6b7280">ประกัน (AG)</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#4ade80">NET สุทธิ</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#4b5563">คอม/แผ่น2.5</th>
+        </tr></thead><tbody id="comm-tbody"></tbody></table></div>
+    </div>
+    <div class="card p-4">
+      <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;margin-bottom:10px">🤝 เอเจนซี่ (ขายผ่านใคร)</p>
+      <div id="comm-agency"></div>
+    </div>
+  </div>
+
+  <!-- TAB: Executive Summary -->
+  <div id="section-exec" class="hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <p style="font-size:11px;color:#6b7280">📋 ภาพรวมทุกมิติในตารางเดียว — เทียบทุกปีข้างกัน</p>
+      <button onclick="execExportCSV()" style="font-size:11px;background:rgba(34,197,94,.12);color:#4ade80;border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:6px 14px;cursor:pointer">⬇️ Export CSV</button>
+    </div>
+    <div class="card overflow-x-auto" style="max-height:75vh;overflow-y:auto">
+      <table id="exec-table" style="width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap"></table>
+    </div>
+  </div>
+
+  <!-- TAB: Insights -->
+  <div id="section-insight" class="hidden">
+
+    <!-- Sub-tabs -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <button class="tab-btn active" id="ins-tab-season" onclick="insTab('season')">🌊 Seasonality</button>
+      <button class="tab-btn" id="ins-tab-health" onclick="insTab('health')">💊 Health Score</button>
+      <button class="tab-btn" id="ins-tab-price" onclick="insTab('price')">💰 Price Trend</button>
+      <span id="ins-filter-area" style="margin-left:auto;display:flex;gap:6px;align-items:center">
+        <select id="ins-sel-area" onchange="renderInsight()" style="background:#1a1f2e;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:5px 10px;font-size:11px">
+          <option value="all">ทุกตลาด</option>
+          <option value="Africa">Africa</option>
+          <option value="Oceania">Oceania</option>
+          <option value="South Asia">South Asia</option>
+          <option value="South East Asia">SE Asia</option>
+          <option value="China">China</option>
+          <option value="Middle East">Middle East</option>
+          <option value="ในประเทศ">ในประเทศ</option>
+        </select>
+        <select id="ins-sel-sale" onchange="renderInsight()" style="background:#1a1f2e;border:1px solid #374151;border-radius:6px;color:#e2e8f0;padding:5px 10px;font-size:11px">
+          <option value="all">ทุกเซลส์</option>
+        </select>
+      </span>
+    </div>
+
+    <!-- Seasonality -->
+    <div id="ins-season" class="">
+      <div class="card p-4 mb-4">
+        <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🌊 Seasonality — เดือนไหนยอดสูง/ต่ำ (ค่าเฉลี่ยจากข้อมูล 13 ปี)</p>
+        <p style="font-size:10px;color:#6b7280;margin-bottom:14px">แท่งสีเขียว = เดือนที่ยอดสูงกว่าค่าเฉลี่ย · สีแดง = ต่ำกว่าค่าเฉลี่ย · เส้นประ = ค่าเฉลี่ยรายปี</p>
+        <div id="ins-season-chart" style="display:flex;align-items:flex-end;gap:8px;height:120px;padding:0 4px"></div>
+        <div id="ins-season-labels" style="display:flex;gap:8px;margin-top:6px"></div>
+      </div>
+      <div class="card p-4">
+        <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">📊 สรุปรายเดือน — ค่าเฉลี่ย · สูงสุด · ต่ำสุด</p>
+        <div id="ins-season-table" style="overflow-x:auto"></div>
+      </div>
+    </div>
+
+    <!-- Health Score -->
+    <div id="ins-health" class="hidden">
+      <div class="card p-3 mb-3" style="background:rgba(99,102,241,.06);border-color:rgba(99,102,241,.2)">
+        <p style="font-size:10px;color:#818cf8;font-weight:600;margin-bottom:4px">📐 วิธีคำนวณ Health Score (0–100)</p>
+        <p style="font-size:10px;color:#6b7280">
+          <b style="color:#22c55e">Recency 40%</b> — ซื้อล่าสุดเมื่อไร (ยิ่งใหม่ยิ่งดี) &nbsp;·&nbsp;
+          <b style="color:#60a5fa">Frequency 30%</b> — เดือนที่มีออเดอร์ / ช่วงเวลาทั้งหมด &nbsp;·&nbsp;
+          <b style="color:#f59e0b">Volume 30%</b> — ยอด eq25 เทียบกับลูกค้าอื่น
+        </p>
+      </div>
+      <div class="card overflow-x-auto">
+        <div style="display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid #1f2937;align-items:center">
+          <span style="font-size:11px;color:#6b7280" id="ins-health-count"></span>
+          <input type="text" id="ins-health-search" oninput="renderHealth()" placeholder="🔍 ค้นหา..."
+            style="background:#111827;border:1px solid #374151;border-radius:5px;color:#e2e8f0;padding:4px 10px;font-size:11px;width:180px;margin-left:auto">
+          <select id="ins-health-sort" onchange="renderHealth()" style="background:#111827;border:1px solid #374151;border-radius:5px;color:#e2e8f0;padding:4px 8px;font-size:11px">
+            <option value="score">เรียงตาม Score</option>
+            <option value="recency">เรียงตาม Recency</option>
+            <option value="volume">เรียงตาม Volume</option>
+          </select>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead>
+            <tr style="border-bottom:1px solid #1f2937">
+              <th style="padding:8px 12px;text-align:left;font-size:10px;color:#4b5563;font-weight:600">#</th>
+              <th style="padding:8px 12px;text-align:left;font-size:10px;color:#4b5563;font-weight:600">ลูกค้า</th>
+              <th style="padding:8px 12px;text-align:center;font-size:10px;color:#4b5563;font-weight:600">Health Score</th>
+              <th style="padding:8px 12px;text-align:center;font-size:10px;color:#22c55e;font-weight:600">Recency</th>
+              <th style="padding:8px 12px;text-align:center;font-size:10px;color:#60a5fa;font-weight:600">Frequency</th>
+              <th style="padding:8px 12px;text-align:center;font-size:10px;color:#f59e0b;font-weight:600">Volume</th>
+              <th style="padding:8px 12px;text-align:right;font-size:10px;color:#4b5563;font-weight:600">eq25 รวม</th>
+              <th style="padding:8px 12px;text-align:center;font-size:10px;color:#4b5563;font-weight:600">ซื้อล่าสุด</th>
+            </tr>
+          </thead>
+          <tbody id="ins-health-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Price Trend -->
+    <div id="ins-price" class="hidden">
+      <div class="card p-4 mb-4">
+        <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">💰 ราคาเฉลี่ย USD/แผ่น 2.5 รายปี</p>
+        <p style="font-size:10px;color:#6b7280;margin-bottom:14px">เปรียบเทียบราคาขายเฉลี่ยต่อแผ่น 2.5 ทุกปี แยกตามตลาดหรือเซลส์</p>
+        <div id="ins-price-chart" style="display:flex;align-items:flex-end;gap:10px;height:120px;padding:0 4px"></div>
+        <div id="ins-price-labels" style="display:flex;gap:10px;margin-top:6px"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="card p-4">
+          <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">🏆 Top 10 ราคาสูงสุด (ต่อลูกค้า)</p>
+          <div id="ins-price-top"></div>
+        </div>
+        <div class="card p-4">
+          <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">📉 Bottom 10 ราคาต่ำสุด (ต่อลูกค้า)</p>
+          <div id="ins-price-bot"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+const DB_STATS = {}
+const CUST_MONTHLY = {};
+const PORT_DATA = {};
+const YEARS = Object.keys(DB_STATS.year_stats).sort();
+const SALESMEN = Object.keys(DB_STATS.salesman_year);
+const AREAS = ['Africa','Oceania','South Asia','South East Asia','China','Europe','Unknown','East Asia','NORTH & SOUTH AMERICA','Middle East','Other/Port'];
+const GRADE_COLORS = {AAA:'#22c55e',A:'#3b82f6',B:'#f59e0b',F:'#f43f5e',AV:'#a855f7',C:'#64748b'};
+const AREA_COLORS = {Africa:'#22c55e',Oceania:'#3b82f6','South Asia':'#f59e0b','South East Asia':'#a855f7',China:'#f43f5e',Europe:'#06b6d4',Unknown:'#6b7280',Other:'#374151'};
+
+let activeArea = 'all';
+
+// Format helpers
+const fNum = (n,d=0) => n == null ? '—' : n.toLocaleString('en-US', {minimumFractionDigits:d, maximumFractionDigits:d});
+const fUSD = (n) => n == null ? '—' : '$' + fNum(Math.round(n));
+const fM = (n) => { if(n>=1e6) return '$'+(n/1e6).toFixed(1)+'M'; if(n>=1e3) return '$'+(n/1e3).toFixed(0)+'k'; return '$'+Math.round(n); };
+const fEq = (n) => { if(n>=1e6) return (n/1e6).toFixed(2)+'M'; if(n>=1e3) return (n/1e3).toFixed(0)+'k'; return Math.round(n).toString(); };
+
+// Init filters
+function initFilters() {
+  const yf = document.getElementById('year-filter');
+  YEARS.forEach(y => { const o = document.createElement('option'); o.value=y; o.textContent=`${y} (${2543+parseInt(y)-2000+2000} BE)`; yf.appendChild(o); });
+  const sf = document.getElementById('sale-filter');
+  SALESMEN.forEach(s => { const o = document.createElement('option'); o.value=s; o.textContent=s; sf.appendChild(o); });
+  document.getElementById('total-customers').textContent = Object.keys(DB_STATS.top_customers).length.toString();
+}
+
+// Apply filters
+function applyFilters() {
+  const yr = document.getElementById('year-filter').value;
+  const sl = document.getElementById('sale-filter').value;
+  renderAll(yr, sl);
+}
+
+let activeMonthYear = 'all';
+function filterMonthYear(y, btn) {
+  activeMonthYear = y;
+  document.querySelectorAll('#section-monthly .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderMonthly();
+}
+function renderMonthly() {
+  const ms = DB_STATS.month_stats || {};
+  const keys = Object.keys(ms).filter(k => activeMonthYear==='all' || k.startsWith(activeMonthYear)).sort();
+  const maxEq25 = Math.max(...keys.map(k=>ms[k].eq25||0), 1);
+  const thaiMo = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  let rows = '';
+  keys.forEach(k => {
+    const s = ms[k]; const [yr,mo] = k.split('-');
+    const pct = (s.eq25/maxEq25*100).toFixed(1);
+    const hasUSD = s.net_usd > 0;
+    rows += `<tr>
+      <td class="font-mono text-emerald-400">${yr} ${thaiMo[parseInt(mo)]}</td>
+      <td class="text-right text-gray-300">${fNum(s.orders)}</td>
+      <td class="text-right text-blue-300 font-mono">${fEq(s.eq25)}</td>
+      <td class="text-right text-gray-400 font-mono">${fNum(s.cont||0)}</td>
+      <td class="text-right font-mono ${hasUSD?'text-green-300':'text-gray-600'}">${hasUSD?fM(s.net_usd):'—'}</td>
+      <td><div style="background:#1f2937;border-radius:3px;height:8px"><div class="bar-blue" style="width:${pct}%;height:100%;border-radius:3px"></div></div></td>
+    </tr>`;
+  });
+  document.getElementById('monthly-tbody').innerHTML = rows||'<tr><td colspan="6" class="text-center text-gray-600 py-6">ไม่มีข้อมูล</td></tr>';
+}
+
+function renderAll(yr='all', sl='all') {
+  renderYearly(yr, sl);
+  renderMonthly();
+  renderCustomers(yr, sl);
+  renderSalesman(yr);
+  renderArea(yr);
+  renderProduct(yr);
+  renderKPIs(yr, sl);
+}
+
+function renderKPIs(yr, sl) {
+  let totalUSD=0, totalEq25=0, totalOrders=0, custSet=new Set();
+  const ys = DB_STATS.year_stats;
+  YEARS.forEach(y => {
+    if(yr !== 'all' && y !== yr) return;
+    const s = ys[y];
+    totalUSD += s.net_usd; totalEq25 += s.eq25; totalOrders += s.orders;
+  });
+  Object.entries(DB_STATS.top_customers).forEach(([c,s]) => custSet.add(c));
+
+  document.getElementById('kpi-usd').textContent = fM(totalUSD);
+  document.getElementById('kpi-eq25').textContent = fEq(totalEq25);
+  document.getElementById('kpi-orders').textContent = fNum(totalOrders);
+  document.getElementById('kpi-custs').textContent = Object.keys(DB_STATS.top_customers).length.toString();
+  const avgPrice = totalEq25 > 0 ? totalUSD / totalEq25 : 0;
+  document.getElementById('kpi-avg-price').textContent = '$' + avgPrice.toFixed(2);
+  document.getElementById('kpi-usd-sub').textContent = yr === 'all' ? '2014–2026 ทั้งหมด' : `ปี ${yr}`;
+}
+
+function renderYearly(yr, sl) {
+  const ys = DB_STATS.year_stats;
+  const maxEq25 = Math.max(...Object.values(ys).map(s=>s.eq25));
+  const maxUSD = Math.max(...Object.values(ys).map(s=>s.net_usd));
+  const totalEq25 = Object.values(ys).reduce((a,s)=>a+s.eq25,0);
+
+  let rows = '';
+  YEARS.forEach(y => {
+    const s = ys[y];
+    if(yr !== 'all' && y !== yr) return;
+    const pct = (s.eq25/totalEq25*100).toFixed(1);
+    const barW = (s.eq25/maxEq25*100).toFixed(1);
+    const avgP = s.eq25 > 0 ? ((s.net_usd_sheets!=null?s.net_usd_sheets:s.net_usd)/s.eq25).toFixed(2) : 0;
+    const fxRate = DB_STATS.fx_rates_annual[y] || 0;
+    const fxColor = fxRate >= 35 ? '#f43f5e' : fxRate <= 32 ? '#22c55e' : '#f59e0b';
+    rows += `<tr>
+      <td class="font-mono text-green-400">${y}</td>
+      <td class="text-right text-gray-300">${fNum(s.orders)}</td>
+      <td class="text-right text-blue-300 font-mono">${fEq(s.eq25)}</td>
+      <td class="text-right text-green-300 font-mono">${fM(s.net_usd)}</td>
+      <td class="text-right text-gray-400 font-mono text-xs">${fxRate > 0 ? fM(Math.round(s.net_usd * fxRate)) : '—'}</td>
+      <td class="text-right text-amber-300 font-mono">$${avgP}</td>
+      <td class="text-right font-mono text-xs" style="color:${fxColor}">${fxRate > 0 ? fxRate.toFixed(2) : '—'}</td>
+      <td><div style="background:#1f2937;border-radius:3px;height:8px"><div class="bar" style="width:${barW}%"></div></div><span class="text-xs text-gray-500">${pct}%</span></td>
+    </tr>`;
+  });
+  document.getElementById('yearly-tbody').innerHTML = rows;
+
+  // Bar charts
+  let eq25Bars='', usdBars='';
+  YEARS.forEach(y => {
+    const s = ys[y];
+    const w1 = (s.eq25/maxEq25*100).toFixed(1);
+    const w2 = (s.net_usd/maxUSD*100).toFixed(1);
+    eq25Bars += `<div class="flex items-center gap-2"><span class="text-xs text-gray-500 w-10 text-right mono">${y}</span><div style="flex:1;background:#111827;border-radius:3px;height:14px"><div class="bar-blue" style="width:${w1}%;height:100%;border-radius:3px"></div></div><span class="text-xs text-blue-400 mono w-16 text-right">${fEq(s.eq25)}</span></div>`;
+    usdBars += `<div class="flex items-center gap-2"><span class="text-xs text-gray-500 w-10 text-right mono">${y}</span><div style="flex:1;background:#111827;border-radius:3px;height:14px"><div class="bar" style="width:${w2}%;height:100%;border-radius:3px"></div></div><span class="text-xs text-green-400 mono w-16 text-right">${fM(s.net_usd)}</span></div>`;
+  });
+  document.getElementById('chart-eq25').innerHTML = eq25Bars;
+  document.getElementById('chart-usd').innerHTML = usdBars;
+}
+
+function renderCustomers(yr, sl) {
+  const custs = DB_STATS.top_customers;
+  let rows = '';
+  let i = 1;
+  const areaColor = {Africa:'badge-green',Oceania:'badge-blue','South Asia':'badge-amber','South East Asia':'badge-purple',China:'badge-rose','Middle East':'badge-amber','ในประเทศ':'badge-blue',Unknown:''};
+  Object.entries(custs).forEach(([name, s]) => {
+    if(s.no_data) return;  // skip rows with no real data
+    if(activeArea !== 'all' && s.area !== activeArea) return;
+    const ac = areaColor[s.area] || '';
+    const saleList = (s.salesman||[]).join(', ');
+    const country = s.country || '—';
+    const lastOrd = s.last_order ? s.last_order.substring(0,7) : '—';
+    const firstOrd = s.first_order ? s.first_order.substring(0,7) : '—';
+    rows += `<tr>
+      <td class="text-gray-500 mono">${i}</td>
+      <td class="text-gray-200 font-medium" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</td>
+      <td><span class="badge ${ac}">${s.area||'—'}</span></td>
+      <td class="text-gray-400 text-xs">${country}</td>
+      <td class="text-gray-400 text-xs">${saleList}</td>
+      <td class="text-right text-gray-300 mono">${fNum(s.orders)}</td>
+      <td class="text-right text-blue-300 mono">${fEq(s.eq25)}</td>
+      <td class="text-right text-green-300 mono">${fM(s.net_usd)}</td>
+      <td class="text-right text-gray-500 mono text-xs">${firstOrd}→${lastOrd}</td>
+    </tr>`;
+    i++;
+  });
+  document.getElementById('cust-tbody').innerHTML = rows || '<tr><td colspan="9" class="text-center text-gray-600 py-6">ไม่มีข้อมูล</td></tr>';
+}
+
+function filterArea(a, btn) {
+  activeArea = a;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderCustomers(document.getElementById('year-filter').value, document.getElementById('sale-filter').value);
+}
+
+function renderSalesman(yr) {
+  const sy = DB_STATS.salesman_year;
+  // Aggregate
+  const totals = {};
+  const allYrTotal = {eq25:0, net_usd:0};
+  Object.entries(sy).forEach(([name, yd]) => {
+    let eq25=0, usd=0, orders=0;
+    Object.entries(yd).forEach(([y,s]) => { if(yr==='all'||y===yr){ eq25+=s.eq25; usd+=s.net_usd; orders+=s.orders; } });
+    totals[name] = {eq25, usd, orders};
+    allYrTotal.eq25 += eq25; allYrTotal.net_usd += usd;
+  });
+  const sorted = Object.entries(totals).sort((a,b)=>b[1].usd-a[1].usd);
+
+  let rows = '';
+  const saleColors = {Nok:'#22c55e',Kim:'#3b82f6',Lek:'#f59e0b',Tor:'#a855f7',Than:'#64748b','K.Angkana':'#f43f5e','K.Lyn':'#06b6d4'};
+  sorted.forEach(([name, s]) => {
+    const pct = allYrTotal.net_usd > 0 ? (s.usd/allYrTotal.net_usd*100).toFixed(1) : 0;
+    // Sparkline
+    const yd = sy[name];
+    const maxY = Math.max(...YEARS.map(y => yd[y]?.net_usd||0));
+    let spark = '';
+    YEARS.forEach(y => {
+      const h = maxY > 0 ? Math.max(3, ((yd[y]?.net_usd||0)/maxY*30)) : 3;
+      const isActive = yr==='all'||y===yr;
+      spark += `<span class="sparkline-bar" style="height:${h}px;opacity:${isActive?1:0.3};background:${saleColors[name]||'#22c55e'}"></span>`;
+    });
+    const col = saleColors[name] || '#64748b';
+    rows += `<tr>
+      <td style="color:${col}" class="font-semibold">${name}</td>
+      <td class="text-right text-gray-300 mono">${fNum(s.orders)}</td>
+      <td class="text-right text-blue-300 mono">${fEq(s.eq25)}</td>
+      <td class="text-right text-green-300 mono">${fM(s.usd)}</td>
+      <td class="text-right"><div style="background:#1f2937;border-radius:10px;height:6px;width:80px;display:inline-block;vertical-align:middle"><div style="width:${pct}%;height:100%;border-radius:10px;background:${col}"></div></div> <span class="text-xs mono" style="color:${col}">${pct}%</span></td>
+      <td class="align-bottom">${spark}</td>
+    </tr>`;
+  });
+  document.getElementById('sale-tbody').innerHTML = rows;
+}
+
+function renderArea(yr) {
+  // Aggregate from area_year or top_customers
+  const areaData = {};
+  let totalUSD = 0;
+  Object.entries(DB_STATS.area_year).forEach(([y, ad]) => {
+    if(yr !== 'all' && y !== yr) return;
+    Object.entries(ad).forEach(([a, v]) => {
+      if(!areaData[a]) areaData[a] = {eq25:0, net_usd:0, orders:0};
+      areaData[a].eq25 += v.eq25; areaData[a].net_usd += v.net_usd;
+    });
+  });
+  // Count orders from customers
+  Object.values(DB_STATS.top_customers).forEach(c => {
+    totalUSD += c.net_usd;
+  });
+  totalUSD = Object.values(areaData).reduce((a,v)=>a+v.net_usd, 0);
+
+  const sorted = Object.entries(areaData).sort((a,b)=>b[1].net_usd-a[1].net_usd).filter(([a])=>a!=='Other/Port');
+  const maxUSD = sorted[0]?.[1].net_usd || 1;
+  const maxEq = Math.max(...sorted.map(([,v])=>v.eq25)) || 1;
+
+  let barsUSD='', barsEq='';
+  sorted.forEach(([a, v]) => {
+    const col = AREA_COLORS[a] || '#6b7280';
+    const w1 = (v.net_usd/maxUSD*100).toFixed(1);
+    const w2 = (v.eq25/maxEq*100).toFixed(1);
+    barsUSD += `<div class="flex items-center gap-2 mb-2"><span class="text-xs text-gray-400 w-28 truncate" title="${a}">${a}</span><div style="flex:1;background:#111827;border-radius:3px;height:14px"><div style="width:${w1}%;height:100%;border-radius:3px;background:${col}"></div></div><span class="text-xs mono w-14 text-right" style="color:${col}">${fM(v.net_usd)}</span></div>`;
+    barsEq += `<div class="flex items-center gap-2 mb-2"><span class="text-xs text-gray-400 w-28 truncate" title="${a}">${a}</span><div style="flex:1;background:#111827;border-radius:3px;height:14px"><div style="width:${w2}%;height:100%;border-radius:3px;background:${col}"></div></div><span class="text-xs mono w-14 text-right" style="color:${col}">${fEq(v.eq25)}</span></div>`;
+  });
+  document.getElementById('area-bars').innerHTML = barsUSD;
+  document.getElementById('area-bars-eq25').innerHTML = barsEq;
+
+  let trows = '';
+  sorted.forEach(([a, v]) => {
+    const pct = totalUSD > 0 ? (v.net_usd/totalUSD*100).toFixed(1) : 0;
+    const col = AREA_COLORS[a] || '#6b7280';
+    trows += `<tr><td style="color:${col}" class="font-medium">${a}</td><td class="text-right text-gray-400 mono">—</td><td class="text-right text-blue-300 mono">${fEq(v.eq25)}</td><td class="text-right text-green-300 mono">${fM(v.net_usd)}</td><td class="text-right mono text-xs" style="color:${col}">${pct}%</td><td><div style="background:#1f2937;border-radius:3px;height:7px"><div style="width:${pct}%;height:100%;border-radius:3px;background:${col}"></div></div></td></tr>`;
+  });
+  document.getElementById('area-tbody').innerHTML = trows;
+}
+
+function renderProduct(yr) {
+  const gy = DB_STATS.grade_year;
+  const ty = DB_STATS.thick_year;
+  const grades = ['AAA','A','B','F','AV','C'];
+  const displayYears = yr === 'all' ? YEARS : [yr];
+
+  // Grade by year
+  let gc = '';
+  displayYears.forEach(y => {
+    if(!gy[y]) return;
+    const total = Object.values(gy[y]).reduce((a,v)=>a+v,0);
+    if(!total) return;
+    let bars = '';
+    grades.forEach(g => {
+      const v = gy[y][g] || 0;
+      const pct = (v/total*100).toFixed(1);
+      if(v>0) bars += `<span title="${g}: ${fEq(v)}" style="flex:${pct};background:${GRADE_COLORS[g]||'#374151'};height:12px"></span>`;
+    });
+    gc += `<div class="mb-2"><div class="flex justify-between mb-0.5"><span class="text-xs text-gray-500 mono">${y}</span><span class="text-xs text-gray-600">${fEq(total)}</span></div><div style="display:flex;height:12px;border-radius:4px;overflow:hidden;gap:1px">${bars}</div></div>`;
+  });
+  document.getElementById('grade-chart').innerHTML = gc;
+
+  // Thickness by year
+  let tc = '';
+  const thickColorPalette = ['#22c55e','#3b82f6','#f59e0b','#a855f7','#f43f5e','#06b6d4','#eab308','#ec4899','#84cc16','#6366f1','#f97316','#14b8a6','#d946ef','#0ea5e9','#facc15','#ef4444','#10b981','#8b5cf6','#fb923c','#2dd4bf','#e879f9','#65a30d','#0891b2','#dc2626','#7c3aed','#ca8a04'];
+  const thickColorCache = {};
+  let thickColorIdx = 0;
+  function getThickColor(t) {
+    if(!thickColorCache[t]) { thickColorCache[t] = thickColorPalette[thickColorIdx % thickColorPalette.length]; thickColorIdx++; }
+    return thickColorCache[t];
+  }
+  // Proxy: โค้ดเดิมเรียก thickColors[t] ปกติ แต่สีแต่ละความหนาไม่ซ้ำกันเลยตามลำดับที่พบ
+  const thickColors = new Proxy({}, { get: (_, t) => getThickColor(t) });
+  displayYears.forEach(y => {
+    if(!ty[y]) return;
+    const total = Object.values(ty[y]).reduce((a,v)=>a+v,0);
+    if(!total) return;
+    let bars = '';
+    Object.entries(ty[y]).sort((a,b)=>parseFloat(a[0])-parseFloat(b[0])).forEach(([t,v]) => {
+      const pct = (v/total*100).toFixed(1);
+      if(v>0) bars += `<span title="${t}mm: ${fEq(v)}" style="flex:${pct};background:${thickColors[t]||'#374151'};height:12px"></span>`;
+    });
+    tc += `<div class="mb-2"><div class="flex justify-between mb-0.5"><span class="text-xs text-gray-500 mono">${y}</span><span class="text-xs text-gray-600">${fEq(total)}</span></div><div style="display:flex;height:12px;border-radius:4px;overflow:hidden;gap:1px">${bars}</div></div>`;
+  });
+  document.getElementById('thick-chart').innerHTML = tc;
+
+  // Grade summary all time
+  const gradeTotals = {};
+  Object.values(gy).forEach(d => { Object.entries(d).forEach(([g,v]) => { gradeTotals[g] = (gradeTotals[g]||0)+v; }); });
+  const totalG = Object.values(gradeTotals).reduce((a,v)=>a+v,0);
+  let gs = '';
+  Object.entries(gradeTotals).sort((a,b)=>b[1]-a[1]).forEach(([g,v]) => {
+    const pct = (v/totalG*100).toFixed(1);
+    gs += `<div class="flex items-center gap-2 mb-2"><span class="text-xs font-bold w-10" style="color:${GRADE_COLORS[g]||'#666'}">${g}</span><div style="flex:1;background:#111827;border-radius:3px;height:14px"><div style="width:${pct}%;height:100%;border-radius:3px;background:${GRADE_COLORS[g]||'#374151'}"></div></div><span class="text-xs mono text-gray-400 w-16 text-right">${fEq(v)}</span><span class="text-xs text-gray-600 w-10 text-right">${pct}%</span></div>`;
+  });
+  document.getElementById('grade-summary').innerHTML = gs;
+
+  // Thickness summary
+  const thickTotals = {};
+  Object.values(ty).forEach(d => { Object.entries(d).forEach(([t,v]) => { thickTotals[t] = (thickTotals[t]||0)+v; }); });
+  const totalT = Object.values(thickTotals).reduce((a,v)=>a+v,0);
+  let ts = '';
+  Object.entries(thickTotals).sort((a,b)=>parseFloat(a[0])-parseFloat(b[0])).forEach(([t,v]) => {
+    const pct = (v/totalT*100).toFixed(1);
+    ts += `<div class="flex items-center gap-2 mb-2"><span class="text-xs font-bold w-12 mono" style="color:${thickColors[t]||'#666'}">${t}mm</span><div style="flex:1;background:#111827;border-radius:3px;height:14px"><div style="width:${pct}%;height:100%;border-radius:3px;background:${thickColors[t]||'#374151'}"></div></div><span class="text-xs mono text-gray-400 w-16 text-right">${fEq(v)}</span><span class="text-xs text-gray-600 w-10 text-right">${pct}%</span></div>`;
+  });
+  document.getElementById('thick-summary').innerHTML = ts;
+}
+
+function switchTab(tab) {
+  ['yearly','monthly','customer','salesman','area','port','comm','exec','product','timeline','insight','editor'].forEach(t => {
+    document.getElementById('section-'+t).classList.toggle('hidden', t!==tab);
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+  });
+  if(tab==='editor')   edRender();
+  if(tab==='timeline') tlRender();
+  if(tab==='insight')  renderInsight();
+  if(tab==='port')     renderPort();
+  if(tab==='comm')     renderComm();
+  if(tab==='exec')     renderExec();
+  if(tab==='yearly')   renderDashboard();
+}
+
+// ===== CUSTOMER EDITOR =====
+// edCustomers = live working copy, synced from DB_STATS.top_customers
+let edCustomers = null;
+const ED_AREAS = ['Africa','Oceania','South Asia','South East Asia','China','Middle East','ในประเทศ'];
+const ED_STORAGE_KEY = 'aaf_cust_editor_v1';
+let edActiveArea = 'all';
+
+function edInit() {
+  edCustomers = Object.entries(DB_STATS.top_customers).map(([name, s]) => ({
+    name, area: s.area||'', country: s.country||'',
+    salesmen: s.salesman||[], orders: s.orders||0,
+    eq25: s.eq25||0, net_usd: s.net_usd||0,
+    first_order: s.first_order||'', last_order: s.last_order||'',
+    no_data: s.no_data||false,
+    name_history: (s.name_history||[]).join(', '),
+    // snapshot ตอน init สำหรับตรวจว่ามีการเปลี่ยนแปลงหรือเปล่า
+    _snapArea:     s.area||'',
+    _snapCountry:  s.country||'',
+    _snapSalesmen: (s.salesman||[]).join(','),
+    _snapHistory:  (s.name_history||[]).join(', '),
+    _newName:null, _origName:null, _flag_dup:false, _flag_merge:false, _flag_del:false,
+    _note:'', _editing:false, _showHistory:false,
+  }));
+  try {
+    const saved = JSON.parse(localStorage.getItem(ED_STORAGE_KEY)||'{}');
+    edCustomers.forEach(c => {
+      const s = saved[c.name];
+      if(!s) return;
+      if(s.area !== undefined)         c.area         = s.area;
+      if(s.country !== undefined)      c.country      = s.country;
+      if(s.name_history !== undefined) c.name_history = s.name_history;
+      if(s.salesmen !== undefined)     c.salesmen     = s.salesmen;
+      if(s._newName !== undefined)     c._newName     = s._newName;
+      if(s._origName !== undefined)    c._origName    = s._origName;
+      if(s._flag_dup !== undefined)    c._flag_dup    = s._flag_dup;
+      if(s._flag_merge !== undefined)  c._flag_merge  = s._flag_merge;
+      if(s._flag_del !== undefined)    c._flag_del    = s._flag_del;
+      if(s._note !== undefined)        c._note        = s._note;
+    });
+  } catch(e){}
+}
+
+function edFilter() {
+  edRenderTable();
+}
+
+function edSetArea(a, btn) {
+  edActiveArea = a;
+  document.querySelectorAll('#ed-area-btns .filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  edRenderTable();
+}
+
+function edRender() {
+  if(!edCustomers) edInit();
+  edRenderTable();
+  edUpdateStats();
+  renderPriceEntry();
+}
+
+function togglePriceEntry() {
+  const w = document.getElementById('price-entry-wrapper');
+  if(w) { w.classList.toggle('hidden'); renderPriceEntry(); }
+}
+
+function edRenderTable() {
+  if(!edCustomers) edInit();
+  const q = (document.getElementById('ed-search')||{}).value?.toLowerCase()||'';
+  let filtered = edCustomers.filter(c => {
+    // no_data rows shown with special style (not hidden)
+    const matchArea = edActiveArea==='all' ? true
+      : edActiveArea==='flagged' ? (c._flag_dup||c._flag_merge||c._flag_del)
+      : c.area===edActiveArea;
+    const matchQ = !q || (c._newName||c.name).toLowerCase().includes(q) || (c.country||'').toLowerCase().includes(q);
+    return matchArea && matchQ;
+  });
+
+  // Apply sort
+  filtered = edSortData(filtered);
+
+  const rows = filtered.map((c, i) => {
+    const ci = edCustomers.indexOf(c);
+    const dispName = c._newName || c.name;
+    const rowBg = c.no_data ? 'background:rgba(100,100,100,.05);opacity:0.5' : c._flag_del ? 'background:rgba(248,81,73,.06)' : c._flag_dup ? 'background:rgba(245,158,11,.06)' : c._flag_merge ? 'background:rgba(59,130,246,.06)' : '';
+    const areaOpts = ED_AREAS.map(a=>`<option value="${a}"${c.area===a?' selected':''}>${a}</option>`).join('');
+    const nameCell = c._editing
+      ? `<input id="ed_ni_${ci}" class="bg-gray-800 border border-blue-500 rounded px-1 text-xs text-gray-200 w-full" style="outline:none" value="${dispName.replace(/"/g,'&quot;')}" onblur="edCommit(${ci},this)" onkeydown="if(event.key==='Enter')this.blur()">`
+      : `<span class="cursor-pointer hover:text-blue-400" style="font-size:12px;font-weight:500;color:${c.no_data?'#4b5563':'#e2e8f0'};text-decoration:${c.no_data?'line-through':'none'}" onclick="edStartEdit(${ci})" title="${c.no_data?'ข้อมูลไม่ครบ':'คลิกเพื่อแก้ไข'}">${dispName}</span>${c._newName&&c._newName!==c.name?`<br><span style="font-size:9px;color:#6b7280">เดิม: ${c.name}</span>`:''}`;
+
+    const netUsd = c.net_usd > 0 ? '$' + (c.net_usd>=1e6 ? (c.net_usd/1e6).toFixed(1)+'M' : (c.net_usd/1e3).toFixed(0)+'k') : '—';
+
+    // Name history cell
+    const histCell = `<div style="display:flex;align-items:center;gap:4px">
+      <input style="flex:1;min-width:120px;background:transparent;border:none;border-bottom:1px dashed #374151;color:#6b7280;font-size:10px;font-family:inherit;padding:2px 4px" 
+        placeholder="ชื่อเดิม / ปีที่เปลี่ยน เช่น BBL→GVM (2020)..."
+        value="${(c.name_history||'').replace(/"/g,'&quot;')}"
+        onchange="edSetHistory(${ci},this.value)"
+        onfocus="this.style.background='#1f2937';this.style.color='#e2e8f0';this.style.borderRadius='3px 3px 0 0'"
+        onblur="this.style.background='transparent';this.style.color='#6b7280';this.style.borderRadius='0'">
+    </div>`;
+
+    // No-data badge for พรเทพ etc.
+    const noDataBadge = c.no_data ? `<span style="font-size:9px;background:rgba(245,158,11,.15);color:#f59e0b;border-radius:3px;padding:1px 4px;margin-left:4px">ข้อมูลไม่ครบ</span>` : '';
+
+    return `<tr style="border-bottom:1px solid #111827;${rowBg}">
+      <td style="padding:6px 10px;font-size:10px;color:#374151;font-family:monospace">${i+1}</td>
+      <td style="padding:6px 10px;max-width:200px">
+        ${nameCell}${noDataBadge}
+      </td>
+      <td style="padding:6px 10px">
+        <select style="background:#1f2937;border:1px solid #374151;border-radius:4px;color:#e2e8f0;padding:2px 6px;font-size:11px;cursor:pointer" onchange="edChangeArea(${ci},this.value)">${areaOpts}</select>
+      </td>
+      <td style="padding:6px 10px;font-size:11px">
+        <input style="width:100%;min-width:90px;background:transparent;border:none;border-bottom:1px dashed #374151;color:#9ca3af;font-size:11px;font-family:inherit;padding:2px 4px" 
+          value="${(c.country||'').replace(/"/g,'&quot;')}" placeholder="ระบุประเทศ..." 
+          onchange="edSetCountry(${ci},this.value)"
+          onfocus="this.style.background='#1f2937';this.style.borderRadius='3px 3px 0 0';this.style.color='#e2e8f0'" 
+          onblur="this.style.background='transparent';this.style.borderRadius='0';this.style.color='#9ca3af'">
+      </td>
+      <td style="padding:6px 10px;font-size:11px">
+        <input style="width:100%;min-width:90px;background:transparent;border:none;border-bottom:1px dashed #374151;color:#9ca3af;font-size:11px;font-family:inherit;padding:2px 4px" 
+          value="${(c.salesmen||[]).join(', ').replace(/"/g,'&quot;')}" placeholder="ชื่อเซลส์..." 
+          onchange="edSetSalesman(${ci},this.value)"
+          onfocus="this.style.background='#1f2937';this.style.borderRadius='3px 3px 0 0';this.style.color='#e2e8f0'" 
+          onblur="this.style.background='transparent';this.style.borderRadius='0';this.style.color='#9ca3af'">
+      </td>
+      <td style="padding:6px 10px;font-size:11px;text-align:right;color:#e2e8f0;font-family:monospace">${(c.orders||0).toLocaleString()}</td>
+      <td style="padding:6px 10px;font-size:11px;text-align:right;color:#60a5fa;font-family:monospace">${fEq(c.eq25)}</td>
+      <td style="padding:6px 10px;font-size:11px;text-align:right;color:#4ade80;font-family:monospace">${netUsd}</td>
+      <td style="padding:6px 10px;font-size:11px;text-align:right;color:#6b7280;font-family:monospace">${c.last_order||'—'}</td>
+      <td style="padding:6px 10px">${histCell}</td>
+      <td style="padding:6px 10px;text-align:center">
+        <div style="display:flex;gap:3px;justify-content:center">
+          <button title="ชื่อซ้ำ" onclick="edToggleFlag(${ci},'dup')" style="width:22px;height:22px;border-radius:4px;border:1px solid ${c._flag_dup?'#f59e0b':'#374151'};background:${c._flag_dup?'rgba(245,158,11,.2)':'none'};cursor:pointer;font-size:11px">🟡</button>
+          <button title="ต้องการรวม" onclick="edToggleFlag(${ci},'merge')" style="width:22px;height:22px;border-radius:4px;border:1px solid ${c._flag_merge?'#3b82f6':'#374151'};background:${c._flag_merge?'rgba(59,130,246,.2)':'none'};cursor:pointer;font-size:11px">🔵</button>
+          <button title="ลบออก" onclick="edToggleFlag(${ci},'del')" style="width:22px;height:22px;border-radius:4px;border:1px solid ${c._flag_del?'#f87171':'#374151'};background:${c._flag_del?'rgba(248,113,113,.2)':'none'};cursor:pointer;font-size:11px">🔴</button>
+        </div>
+      </td>
+      <td style="padding:6px 10px">
+        <input style="width:100%;background:transparent;border:none;border-bottom:1px dashed #374151;color:#9ca3af;font-size:11px;font-family:inherit;padding:2px 4px" placeholder="หมายเหตุ..." value="${(c._note||'').replace(/"/g,'&quot;')}" onchange="edSetNote(${ci},this.value)" onfocus="this.style.background='#1f2937';this.style.borderRadius='3px 3px 0 0'" onblur="this.style.background='transparent';this.style.borderRadius='0'">
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('ed-tbody').innerHTML = rows || '<tr><td colspan="11" style="text-align:center;padding:30px;color:#6b7280;font-size:12px">ไม่มีข้อมูล</td></tr>';
+  edUpdateStats();
+}
+
+function edStartEdit(ci) {
+  edCustomers[ci]._editing = true;
+  if(!edCustomers[ci]._newName) edCustomers[ci]._newName = edCustomers[ci].name;
+  edRenderTable();
+  setTimeout(() => { const el=document.getElementById('ed_ni_'+ci); if(el){el.focus();el.select();} }, 30);
+}
+
+function edCommit(ci, el) {
+  const val = el.value.trim();
+  if(val && val !== edCustomers[ci].name) {
+    edCustomers[ci]._origName = edCustomers[ci]._origName || edCustomers[ci].name;
+    edCustomers[ci]._newName = val;
+  } else {
+    edCustomers[ci]._newName = null;
+  }
+  edCustomers[ci]._editing = false;
+  // Sync to DB_STATS so customer tab updates too
+  edSyncToStats();
+  edRenderTable();
+  renderCustomers(document.getElementById('year-filter').value, document.getElementById('sale-filter').value);
+}
+
+function edChangeArea(ci, val) {
+  edCustomers[ci].area = val;
+  edSyncToStats();
+  edRenderTable();
+  renderCustomers(document.getElementById('year-filter').value, document.getElementById('sale-filter').value);
+}
+
+function edToggleFlag(ci, type) {
+  edCustomers[ci]['_flag_'+type] = !edCustomers[ci]['_flag_'+type];
+  edRenderTable();
+}
+
+function edSetNote(ci, val) {
+  edCustomers[ci]._note = val;
+  edUpdateStats();
+}
+
+function edSetHistory(ci, val) {
+  edCustomers[ci].name_history = val.trim();
+}
+
+function edSetCountry(ci, val) {
+  edCustomers[ci].country = val.trim();
+  edSyncToStats();
+}
+
+function edSetSalesman(ci, val) {
+  // แยกด้วย comma หรือ space → array
+  edCustomers[ci].salesmen = val.split(/[,،]+/).map(s=>s.trim()).filter(Boolean);
+  edSyncToStats();
+}
+
+// ===== PRICE ENTRY 2025 (Feb-Aug) =====
+const MONTHS_NO_PRICE = ['2025-02','2025-03','2025-04','2025-05','2025-06','2025-07','2025-08'];
+const MONTH_TH = {'2025-02':'ก.พ. 2025','2025-03':'มี.ค. 2025','2025-04':'เม.ย. 2025',
+  '2025-05':'พ.ค. 2025','2025-06':'มิ.ย. 2025','2025-07':'ก.ค. 2025','2025-08':'ส.ค. 2025'};
+
+function renderPriceEntry() {
+  const ms = DB_STATS.month_stats || {};
+  let rows = '';
+  MONTHS_NO_PRICE.forEach(mo => {
+    const s = ms[mo] || {};
+    const saved = parseFloat(localStorage.getItem('aaf_price_'+mo)||'0') || 0;
+    const est = saved > 0 && s.eq25 > 0 ? (s.eq25 * saved) : 0;
+    rows += `<tr style="border-bottom:1px solid #111827">
+      <td style="padding:8px 12px;font-size:12px;color:#22c55e;font-family:monospace">${MONTH_TH[mo]}</td>
+      <td style="padding:8px 12px;font-size:11px;text-align:right;color:#e2e8f0;font-family:monospace">${(s.orders||0).toLocaleString()}</td>
+      <td style="padding:8px 12px;font-size:11px;text-align:right;color:#60a5fa;font-family:monospace">${fEq(s.eq25||0)}</td>
+      <td style="padding:8px 12px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="color:#6b7280;font-size:11px">$</span>
+          <input type="number" step="0.01" min="0" max="20" id="price_${mo}"
+            style="width:80px;background:#1f2937;border:1px solid #374151;border-radius:4px;color:#fbbf24;font-size:12px;font-family:monospace;padding:3px 6px;text-align:right"
+            value="${saved||''}" placeholder="2.85" onchange="savePriceEntry('${mo}',this.value)">
+          <span style="color:#4b5563;font-size:10px">USD/แผ่น2.5</span>
+        </div>
+      </td>
+      <td style="padding:8px 12px;font-size:11px;text-align:right;font-family:monospace;color:${est>0?'#4ade80':'#374151'}" id="est_${mo}">
+        ${est>0?'$'+(est/1e6).toFixed(2)+'M':'—'}
+      </td>
+    </tr>`;
+  });
+  const panel = document.getElementById('price-entry-panel');
+  if(!panel) return;
+  panel.innerHTML = `
+    <div style="background:#1a1f2e;border:1px solid #374151;border-radius:8px;padding:12px 16px;margin-bottom:12px">
+      <p style="color:#f59e0b;font-size:12px;font-weight:600;margin-bottom:4px">⚠️ ราคา USD ขาดหาย ก.พ.–ส.ค. 2025</p>
+      <p style="color:#6b7280;font-size:11px">Format ไฟล์ Excel เปลี่ยนในช่วงนี้ ราคาต่อแผ่นจึงหายไป กรอกราคาเฉลี่ย (USD/แผ่น 2.5) แล้วกดอัปเดต ระบบจะคำนวณยอด Net USD ให้อัตโนมัติ</p>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+      <thead><tr style="border-bottom:1px solid #1f2937">
+        <th style="font-size:10px;color:#4b5563;padding:8px 12px;text-align:left;text-transform:uppercase">เดือน</th>
+        <th style="font-size:10px;color:#4b5563;padding:8px 12px;text-align:right;text-transform:uppercase">ออเดอร์</th>
+        <th style="font-size:10px;color:#4b5563;padding:8px 12px;text-align:right;text-transform:uppercase">แผ่น 2.5</th>
+        <th style="font-size:10px;color:#f59e0b;padding:8px 12px;text-align:left;text-transform:uppercase">ราคาเฉลี่ย $ (กรอก)</th>
+        <th style="font-size:10px;color:#4b5563;padding:8px 12px;text-align:right;text-transform:uppercase">Net USD (ประมาณ)</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+      <button onclick="applyPriceEntries()" style="background:#22c55e;color:#000;border:none;padding:7px 18px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">✅ คำนวณและอัปเดตสถิติ</button>
+      <span style="font-size:11px;color:#6b7280">กรอกราคาแล้วกดปุ่มนี้ ระบบจะอัปเดตยอด 2025 ใหม่</span>
+    </div>`;
+}
+
+function savePriceEntry(mo, val) {
+  const v = parseFloat(val);
+  if(v > 0) {
+    localStorage.setItem('aaf_price_'+mo, v.toString());
+    const eq25 = DB_STATS.month_stats[mo]?.eq25 || 0;
+    const est = v * eq25;
+    const el = document.getElementById('est_'+mo);
+    if(el) { el.textContent = est>0 ? '$'+(est/1e6).toFixed(2)+'M' : '—'; el.style.color='#4ade80'; }
+  }
+}
+
+function applyPriceEntries() {
+  let added = 0;
+  MONTHS_NO_PRICE.forEach(mo => {
+    const price = parseFloat(localStorage.getItem('aaf_price_'+mo)||'0');
+    const eq25 = DB_STATS.month_stats[mo]?.eq25 || 0;
+    if(price > 0 && eq25 > 0) {
+      const usd = price * eq25;
+      if(DB_STATS.month_stats[mo]) DB_STATS.month_stats[mo].net_usd = usd;
+      added += usd;
+    }
+  });
+  if(DB_STATS.year_stats['2025']) {
+    const existing = DB_STATS.year_stats['2025'].net_usd || 0;
+    DB_STATS.year_stats['2025'].net_usd = existing + added;
+  }
+  renderYearly(document.getElementById('year-filter').value, document.getElementById('sale-filter').value);
+  renderMonthly();
+  renderKPIs(document.getElementById('year-filter').value, document.getElementById('sale-filter').value);
+  showToastEd('✅ อัปเดตสถิติ 2025 แล้ว ดูได้ที่แท็บ รายปี/รายเดือน');
+  renderPriceEntry();
+}
+let edSortKey = 'eq25';
+let edSortDir = -1;
+
+function edSort(key) {
+  if(edSortKey === key) { edSortDir *= -1; }
+  else { edSortKey = key; edSortDir = (key==='name'||key==='area'||key==='country'||key==='last_order') ? 1 : -1; }
+  // Update header indicators
+  ['name','area','country','orders','eq25','net_usd','last_order'].forEach(k => {
+    const el = document.getElementById('ed-sort-'+k);
+    if(!el) return;
+    if(k===edSortKey) {
+      el.textContent = edSortDir===1 ? '▲' : '▼';
+      el.style.color = '#22c55e';
+      document.getElementById('ed-th-'+k).style.color = '#22c55e';
+    } else {
+      el.textContent = '↕';
+      el.style.color = '';
+      document.getElementById('ed-th-'+k).style.color = '#4b5563';
+    }
+  });
+  edRenderTable();
+}
+
+function edSortData(arr) {
+  return [...arr].sort((a, b) => {
+    let av = a[edSortKey], bv = b[edSortKey];
+    // Use display name for sorting
+    if(edSortKey === 'name') { av = (a._newName||a.name||''); bv = (b._newName||b.name||''); }
+    // String sort with Thai locale
+    if(typeof av === 'string' || typeof bv === 'string') {
+      av = (av||'').toString(); bv = (bv||'').toString();
+      return edSortDir * av.localeCompare(bv, 'th', {sensitivity:'base'});
+    }
+    // Numeric sort
+    av = av||0; bv = bv||0;
+    return edSortDir * (av - bv);
+  });
+}
+
+function edSyncToStats() {
+  // Sync area changes back to DB_STATS so customer tab reflects edits
+  edCustomers.forEach(c => {
+    const key = c._newName || c.name;
+    if(DB_STATS.top_customers[c.name]) {
+      DB_STATS.top_customers[c.name].area     = c.area;
+      DB_STATS.top_customers[c.name].country  = c.country;
+      DB_STATS.top_customers[c.name].salesman = c.salesmen;
+    }
+  });
+}
+
+function edUpdateStats() {
+  if(!edCustomers) return;
+  document.getElementById('ed-stat-dup').textContent    = edCustomers.filter(c=>c._flag_dup).length;
+  document.getElementById('ed-stat-merge').textContent  = edCustomers.filter(c=>c._flag_merge).length;
+  document.getElementById('ed-stat-del').textContent    = edCustomers.filter(c=>c._flag_del).length;
+  document.getElementById('ed-stat-rename').textContent = edCustomers.filter(c=>c._newName&&c._newName!==c.name).length;
+}
+
+function edSave() {
+  if(!edCustomers) return;
+  const toSave = {};
+  edCustomers.forEach(c => {
+    const curSalesmen = (c.salesmen||[]).join(',');
+    const hasChange = c._flag_dup || c._flag_merge || c._flag_del || c._note ||
+      (c._newName && c._newName !== c.name) ||
+      c.area         !== c._snapArea     ||
+      c.country      !== c._snapCountry  ||
+      c.name_history !== c._snapHistory  ||
+      curSalesmen    !== c._snapSalesmen;
+    if(hasChange) {
+      toSave[c.name] = {
+        area:         c.area,
+        country:      c.country,
+        name_history: c.name_history,
+        salesmen:     c.salesmen,
+        _newName:     c._newName,
+        _origName:    c._origName,
+        _flag_dup:    c._flag_dup,
+        _flag_merge:  c._flag_merge,
+        _flag_del:    c._flag_del,
+        _note:        c._note,
+      };
+    }
+  });
+  localStorage.setItem(ED_STORAGE_KEY, JSON.stringify(toSave));
+  showToastEd('✅ บันทึกแล้ว (' + Object.keys(toSave).length + ' รายที่เปลี่ยนแปลง)');
+}
+
+function edExport() {
+  if(!edCustomers) return;
+  const changes = [];
+  edCustomers.forEach(c => {
+    if(c._flag_dup||c._flag_merge||c._flag_del||c._note||(c._newName&&c._newName!==c.name)) {
+      changes.push({
+        original_name: c.name,
+        new_name: c._newName||c.name,
+        area: c.area,
+        flag: c._flag_del?'delete':c._flag_dup?'duplicate':c._flag_merge?'merge':null,
+        note: c._note||null,
+      });
+    }
+  });
+  const out = { exported_at: new Date().toISOString(), changes_count: changes.length, changes };
+  const blob = new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'customer_changes_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  showToastEd('💾 Export เสร็จ ' + changes.length + ' รายการ');
+}
+
+let _edToastTimer;
+function showToastEd(msg) {
+  const t = document.getElementById('ed-toast');
+  if(!t) return;
+  t.textContent = msg;
+  t.style.opacity = '1'; t.style.transform = 'translateY(0)';
+  clearTimeout(_edToastTimer);
+  _edToastTimer = setTimeout(() => { t.style.opacity='0'; t.style.transform='translateY(10px)'; }, 2500);
+}
+
+// ===== TIMELINE TAB =====
+const TL_YEARS = Object.keys(DB_STATS.year_stats).sort();
+const NOW_YM = '2026-06';
+let tlDrillCust = null;   // ชื่อลูกค้าที่กำลัง drill
+let tlDrillYear = null;   // ปีที่กำลัง drill
+
+function tlMonthDiff(ym1, ym2) {
+  const [y1,m1] = ym1.split('-').map(Number);
+  const [y2,m2] = ym2.split('-').map(Number);
+  return (y2-y1)*12 + (m2-m1);
+}
+
+function fK(n) {
+  if(!n) return '';
+  if(n>=1000000) return (n/1000000).toFixed(1)+'M';
+  if(n>=1000) return Math.round(n/1000)+'k';
+  return Math.round(n).toString();
+}
+
+function tlRender() {
+  const subhdr = document.getElementById('tl-year-subheader');
+  if(subhdr) {
+    subhdr.innerHTML = '<td colspan="5"></td>' +
+      TL_YEARS.map(y=>`<td style="font-size:9px;color:#4b5563;text-align:center;padding:2px 1px;font-family:monospace">${y.slice(2)}</td>`).join('') +
+      '<td></td>';
+  }
+  tlFilter();
+}
+
+function tlFilter() {
+  const q       = (document.getElementById('tl-search')||{}).value?.toLowerCase()||'';
+  const area    = (document.getElementById('tl-area')||{}).value||'all';
+  const sortKey = (document.getElementById('tl-sort')||{}).value||'eq25';
+  const custs   = DB_STATS.top_customers;
+
+  let list = Object.entries(custs).filter(([name,s]) => {
+    if(!s.first_order && !s.last_order && s.orders===0) return false;
+    if(area!=='all' && s.area!==area) return false;
+    if(q && !name.toLowerCase().includes(q) && !(s.country||'').toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  list.sort((a,b) => {
+    const [an,as_]=a; const [bn,bs]=b;
+    if(sortKey==='name')        return an.localeCompare(bn,'th');
+    if(sortKey==='first_order') return (as_.first_order||'').localeCompare(bs.first_order||'');
+    if(sortKey==='last_order')  return (bs.last_order||'').localeCompare(as_.last_order||'');
+    return (bs[sortKey]||0)-(as_[sortKey]||0);
+  });
+
+  // Filter by status card if one is selected
+  if(tlActiveStatus) {
+    list = list.filter(([name,s]) => {
+      const ms = s.last_order ? tlMonthDiff(s.last_order, NOW_YM) : 999;
+      if(tlActiveStatus==='active') return ms <= 8;
+      if(tlActiveStatus==='gap')    return ms > 8 && ms <= 36;
+      if(tlActiveStatus==='dead')   return ms > 36;
+      if(tlActiveStatus==='new')    return s.first_order && parseInt(s.first_order) >= 2024;
+      return true;
+    });
+  }
+
+  const statusLabel = {
+    active: '🟢 Active',
+    gap:    '⚠️ Follow up',
+    dead:   '🔴 หยุดถาวร',
+    new:    '🔵 ลูกค้าใหม่'
+  };
+  const countLabel = tlActiveStatus
+    ? `${list.length} ลูกค้า (${statusLabel[tlActiveStatus]})`
+    : `${list.length} ลูกค้า`;
+  document.getElementById('tl-count').textContent = countLabel;
+
+  let activeCount=0, gapCount=0, deadCount=0, newCount=0;
+  let totOrders=0, totEq25=0, totUSD=0;
+
+  const rows = list.map(([name,s], idx) => {
+    const monthsSince = s.last_order ? tlMonthDiff(s.last_order, NOW_YM) : 999;
+    let status='dead';
+    if(monthsSince<=8)  { status='active'; activeCount++; }
+    else if(monthsSince<=36) { status='gap'; gapCount++; }
+    else deadCount++;
+    if(s.first_order && parseInt(s.first_order)>=2024) newCount++;
+
+    totOrders += s.orders||0;
+    totEq25   += s.eq25||0;
+    totUSD    += s.net_usd||0;
+
+    const custData = CUST_MONTHLY[name] || {};
+
+    // Year cells — ใช้ข้อมูลจริงจาก CUST_MONTHLY
+    const yearCells = TL_YEARS.map(y => {
+      // รวมยอดในปีนั้น
+      let yEq=0, yOrd=0;
+      for(let m=1;m<=12;m++){
+        const ym = y+'-'+String(m).padStart(2,'0');
+        if(custData[ym]){ yEq+=custData[ym].e||0; yOrd+=custData[ym].o||0; }
+      }
+      const hasData = yOrd>0;
+      const isLastY = s.last_order && s.last_order.startsWith(y);
+
+      let bg, textColor;
+      if(!hasData) {
+        bg='#111827'; textColor='transparent';
+      } else if(isLastY && monthsSince>36) {
+        bg='rgba(239,68,68,0.25)'; textColor='#f87171';
+      } else if(isLastY && monthsSince>8) {
+        bg='rgba(245,158,11,0.25)'; textColor='#fbbf24';
+      } else {
+        bg='rgba(34,197,94,0.2)'; textColor='#4ade80';
+      }
+
+      const dispVal = hasData ? fK(yEq) : '';
+      const isActive = (tlDrillCust===name && tlDrillYear===y);
+
+      return `<td style="padding:2px 1px;text-align:center">
+        <div style="background:${isActive?'rgba(99,102,241,0.4)':bg};border-radius:3px;min-height:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:${isActive?'1px solid #818cf8':'1px solid transparent'}" onclick="tlDrillDown('${name.replace(/'/g,"\\'")}',${'\''+y+'\''})" title="${name} · ${y}${hasData?' · '+yOrd+' orders · '+fK(yEq)+' แผ่น':''}">
+          <span style="font-size:8px;color:${textColor};font-family:monospace;font-weight:600;white-space:nowrap">${dispVal}</span>
+        </div>
+      </td>`;
+    }).join('');
+
+    const badge = {
+      active:'<span style="font-size:9px;background:rgba(34,197,94,.15);color:#22c55e;border-radius:3px;padding:1px 5px;white-space:nowrap">●Active</span>',
+      gap:   '<span style="font-size:9px;background:rgba(245,158,11,.15);color:#f59e0b;border-radius:3px;padding:1px 5px;white-space:nowrap">⚠Followup</span>',
+      dead:  '<span style="font-size:9px;background:rgba(239,68,68,.15);color:#f87171;border-radius:3px;padding:1px 5px;white-space:nowrap">✗หยุด</span>'
+    }[status]||'';
+
+    const isSelRow = tlDrillCust===name;
+    return `<tr style="border-bottom:1px solid #111827;background:${isSelRow?'rgba(99,102,241,0.06)':''}" onmouseenter="if(!${isSelRow})this.style.background='rgba(34,197,94,.03)'" onmouseleave="if(!${isSelRow})this.style.background='${isSelRow?'rgba(99,102,241,0.06)':''}'">
+      <td style="font-size:10px;color:#374151;padding:5px 6px;font-family:monospace">${idx+1}</td>
+      <td style="padding:5px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px;cursor:pointer" onclick="tlShowDetail('${name.replace(/'/g,"\\'")}',null)" title="${name}">
+        <span style="font-size:11px;font-weight:500;color:#e2e8f0">${name}</span>
+      </td>
+      <td style="font-size:11px;color:#e2e8f0;font-family:monospace;text-align:right;padding:5px 6px">${(s.orders||0).toLocaleString()}</td>
+      <td style="font-size:11px;color:#60a5fa;font-family:monospace;text-align:right;padding:5px 6px">${fK(s.eq25)}</td>
+      <td style="font-size:11px;color:#4ade80;font-family:monospace;text-align:right;padding:5px 6px">${fK(s.net_usd)}</td>
+      ${yearCells}
+      <td style="padding:5px 6px;text-align:center">${badge}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tl-tbody').innerHTML = rows||'<tr><td colspan="20" style="text-align:center;padding:30px;color:#6b7280;font-size:12px">ไม่มีข้อมูล</td></tr>';
+  document.getElementById('tl-tot-orders').textContent = totOrders.toLocaleString();
+  document.getElementById('tl-tot-eq25').textContent   = fK(totEq25);
+  document.getElementById('tl-tot-usd').textContent    = '$'+fK(totUSD);
+
+  // Footer year totals (ยอดรวม all customers ที่ filter แล้ว)
+  const yearFooter = TL_YEARS.map(y => {
+    const v = DB_STATS.year_stats[y]?.net_usd||0;
+    return `<td style="font-size:9px;color:#374151;font-family:monospace;text-align:center;padding:4px 1px">${v>0?'$'+fK(v):''}</td>`;
+  }).join('');
+  const footerTd = document.getElementById('tl-tot-years');
+  if(footerTd) footerTd.outerHTML = yearFooter+'<td></td>';
+
+  document.getElementById('tl-sum-active').textContent = activeCount;
+  document.getElementById('tl-sum-gap').textContent    = gapCount;
+  document.getElementById('tl-sum-dead').textContent   = deadCount;
+  document.getElementById('tl-sum-new').textContent    = newCount;
+}
+
+// กดที่ช่องปี → drill down เดือน
+function tlDrillDown(name, year) {
+  // ถ้ากดซ้ำ = ปิด
+  if(tlDrillCust===name && tlDrillYear===year) {
+    tlDrillCust=null; tlDrillYear=null;
+    document.getElementById('tl-detail').classList.add('hidden');
+    tlFilter();
+    return;
+  }
+  tlDrillCust=name; tlDrillYear=year;
+  tlFilter(); // re-render rows to show active highlight
+  tlShowMonthlyDrill(name, year);
+}
+
+function tlShowMonthlyDrill(name, year) {
+  const s       = DB_STATS.top_customers[name];
+  const custData= CUST_MONTHLY[name]||{};
+  const panel   = document.getElementById('tl-detail');
+  panel.classList.remove('hidden');
+
+  // รวมยอดทั้งปี
+  let yOrd=0, yEq=0, yUsd=0;
+  const months = [];
+  for(let m=1;m<=12;m++){
+    const ym = year+'-'+String(m).padStart(2,'0');
+    const d  = custData[ym];
+    if(d){ yOrd+=d.o||0; yEq+=d.e||0; yUsd+=d.u||0; }
+    months.push({ym, m, d: d||null});
+  }
+
+  const thaiMo=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const maxEq = Math.max(...months.map(x=>x.d?x.d.e:0), 1);
+
+  // สร้าง monthly bars
+  const bars = months.map(({ym, m, d}) => {
+    const hasData = d && d.o > 0;
+    const barH   = hasData ? Math.max(4, Math.round(d.e/maxEq*60)) : 0;
+    const isFirst= s.first_order===ym;
+    const isLast = s.last_order===ym;
+    const barColor = isFirst||isLast ? '#3b82f6' : hasData ? '#22c55e' : '#1f2937';
+    const tooltip  = hasData
+      ? `${ym}: ${d.o} orders · ${fK(d.e)} แผ่น · $${fK(d.u)}`
+      : `${ym}: ไม่มีออเดอร์`;
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;min-width:44px">
+      <div style="font-size:9px;color:${hasData?'#e2e8f0':'#374151'};font-family:monospace;text-align:center">${hasData?fK(d.e):''}</div>
+      <div style="width:28px;height:60px;display:flex;align-items:flex-end;cursor:default" title="${tooltip}">
+        <div style="width:100%;height:${barH}px;background:${barColor};border-radius:2px 2px 0 0;transition:height .2s"></div>
+      </div>
+      <div style="font-size:9px;color:${hasData?'#9ca3af':'#374151'};text-align:center">${thaiMo[m-1]}</div>
+      <div style="font-size:8px;color:${hasData?'#22c55e':'#374151'};text-align:center">${hasData?d.o+'×':''}</div>
+    </div>`;
+  }).join('');
+
+  // เดือนที่หายไปติดต่อกัน
+  const gapMonths = months.filter(x=>!x.d);
+  let gapNote = '';
+  if(yOrd===0) {
+    gapNote = `<span style="color:#f87171">ไม่มีออเดอร์ในปี ${year} เลย</span>`;
+  } else {
+    const activeM = months.filter(x=>x.d).length;
+    gapNote = `ซื้อ <b style="color:#22c55e">${activeM}</b> เดือน · หายไป <b style="color:#f59e0b">${12-activeM}</b> เดือน`;
+  }
+
+  panel.innerHTML = `
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+    <div>
+      <p style="font-size:13px;font-weight:700;color:#e2e8f0">${name}</p>
+      <p style="font-size:11px;color:#6b7280">รายละเอียดปี ${year} · ${gapNote}</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button onclick="tlShowDetail('${name.replace(/'/g,"\\'")}',null)" style="font-size:10px;background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3);border-radius:5px;padding:4px 10px;cursor:pointer">📊 วิเคราะห์รวม</button>
+      <button onclick="tlDrillCust=null;tlDrillYear=null;document.getElementById('tl-detail').classList.add('hidden');tlFilter()" style="color:#6b7280;font-size:20px;background:none;border:none;cursor:pointer;line-height:1">×</button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+    <div style="background:#111827;border-radius:8px;padding:10px 14px"><p style="font-size:10px;color:#4b5563;margin-bottom:3px">Orders ปี ${year}</p><p style="font-size:20px;font-weight:700;color:#e2e8f0;font-family:monospace">${yOrd}</p></div>
+    <div style="background:#111827;border-radius:8px;padding:10px 14px"><p style="font-size:10px;color:#4b5563;margin-bottom:3px">แผ่น 2.5 ปี ${year}</p><p style="font-size:20px;font-weight:700;color:#60a5fa;font-family:monospace">${fK(yEq)}</p></div>
+    <div style="background:#111827;border-radius:8px;padding:10px 14px"><p style="font-size:10px;color:#4b5563;margin-bottom:3px">Net USD ปี ${year}</p><p style="font-size:20px;font-weight:700;color:#4ade80;font-family:monospace">$${fK(yUsd)}</p></div>
+    <div style="background:#111827;border-radius:8px;padding:10px 14px"><p style="font-size:10px;color:#4b5563;margin-bottom:3px">เฉลี่ย/เดือน</p><p style="font-size:20px;font-weight:700;color:#f59e0b;font-family:monospace">${yOrd>0?'$'+fK(yUsd/months.filter(x=>x.d).length):'-'}</p></div>
+  </div>
+  <div style="overflow-x:auto">
+    <div style="display:flex;gap:4px;min-width:580px;align-items:flex-end;padding:0 4px">
+      ${bars}
+    </div>
+  </div>
+  <div style="margin-top:10px;display:flex;gap:10px;font-size:10px;color:#4b5563;flex-wrap:wrap">
+    <span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:10px;background:#22c55e;border-radius:2px"></span>มีออเดอร์</span>
+    <span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:10px;background:#3b82f6;border-radius:2px"></span>เดือนเริ่ม/สิ้นสุด</span>
+    <span style="display:inline-flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:10px;background:#1f2937;border-radius:2px;border:1px solid #374151"></span>ไม่มีออเดอร์</span>
+    <span style="margin-left:auto;color:#6b7280">ตัวเลขบน = แผ่น 2.5 · ตัวเลขล่าง = จำนวน orders</span>
+  </div>`;
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function tlShowDetail(name, clickedYear) {
+  const s = DB_STATS.top_customers[name];
+  if(!s) return;
+  const panel = document.getElementById('tl-detail');
+  panel.classList.remove('hidden');
+  tlDrillCust=name; tlDrillYear=null;
+  tlFilter();
+
+  const first = s.first_order||'—';
+  const last  = s.last_order ||'—';
+  const span  = first!=='—'&&last!=='—' ? tlMonthDiff(first,last)+1 : 0;
+  const monthsSince  = last!=='—' ? tlMonthDiff(last,NOW_YM) : 999;
+  const activeMonths = s.active_months||0;
+  const avgPerMonth  = activeMonths>0 ? (s.orders/activeMonths).toFixed(1) : '—';
+  const avgEq25      = s.orders>0 ? fK(s.eq25/s.orders) : '—';
+  const avgUSD       = s.orders>0 ? '$'+fK(s.net_usd/s.orders) : '—';
+
+  let freqLabel='—';
+  if(activeMonths>0&&s.orders>1){
+    const ordPerMonth = s.orders/activeMonths;
+    if(ordPerMonth>=0.8)      freqLabel='🟢 ซื้อแทบทุกเดือน';
+    else if(ordPerMonth>=0.4) freqLabel=`🟡 ซื้อทุก ~${Math.round(1/ordPerMonth)} เดือน`;
+    else if(ordPerMonth>=0.2) freqLabel=`🟠 ซื้อทุก ~${Math.round(1/ordPerMonth)} เดือน`;
+    else                       freqLabel=`🔴 ซื้อทุก ~${(1/ordPerMonth).toFixed(1)} เดือน`;
+  }
+
+  let statusText='—';
+  if(monthsSince<=2)       statusText='🟢 Active — ซื้อล่าสุดภายใน 2 เดือน';
+  else if(monthsSince<=6)  statusText=`🟡 Active — ${monthsSince} เดือนที่แล้ว`;
+  else if(monthsSince<=12) statusText=`🟠 Follow up — ${monthsSince} เดือนไม่ซื้อ`;
+  else if(monthsSince<=36) statusText=`⚠️ หยุดมา ${(monthsSince/12).toFixed(1)} ปี`;
+  else                     statusText=`🔴 ไม่ซื้อมา ${(monthsSince/12).toFixed(1)} ปี`;
+
+  // ปุ่ม drill ทุกปีที่มีข้อมูล
+  const custData = CUST_MONTHLY[name]||{};
+  const activeYears = TL_YEARS.filter(y => {
+    for(let m=1;m<=12;m++){ const ym=y+'-'+String(m).padStart(2,'0'); if(custData[ym]) return true; }
+    return false;
+  });
+  const yearBtns = activeYears.map(y =>
+    `<button onclick="tlDrillDown('${name.replace(/'/g,"\\'")}','${y}')" style="font-size:10px;background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.25);border-radius:5px;padding:3px 10px;cursor:pointer;margin:2px">${y}</button>`
+  ).join('');
+
+  // Year-by-year summary
+  const yearRows = activeYears.map(y => {
+    let yOrd=0, yEq=0, yUsd=0, yMo=0;
+    for(let m=1;m<=12;m++){
+      const ym=y+'-'+String(m).padStart(2,'0');
+      if(custData[ym]){ yOrd+=custData[ym].o||0; yEq+=custData[ym].e||0; yUsd+=custData[ym].u||0; yMo++; }
+    }
+    return `<tr style="border-bottom:1px solid #1f2937">
+      <td style="padding:5px 8px;font-size:11px;font-weight:600;color:#e2e8f0;font-family:monospace">${y}</td>
+      <td style="padding:5px 8px;font-size:11px;color:#e2e8f0;font-family:monospace;text-align:right">${yOrd}</td>
+      <td style="padding:5px 8px;font-size:11px;color:#60a5fa;font-family:monospace;text-align:right">${fK(yEq)}</td>
+      <td style="padding:5px 8px;font-size:11px;color:#4ade80;font-family:monospace;text-align:right">$${fK(yUsd)}</td>
+      <td style="padding:5px 8px;font-size:11px;color:#6b7280;font-family:monospace;text-align:right">${yMo}/12 เดือน</td>
+      <td style="padding:5px 8px"><button onclick="tlDrillDown('${name.replace(/'/g,"\\'")}','${y}')" style="font-size:9px;background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3);border-radius:4px;padding:2px 8px;cursor:pointer">ดูรายเดือน →</button></td>
+    </tr>`;
+  }).join('');
+
+  panel.innerHTML = `
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+    <div>
+      <p style="font-size:14px;font-weight:700;color:#e2e8f0">${name}</p>
+      <p style="font-size:11px;color:#6b7280">${s.area||'—'} · ${s.country||'—'} · เซลส์: ${(s.salesman||[]).join(', ')||'—'}</p>
+    </div>
+    <button onclick="tlDrillCust=null;tlDrillYear=null;document.getElementById('tl-detail').classList.add('hidden');tlFilter()" style="color:#6b7280;font-size:22px;background:none;border:none;cursor:pointer;line-height:1">×</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
+    <div style="background:#111827;border-radius:8px;padding:10px 14px"><p style="font-size:10px;color:#4b5563;margin-bottom:3px">Orders รวม</p><p style="font-size:20px;font-weight:700;color:#e2e8f0;font-family:monospace">${(s.orders||0).toLocaleString()}</p></div>
+    <div style="background:#111827;border-radius:8px;padding:10px 14px"><p style="font-size:10px;color:#4b5563;margin-bottom:3px">แผ่น 2.5 รวม</p><p style="font-size:20px;font-weight:700;color:#60a5fa;font-family:monospace">${fK(s.eq25)}</p></div>
+    <div style="background:#111827;border-radius:8px;padding:10px 14px"><p style="font-size:10px;color:#4b5563;margin-bottom:3px">Net USD รวม</p><p style="font-size:20px;font-weight:700;color:#4ade80;font-family:monospace">$${fK(s.net_usd)}</p></div>
+    <div style="background:#111827;border-radius:8px;padding:10px 14px"><p style="font-size:10px;color:#4b5563;margin-bottom:3px">ช่วงเวลา</p><p style="font-size:12px;font-weight:700;color:#e2e8f0;font-family:monospace">${first}→${last}</p><p style="font-size:10px;color:#6b7280">${activeMonths} เดือนที่ active จาก ${span}</p></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+    <div style="background:#111827;border-radius:8px;padding:10px 14px"><p style="font-size:10px;color:#4b5563;margin-bottom:4px">📊 สถานะ</p><p style="font-size:12px;color:#e2e8f0">${statusText}</p></div>
+    <div style="background:#111827;border-radius:8px;padding:10px 14px"><p style="font-size:10px;color:#4b5563;margin-bottom:4px">🔁 ความถี่</p><p style="font-size:12px;color:#e2e8f0">${freqLabel}</p><p style="font-size:10px;color:#6b7280;margin-top:2px">${avgPerMonth} orders/เดือน active</p></div>
+    <div style="background:#111827;border-radius:8px;padding:10px 14px"><p style="font-size:10px;color:#4b5563;margin-bottom:4px">💰 ขนาดออเดอร์เฉลี่ย</p><p style="font-size:12px;color:#e2e8f0">${avgEq25} แผ่น · ${avgUSD}</p></div>
+  </div>
+  <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;margin-bottom:8px">📅 ยอดรายปี — กดปีเพื่อดูรายเดือน</p>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="border-bottom:1px solid #374151">
+        <th style="font-size:10px;color:#4b5563;padding:5px 8px;text-align:left">ปี</th>
+        <th style="font-size:10px;color:#4b5563;padding:5px 8px;text-align:right">Orders</th>
+        <th style="font-size:10px;color:#4b5563;padding:5px 8px;text-align:right">แผ่น 2.5</th>
+        <th style="font-size:10px;color:#4b5563;padding:5px 8px;text-align:right">Net USD</th>
+        <th style="font-size:10px;color:#4b5563;padding:5px 8px;text-align:right">เดือน active</th>
+        <th style="font-size:10px;color:#4b5563;padding:5px 8px"></th>
+      </tr></thead>
+      <tbody>${yearRows}</tbody>
+    </table>
+  </div>
+  <div style="margin-top:16px">
+    <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">🗓 แผนที่การซื้อ — ปี × เดือน</p>
+    ${buildHeatmap(name)}
+  </div>`;
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function buildHeatmap(name) {
+  const custData = CUST_MONTHLY[name] || {};
+  const thaiMo = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const years = TL_YEARS;
+  let maxEq = 0;
+  years.forEach(y => { for(let m=1;m<=12;m++){ const d=custData[y+'-'+String(m).padStart(2,'0')]; if(d&&d.e>maxEq)maxEq=d.e; } });
+  if(!maxEq) return '<p style="font-size:11px;color:#4b5563;padding:8px 0">ไม่มีข้อมูลรายเดือน</p>';
+
+  let html = '<div style="overflow-x:auto"><table style="border-collapse:separate;border-spacing:3px">';
+  html += '<thead><tr><td style="min-width:40px"></td>';
+  thaiMo.forEach(m => { html += `<td style="min-width:52px;text-align:center;font-size:9px;color:#4b5563;font-weight:600;padding-bottom:4px">${m}</td>`; });
+  html += '</tr></thead><tbody>';
+
+  years.forEach(y => {
+    let yHas = false;
+    for(let m=1;m<=12;m++) { if(custData[y+'-'+String(m).padStart(2,'0')]?.o){yHas=true;break;} }
+    html += `<tr><td style="text-align:right;padding-right:6px;font-size:10px;font-family:monospace;color:${yHas?'#9ca3af':'#374151'};font-weight:${yHas?700:400};vertical-align:middle;white-space:nowrap">${y}</td>`;
+    for(let m=1;m<=12;m++){
+      const ym=y+'-'+String(m).padStart(2,'0');
+      const d=custData[ym];
+      const has=!!(d&&d.o>0);
+      const eq=has?d.e:0;
+      let bg,tc;
+      if(!has){ bg='#0f172a'; tc='transparent'; }
+      else { const t=0.18+0.82*(eq/maxEq); bg=`rgb(${Math.round(34*t)},${Math.round(197*t)},${Math.round(94*t)})`; tc=t>0.5?'#052e16':'#bbf7d0'; }
+      const label=has?fK(eq):'';
+      const tip=has?`${ym}: ${d.o} orders · ${fK(eq)} แผ่น · $${fK(d.u)}`:`${ym}: ไม่มีออเดอร์`;
+      const ne=name.replace(/'/g,"\'");
+      html += `<td style="padding:0"><div onclick="${has?`tlDrillDown('${ne}','${y}')`:'void(0)'}" title="${tip}" style="width:52px;height:30px;background:${bg};border-radius:3px;display:flex;align-items:center;justify-content:center;cursor:${has?'pointer':'default'}" onmouseenter="this.style.filter='${has?'brightness(1.3)':'none'}'" onmouseleave="this.style.filter='none'"><span style="font-size:8px;font-weight:700;color:${tc};font-family:monospace">${label}</span></div></td>`;
+    }
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  html += `<div style="display:flex;gap:12px;margin-top:6px;font-size:9px;color:#6b7280;align-items:center"><span style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:10px;background:rgb(6,35,17);border-radius:2px;border:1px solid #1f2937;display:inline-block"></span>น้อย</span><span style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:10px;background:rgb(34,197,94);border-radius:2px;display:inline-block"></span>มาก</span><span style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:10px;background:#0f172a;border-radius:2px;border:1px solid #1e293b;display:inline-block"></span>ไม่มี</span><span style="margin-left:auto">คลิกช่องเพื่อดู bar chart รายเดือน</span></div>`;
+  return html;
+}
+
+let tlActiveStatus = null;
+
+function tlFilterByStatus(status) {
+  // Toggle off if same card clicked again
+  if (tlActiveStatus === status) {
+    tlActiveStatus = null;
+    // Reset card styles
+    ['active','gap','dead','new'].forEach(s => {
+      const card = document.getElementById('tl-card-'+s);
+      if(card){ card.style.background=''; card.style.borderColor='transparent'; }
+    });
+    tlFilter();
+    return;
+  }
+  tlActiveStatus = status;
+
+  // Update card highlight
+  const colorMap = {
+    active: 'rgba(34,197,94,',
+    gap:    'rgba(245,158,11,',
+    dead:   'rgba(239,68,68,',
+    new:    'rgba(59,130,246,'
+  };
+  ['active','gap','dead','new'].forEach(s => {
+    const card = document.getElementById('tl-card-'+s);
+    if(!card) return;
+    if(s === status) {
+      card.style.background    = colorMap[s]+'0.12)';
+      card.style.borderColor   = colorMap[s]+'0.5)';
+    } else {
+      card.style.background    = '';
+      card.style.borderColor   = 'transparent';
+    }
+  });
+
+  // Re-render with status filter applied
+  tlFilterAndScroll();
+}
+
+function tlFilterAndScroll() {
+  tlFilter();
+  // Scroll to table
+  const rows = document.getElementById('tl-tbody');
+  if(rows) rows.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ===== DASHBOARD QUICK STATS =====
+function renderDashboard() {
+  const el = document.getElementById('dashboard-quick');
+  if(!el) return;
+
+  const NOW_YM = '2026-06';
+  const PREV_YM = '2026-05';
+  const THIS_YEAR = '2026';
+  const LAST_YEAR = '2025';
+
+  // Customers active this month vs last month
+  const custs = DB_STATS.top_customers;
+  const thisMonthCusts  = Object.entries(CUST_MONTHLY).filter(([n,m]) => m[NOW_YM]?.o > 0);
+  const lastMonthCusts  = Object.entries(CUST_MONTHLY).filter(([n,m]) => m[PREV_YM]?.o > 0);
+  const thisMonthEq25   = thisMonthCusts.reduce((s,[n,m]) => s+(m[NOW_YM]?.e||0), 0);
+  const lastMonthEq25   = lastMonthCusts.reduce((s,[n,m]) => s+(m[PREV_YM]?.e||0), 0);
+
+  // Top 5 customers this year
+  const top5 = Object.entries(CUST_MONTHLY).map(([name, months]) => {
+    let yEq=0, yOrd=0;
+    for(let m=1;m<=12;m++){
+      const ym=THIS_YEAR+'-'+String(m).padStart(2,'0');
+      if(months[ym]){ yEq+=months[ym].e||0; yOrd+=months[ym].o||0; }
+    }
+    return {name, yEq, yOrd};
+  }).filter(x=>x.yOrd>0).sort((a,b)=>b.yEq-a.yEq).slice(0,5);
+
+  // Follow-up customers (8-36 months)
+  const followUp = Object.entries(custs).filter(([n,s]) => {
+    const ms = s.last_order ? tlMonthDiff(s.last_order, NOW_YM) : 999;
+    return ms > 8 && ms <= 36;
+  }).sort((a,b) => {
+    const ma = tlMonthDiff(a[1].last_order||'2000-01', NOW_YM);
+    const mb = tlMonthDiff(b[1].last_order||'2000-01', NOW_YM);
+    return ma - mb; // closest to recovering first
+  });
+
+  const eqDiff = lastMonthEq25 > 0 ? ((thisMonthEq25-lastMonthEq25)/lastMonthEq25*100).toFixed(0) : 0;
+  const eqDiffColor = eqDiff >= 0 ? '#22c55e' : '#f87171';
+  const eqDiffSign  = eqDiff >= 0 ? '+' : '';
+
+  el.innerHTML = `
+    <!-- Card 1: เดือนนี้ vs เดือนที่แล้ว -->
+    <div class="card p-4">
+      <p style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">📅 ${NOW_YM} vs ${PREV_YM}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <p style="font-size:10px;color:#6b7280;margin-bottom:2px">ลูกค้าที่ซื้อ</p>
+          <p style="font-size:22px;font-weight:700;color:#e2e8f0;font-family:monospace">${thisMonthCusts.length}</p>
+          <p style="font-size:10px;color:#6b7280">vs ${lastMonthCusts.length} เดือนที่แล้ว</p>
+        </div>
+        <div>
+          <p style="font-size:10px;color:#6b7280;margin-bottom:2px">แผ่น 2.5</p>
+          <p style="font-size:22px;font-weight:700;color:#60a5fa;font-family:monospace">${fK(thisMonthEq25)}</p>
+          <p style="font-size:10px;color:${eqDiffColor}">${eqDiffSign}${eqDiff}% vs เดือนที่แล้ว</p>
+        </div>
+      </div>
+      <div style="margin-top:10px;border-top:1px solid #1f2937;padding-top:8px">
+        <p style="font-size:10px;color:#4b5563;margin-bottom:4px;font-weight:600">ลูกค้าที่ซื้อเดือนนี้:</p>
+        ${thisMonthCusts.slice(0,5).map(([n,m]) =>
+          `<div style="display:flex;justify-content:space-between;font-size:10px;padding:2px 0">
+            <span style="color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${n}</span>
+            <span style="color:#60a5fa;font-family:monospace;flex-shrink:0">${fK(m[NOW_YM]?.e||0)}</span>
+          </div>`
+        ).join('')}
+        ${thisMonthCusts.length>5?`<p style="font-size:10px;color:#374151;margin-top:3px">+${thisMonthCusts.length-5} รายการอื่น</p>`:''}
+      </div>
+    </div>
+
+    <!-- Card 2: Top 5 ปีนี้ -->
+    <div class="card p-4">
+      <p style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">🏆 Top 5 ลูกค้าปี ${THIS_YEAR}</p>
+      ${top5.map((x,i) => {
+        const pct = top5[0].yEq > 0 ? (x.yEq/top5[0].yEq*100) : 0;
+        const colors = ['#f59e0b','#9ca3af','#cd7c2d','#60a5fa','#a78bfa'];
+        return `<div style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <span style="font-size:10px;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${i+1}. ${x.name}</span>
+            <span style="font-size:10px;color:#60a5fa;font-family:monospace;flex-shrink:0">${fK(x.yEq)}</span>
+          </div>
+          <div style="height:4px;background:#1f2937;border-radius:2px">
+            <div style="height:100%;width:${pct}%;background:${colors[i]};border-radius:2px"></div>
+          </div>
+        </div>`;
+      }).join('')}
+      ${top5.length===0?'<p style="font-size:11px;color:#4b5563">ยังไม่มีข้อมูล</p>':''}
+    </div>
+
+    <!-- Card 3: Follow-up ด่วน -->
+    <div class="card p-4">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <p style="font-size:10px;font-weight:600;color:#4b5563;text-transform:uppercase;letter-spacing:.05em">⚠️ Follow-up ด่วน (${followUp.length} ราย)</p>
+        <button onclick="switchTab('timeline');setTimeout(()=>tlFilterByStatus('gap'),100)" style="font-size:9px;background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.3);border-radius:4px;padding:2px 8px;cursor:pointer">ดูทั้งหมด →</button>
+      </div>
+      ${followUp.slice(0,7).map(([name,s]) => {
+        const ms = tlMonthDiff(s.last_order||'', NOW_YM);
+        const urgency = ms <= 12 ? '#f59e0b' : ms <= 24 ? '#fb923c' : '#f87171';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid #111827">
+          <span style="font-size:10px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px" title="${name}">${name}</span>
+          <div style="text-align:right;flex-shrink:0">
+            <span style="font-size:9px;color:${urgency};font-family:monospace">${ms}mo</span>
+            <span style="font-size:9px;color:#4b5563;margin-left:4px">${(s.salesman||[]).join('/')}</span>
+          </div>
+        </div>`;
+      }).join('')}
+      ${followUp.length>7?`<p style="font-size:9px;color:#374151;margin-top:4px;text-align:center">+${followUp.length-7} รายการอื่น</p>`:''}
+    </div>
+  `;
+}
+
+// ===== EXPORT FOLLOW-UP LIST =====
+function exportFollowUp() {
+  const NOW_YM = '2026-06';
+  const custs  = DB_STATS.top_customers;
+
+  const list = Object.entries(custs).filter(([n,s]) => {
+    const ms = s.last_order ? tlMonthDiff(s.last_order, NOW_YM) : 999;
+    return ms > 8 && ms <= 36;
+  }).sort((a,b) => {
+    return tlMonthDiff(a[1].last_order||'2000-01', NOW_YM) - tlMonthDiff(b[1].last_order||'2000-01', NOW_YM);
+  });
+
+  // Build CSV
+  const header = ['#','ลูกค้า','Area','ประเทศ','เซลส์','ออเดอร์รวม','แผ่น2.5รวม','ซื้อล่าสุด','หยุดมา(เดือน)','Net USD รวม'];
+  const rows = list.map(([name,s], i) => {
+    const ms = tlMonthDiff(s.last_order||'', NOW_YM);
+    return [
+      i+1, `"${name}"`, s.area||'', s.country||'',
+      `"${(s.salesman||[]).join(', ')}"`,
+      s.orders||0, s.eq25||0, s.last_order||'', ms, s.net_usd||0
+    ].join(',');
+  });
+  const csv = [header.join(','), ...rows].join('\n');
+
+  // Download
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `followup_list_${NOW_YM}.csv`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+
+  showToastEd(`✅ Export แล้ว ${list.length} ลูกค้า → followup_list_${NOW_YM}.csv`);
+}
+
+
+// ===== INSIGHTS TAB =====
+let _insCurrentTab = 'season';
+
+function insTab(t) {
+  _insCurrentTab = t;
+  ['season','health','price'].forEach(s => {
+    document.getElementById('ins-'+s)?.classList.toggle('hidden', s!==t);
+    const btn = document.getElementById('ins-tab-'+s);
+    if(btn) btn.classList.toggle('active', s===t);
+  });
+  if(t==='season') renderSeason();
+  if(t==='health') renderHealth();
+  if(t==='price')  renderPrice();
+}
+
+function renderInsight() {
+  // Populate selectors first time
+  const saleSel = document.getElementById('ins-sel-sale');
+  if(saleSel && saleSel.options.length <= 1) {
+    Object.keys(DB_STATS.salesman_year).sort().forEach(s => {
+      const o = document.createElement('option'); o.value=s; o.textContent=s;
+      saleSel.appendChild(o);
+    });
+  }
+  if(_insCurrentTab==='season') renderSeason();
+  if(_insCurrentTab==='health') renderHealth();
+  if(_insCurrentTab==='price')  renderPrice();
+}
+
+function getInsFilters() {
+  return {
+    area: (document.getElementById('ins-sel-area')||{}).value||'all',
+    sale: (document.getElementById('ins-sel-sale')||{}).value||'all',
+  };
+}
+
+// ===== SEASONALITY =====
+function renderSeason() {
+  const {area, sale} = getInsFilters();
+  const thaiMo = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const monthly = Array(12).fill(null).map(()=>({eq25:0,orders:0,count:0}));
+
+  // รวมจาก CUST_MONTHLY ถ้ามี filter
+  if(area==='all' && sale==='all') {
+    // ใช้ month_stats ตรงๆ เร็วกว่า
+    Object.entries(DB_STATS.month_stats).forEach(([ym,s]) => {
+      const mo = parseInt(ym.split('-')[1]) - 1;
+      monthly[mo].eq25   += s.eq25||0;
+      monthly[mo].orders += s.orders||0;
+      monthly[mo].count  += 1;
+    });
+  } else {
+    // filter by area/sale
+    Object.entries(CUST_MONTHLY).forEach(([name, months]) => {
+      const s = DB_STATS.top_customers[name];
+      if(!s) return;
+      if(area!=='all' && s.area!==area) return;
+      if(sale!=='all' && !(s.salesman||[]).map(x=>x.trim()).includes(sale)) return;
+      Object.entries(months).forEach(([ym,d]) => {
+        const mo = parseInt(ym.split('-')[1]) - 1;
+        monthly[mo].eq25   += d.e||0;
+        monthly[mo].orders += d.o||0;
+        monthly[mo].count  += 1;
+      });
+    });
+  }
+
+  const avgs = monthly.map(m => m.count>0 ? Math.round(m.eq25/m.count) : 0);
+  const totalAvg = avgs.reduce((s,v)=>s+v,0) / 12;
+  const maxAvg   = Math.max(...avgs, 1);
+
+  const chartEl = document.getElementById('ins-season-chart');
+  const labelsEl= document.getElementById('ins-season-labels');
+  if(!chartEl) return;
+
+  chartEl.innerHTML = avgs.map((v,i) => {
+    const barH   = Math.max(4, Math.round(v/maxAvg*100));
+    const isHigh = v > totalAvg;
+    const pct    = totalAvg > 0 ? ((v-totalAvg)/totalAvg*100).toFixed(0) : 0;
+    const sign   = pct >= 0 ? '+' : '';
+    const color  = isHigh ? '#22c55e' : '#f87171';
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+      <span style="font-size:8px;color:${color};font-weight:700;font-family:monospace">${sign}${pct}%</span>
+      <div style="width:100%;height:${barH}px;background:${color};border-radius:3px 3px 0 0;opacity:.85"
+           title="${thaiMo[i]}: avg ${fK(v)} แผ่น/ปี (${sign}${pct}% จากค่าเฉลี่ย)"></div>
+    </div>`;
+  }).join('');
+  // avg line
+  const lineY = Math.round((1 - totalAvg/maxAvg)*100);
+  chartEl.style.position = 'relative';
+
+  labelsEl.innerHTML = thaiMo.map((m,i) => {
+    const v = avgs[i]; const isHigh = v>totalAvg;
+    return `<div style="flex:1;text-align:center;font-size:9px;color:${isHigh?'#4ade80':'#f87171'}">${m}</div>`;
+  }).join('');
+
+  // Table
+  const tableEl = document.getElementById('ins-season-table');
+  if(!tableEl) return;
+
+  // Per-year breakdown
+  const yearlyMo = {};
+  if(area==='all' && sale==='all') {
+    Object.entries(DB_STATS.month_stats).forEach(([ym,s]) => {
+      const yr = ym.slice(0,4); const mo = parseInt(ym.split('-')[1])-1;
+      if(!yearlyMo[mo]) yearlyMo[mo] = {};
+      yearlyMo[mo][yr] = s.eq25||0;
+    });
+  }
+
+  const rows = monthly.map((m,i) => {
+    const avg = avgs[i]; const isHigh = avg>totalAvg;
+    const yrVals = Object.values(yearlyMo[i]||{});
+    const maxV = Math.max(...yrVals,1);
+    const minV = Math.min(...yrVals.filter(v=>v>0),maxV);
+    return `<tr style="border-bottom:1px solid #111827">
+      <td style="padding:6px 12px;font-size:11px;color:#9ca3af;font-weight:600">${thaiMo[i]}</td>
+      <td style="padding:6px 12px;font-size:11px;color:${isHigh?'#4ade80':'#f87171'};font-family:monospace;font-weight:700">${fK(avg)}</td>
+      <td style="padding:6px 12px;font-size:11px;color:#60a5fa;font-family:monospace">${fK(maxV)}</td>
+      <td style="padding:6px 12px;font-size:11px;color:#f87171;font-family:monospace">${minV<maxV?fK(minV):'—'}</td>
+      <td style="padding:6px 12px">
+        <div style="height:6px;background:#1f2937;border-radius:3px;width:200px">
+          <div style="height:100%;width:${Math.round(avg/maxAvg*100)}%;background:${isHigh?'#22c55e':'#f87171'};border-radius:3px"></div>
+        </div>
+      </td>
+      <td style="padding:6px 12px;font-size:10px;color:${isHigh?'#22c55e':'#f87171'};font-weight:700">
+        ${avg>totalAvg?'▲ High Season':'▼ Low Season'}
+      </td>
+    </tr>`;
+  }).join('');
+
+  tableEl.innerHTML = `<table style="width:100%;border-collapse:collapse">
+    <thead><tr style="border-bottom:1px solid #374151">
+      <th style="padding:6px 12px;font-size:10px;color:#4b5563;font-weight:600;text-align:left">เดือน</th>
+      <th style="padding:6px 12px;font-size:10px;color:#4b5563;font-weight:600;text-align:left">เฉลี่ย/ปี</th>
+      <th style="padding:6px 12px;font-size:10px;color:#4b5563;font-weight:600;text-align:left">สูงสุด</th>
+      <th style="padding:6px 12px;font-size:10px;color:#4b5563;font-weight:600;text-align:left">ต่ำสุด</th>
+      <th style="padding:6px 12px;font-size:10px;color:#4b5563;font-weight:600;text-align:left">สัดส่วน</th>
+      <th style="padding:6px 12px;font-size:10px;color:#4b5563;font-weight:600;text-align:left">ฤดูกาล</th>
+    </tr></thead><tbody>${rows}</tbody>
+  </table>`;
+}
+
+// ===== HEALTH SCORE =====
+function calcHealthScore(name, s) {
+  const NOW_YM = '2026-06';
+  const recencyMo = s.last_order ? tlMonthDiff(s.last_order, NOW_YM) : 999;
+  const totalSpan = (s.first_order && s.last_order) ? Math.max(1, tlMonthDiff(s.first_order, s.last_order)+1) : 1;
+  const activeM   = s.active_months || 1;
+  const maxEq25   = 5500000; // approx max
+
+  // Recency: 0 months = 100, 36+ = 0
+  const rScore = Math.max(0, Math.round((1 - Math.min(recencyMo,36)/36) * 100));
+  // Frequency: active months / total span
+  const fScore = Math.round(Math.min(activeM/totalSpan, 1) * 100);
+  // Volume: eq25 vs max
+  const vScore = Math.round(Math.min(s.eq25||0, maxEq25) / maxEq25 * 100);
+  // Weighted
+  const total = Math.round(rScore*0.4 + fScore*0.3 + vScore*0.3);
+  return {total, rScore, fScore, vScore};
+}
+
+function renderHealth() {
+  const {area, sale} = getInsFilters();
+  const q       = ((document.getElementById('ins-health-search')||{}).value||'').toLowerCase();
+  const sortKey = (document.getElementById('ins-health-sort')||{}).value||'score';
+
+  let list = Object.entries(DB_STATS.top_customers).filter(([n,s]) => {
+    if(area!=='all' && s.area!==area) return false;
+    if(sale!=='all' && !(s.salesman||[]).map(x=>x.trim()).includes(sale)) return false;
+    if(q && !n.toLowerCase().includes(q)) return false;
+    return s.orders>0;
+  }).map(([n,s]) => {
+    const sc = calcHealthScore(n, s);
+    return {n, s, ...sc};
+  });
+
+  list.sort((a,b) => {
+    if(sortKey==='recency') return b.rScore-a.rScore;
+    if(sortKey==='volume')  return b.vScore-a.vScore;
+    return b.total-a.total;
+  });
+
+  const el = document.getElementById('ins-health-count');
+  if(el) el.textContent = list.length+' ลูกค้า';
+
+  const scoreColor = (v) => v>=70?'#22c55e':v>=40?'#f59e0b':'#f87171';
+  const scoreBg    = (v) => v>=70?'rgba(34,197,94,.12)':v>=40?'rgba(245,158,11,.12)':'rgba(239,68,68,.12)';
+
+  const rows = list.map(({n,s,total,rScore,fScore,vScore},i) => {
+    const badge = total>=70?'🟢 Healthy':total>=40?'🟡 At Risk':'🔴 Churned';
+    return `<tr style="border-bottom:1px solid #0d1117" onmouseenter="this.style.background='rgba(255,255,255,.02)'" onmouseleave="this.style.background=''">
+      <td style="padding:7px 12px;font-size:10px;color:#374151">${i+1}</td>
+      <td style="padding:7px 12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${n}">
+        <span style="font-size:11px;font-weight:500;color:#e2e8f0">${n}</span><br>
+        <span style="font-size:9px;color:#4b5563">${s.area||'—'} · ${(s.salesman||[]).join('/')}</span>
+      </td>
+      <td style="padding:7px 12px;text-align:center">
+        <div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px">
+          <span style="font-size:18px;font-weight:800;color:${scoreColor(total)};font-family:monospace;line-height:1">${total}</span>
+          <span style="font-size:9px;color:${scoreColor(total)}">${badge}</span>
+        </div>
+      </td>
+      <td style="padding:7px 12px;text-align:center">
+        <div style="display:inline-block;width:36px;height:36px;border-radius:50%;border:3px solid ${scoreColor(rScore)};display:flex;align-items:center;justify-content:center">
+          <span style="font-size:10px;font-weight:700;color:${scoreColor(rScore)};font-family:monospace">${rScore}</span>
+        </div>
+      </td>
+      <td style="padding:7px 12px;text-align:center">
+        <div style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:3px solid ${scoreColor(fScore)}">
+          <span style="font-size:10px;font-weight:700;color:${scoreColor(fScore)};font-family:monospace">${fScore}</span>
+        </div>
+      </td>
+      <td style="padding:7px 12px;text-align:center">
+        <div style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:3px solid ${scoreColor(vScore)}">
+          <span style="font-size:10px;font-weight:700;color:${scoreColor(vScore)};font-family:monospace">${vScore}</span>
+        </div>
+      </td>
+      <td style="padding:7px 12px;text-align:right;font-size:11px;color:#60a5fa;font-family:monospace">${fK(s.eq25||0)}</td>
+      <td style="padding:7px 12px;text-align:center;font-size:10px;color:#9ca3af;font-family:monospace">${s.last_order||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const tbody = document.getElementById('ins-health-tbody');
+  if(tbody) tbody.innerHTML = rows || '<tr><td colspan="8" style="text-align:center;padding:30px;color:#4b5563;font-size:12px">ไม่มีข้อมูล</td></tr>';
+}
+
+// ===== PRICE TREND =====
+function renderPrice() {
+  const {area, sale} = getInsFilters();
+  const YEARS = Object.keys(DB_STATS.year_stats).sort();
+
+  // Price per year
+  let prices;
+  if(area==='all' && sale==='all') {
+    prices = YEARS.map(yr => {
+      const s = DB_STATS.year_stats[yr];
+      return s.eq25>0 && s.net_usd>0 ? (s.net_usd_sheets!=null?s.net_usd_sheets:s.net_usd)/s.eq25 : 0;
+    });
+  } else {
+    // Filter from CUST_MONTHLY
+    const yrTotals = {};
+    YEARS.forEach(y => yrTotals[y]={eq25:0,usd:0});
+    Object.entries(CUST_MONTHLY).forEach(([name, months]) => {
+      const s = DB_STATS.top_customers[name];
+      if(!s) return;
+      if(area!=='all' && s.area!==area) return;
+      if(sale!=='all' && !(s.salesman||[]).map(x=>x.trim()).includes(sale)) return;
+      Object.entries(months).forEach(([ym,d]) => {
+        const yr=ym.slice(0,4);
+        if(yrTotals[yr]){ yrTotals[yr].eq25+=d.e||0; yrTotals[yr].usd+=d.u||0; }
+      });
+    });
+    prices = YEARS.map(yr => yrTotals[yr].eq25>0 ? yrTotals[yr].usd/yrTotals[yr].eq25 : 0);
+  }
+
+  const validPrices = prices.filter(v=>v>0);
+  const maxP = Math.max(...validPrices, 1);
+  const minP = Math.min(...validPrices.filter(v=>v>0), maxP);
+  const avgP = validPrices.length ? validPrices.reduce((s,v)=>s+v,0)/validPrices.length : 0;
+
+  const chartEl = document.getElementById('ins-price-chart');
+  const labelsEl= document.getElementById('ins-price-labels');
+  if(!chartEl) return;
+
+  chartEl.innerHTML = prices.map((v,i) => {
+    if(!v) return `<div style="flex:1"></div>`;
+    const barH   = Math.round(v/maxP*100);
+    const isHigh = v > avgP;
+    const color  = isHigh ? '#f59e0b' : '#60a5fa';
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+      <span style="font-size:8px;color:${color};font-weight:700;font-family:monospace">$${v.toFixed(2)}</span>
+      <div style="width:100%;height:${barH}px;background:${color};border-radius:3px 3px 0 0;opacity:.85"
+           title="${YEARS[i]}: $${v.toFixed(3)}/แผ่น2.5"></div>
+    </div>`;
+  }).join('');
+  labelsEl.innerHTML = YEARS.map(y=>`<div style="flex:1;text-align:center;font-size:9px;color:#4b5563">${y.slice(2)}</div>`).join('');
+
+  // Customer price ranking
+  const custPrices = Object.entries(DB_STATS.top_customers)
+    .filter(([n,s]) => {
+      if(area!=='all' && s.area!==area) return false;
+      if(sale!=='all' && !(s.salesman||[]).map(x=>x.trim()).includes(sale)) return false;
+      return s.eq25>50000 && s.net_usd>0;
+    })
+    .map(([n,s]) => ({n, price: (s.net_usd_sheets!=null?s.net_usd_sheets:s.net_usd)/s.eq25, eq25: s.eq25, area: s.area}))
+    .sort((a,b)=>b.price-a.price);
+
+  const renderPriceList = (arr, color) => arr.map((x,i) =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #111827">
+      <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">
+        <span style="font-size:10px;color:#9ca3af">${i+1}. </span>
+        <span style="font-size:10px;color:#e2e8f0" title="${x.n}">${x.n}</span>
+      </div>
+      <div style="text-align:right;flex-shrink:0;margin-left:8px">
+        <span style="font-size:12px;font-weight:700;color:${color};font-family:monospace">$${x.price.toFixed(2)}</span>
+        <span style="font-size:9px;color:#4b5563;display:block">${fK(x.eq25)} แผ่น</span>
+      </div>
+    </div>`
+  ).join('');
+
+  const topEl = document.getElementById('ins-price-top');
+  const botEl = document.getElementById('ins-price-bot');
+  if(topEl) topEl.innerHTML = renderPriceList(custPrices.slice(0,10), '#f59e0b');
+  if(botEl) botEl.innerHTML = renderPriceList([...custPrices].reverse().slice(0,10), '#60a5fa');
+}
+
+
+// ===== SHARED DATA LAYER =====
+// ใช้ร่วมกับ sales_manager.html และ sales_analytics.html
+// ออเดอร์ใหม่จาก sales_manager จะปรากฏใน realtime-orders overlay
+const SHARED_KEY = 'aaf_shared_v1';
+const RECENT_KEY = 'aaf_recent_orders_v1';
+
+function sharedGetRecentOrders() {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    if(!raw) return [];
+    const data = JSON.parse(raw);
+    // เฉพาะ 90 วันล่าสุด
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-90);
+    return data.filter(r => r.ts && new Date(r.ts) > cutoff);
+  } catch(e) { return []; }
+}
+
+function sharedRenderRecentBadge() {
+  const orders = sharedGetRecentOrders();
+  if(!orders.length) return;
+  const el = document.getElementById('shared-recent-badge');
+  if(!el) return;
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <span style="font-size:10px;color:#f59e0b;font-weight:600">🔴 Live Orders (${orders.length} รายการจาก Sales Manager)</span>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+      ${orders.slice(-5).reverse().map(r =>
+        `<span style="font-size:9px;background:rgba(245,158,11,.1);color:#fbbf24;border:1px solid rgba(245,158,11,.2);border-radius:4px;padding:2px 7px">${r.cust||'?'} · ${r.ym||'?'} · ${fK(r.eq25||0)} แผ่น</span>`
+      ).join('')}
+    </div>`;
+}
+
+// Call on page load
+setTimeout(sharedRenderRecentBadge, 500);
+
+// Listen for storage changes (cross-tab)
+window.addEventListener('storage', (e) => {
+  if(e.key === RECENT_KEY) sharedRenderRecentBadge();
+});
+
+
+// ===== PORT TAB =====
+let _portSelected = null;
+
+function renderPort() {
+  // init selectors ครั้งแรก
+  const yrSel = document.getElementById('port-year');
+  if(yrSel && yrSel.options.length <= 1) {
+    Object.keys(DB_STATS.year_stats).sort().reverse().forEach(y => {
+      const o=document.createElement('option'); o.value=y; o.textContent=y; yrSel.appendChild(o);
+    });
+    const areas = [...new Set(Object.values(PORT_DATA).map(p=>p.area).filter(a=>a))].sort();
+    const aSel = document.getElementById('port-area');
+    areas.forEach(a => { const o=document.createElement('option'); o.value=a; o.textContent=a; aSel.appendChild(o); });
+  }
+
+  const q    = ((document.getElementById('port-search')||{}).value||'').toLowerCase();
+  const yr   = (document.getElementById('port-year')||{}).value||'all';
+  const area = (document.getElementById('port-area')||{}).value||'all';
+
+  // สร้าง list พร้อมยอดตามปีที่เลือก
+  let list = Object.entries(PORT_DATA).map(([port,p]) => {
+    let o,e,u;
+    if(yr==='all'){ o=p.o; e=p.e; u=p.u; }
+    else {
+      o=0;e=0;u=0;
+      Object.entries(p.months).forEach(([ym,m]) => {
+        if(ym.startsWith(yr)){ o+=m.o; e+=m.e; u+=m.u; }
+      });
+    }
+    return {port, country:p.country, area:p.area, nCust:Object.keys(p.customers).length, o, e, u};
+  }).filter(x => {
+    if(x.e === 0 && yr!=='all') return false;
+    if(area!=='all' && x.area!==area) return false;
+    if(q && !x.port.toLowerCase().includes(q) && !(x.country||'').toLowerCase().includes(q)) return false;
+    return true;
+  }).sort((a,b)=>b.e-a.e);
+
+  document.getElementById('port-count').textContent = list.length+' พอร์ต';
+
+  // Summary cards
+  const totE = list.reduce((s,x)=>s+x.e,0);
+  const totU = list.reduce((s,x)=>s+x.u,0);
+  const top = list[0];
+  document.getElementById('port-summary').innerHTML = `
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">พอร์ตทั้งหมด</p><p style="font-size:22px;font-weight:700;color:#e2e8f0;font-family:monospace">${list.length}</p></div>
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">แผ่น 2.5 รวม</p><p style="font-size:22px;font-weight:700;color:#60a5fa;font-family:monospace">${fK(totE)}</p></div>
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">Net USD รวม</p><p style="font-size:22px;font-weight:700;color:#4ade80;font-family:monospace">$${fK(totU)}</p></div>
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">พอร์ตอันดับ 1</p><p style="font-size:14px;font-weight:700;color:#f59e0b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${top?top.port:''}">${top?top.port:'—'}</p><p style="font-size:10px;color:#6b7280">${top?fK(top.e)+' แผ่น':''}</p></div>`;
+
+  const maxE = Math.max(...list.map(x=>x.e),1);
+  document.getElementById('port-tbody').innerHTML = list.map((x,i) => {
+    const pct = Math.round(x.e/maxE*100);
+    const isSel = _portSelected===x.port;
+    return `<tr style="border-bottom:1px solid #111827;background:${isSel?'rgba(99,102,241,.06)':''}">
+      <td style="padding:7px 12px;color:#374151;font-size:10px">${i+1}</td>
+      <td style="padding:7px 12px;color:#e2e8f0;font-weight:600;cursor:pointer" onclick="portDrill('${x.port.replace(/'/g,"\\'")}')" title="คลิกดูรายเดือน">🚢 ${x.port}</td>
+      <td style="padding:7px 12px;color:#9ca3af">${x.country||'—'}</td>
+      <td style="padding:7px 12px;color:#6b7280;font-size:10px">${x.area||'—'}</td>
+      <td style="padding:7px 12px;text-align:right;color:#9ca3af;font-family:monospace">${x.nCust}</td>
+      <td style="padding:7px 12px;text-align:right;color:#e2e8f0;font-family:monospace">${x.o.toLocaleString()}</td>
+      <td style="padding:7px 12px;text-align:right;color:#60a5fa;font-family:monospace">${fK(x.e)}</td>
+      <td style="padding:7px 12px;text-align:right;color:#4ade80;font-family:monospace">$${fK(x.u)}</td>
+      <td style="padding:7px 12px"><div style="height:6px;background:#1f2937;border-radius:3px;width:120px"><div style="height:100%;width:${pct}%;background:#3b82f6;border-radius:3px"></div></div></td>
+      <td style="padding:7px 12px"><button onclick="portDrill('${x.port.replace(/'/g,"\\'")}')" style="font-size:9px;background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3);border-radius:4px;padding:2px 8px;cursor:pointer">รายเดือน →</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="10" style="text-align:center;padding:30px;color:#4b5563">ไม่มีข้อมูล</td></tr>';
+}
+
+function portDrill(port) {
+  const p = PORT_DATA[port];
+  const panel = document.getElementById('port-detail');
+  if(!p){ panel.classList.add('hidden'); return; }
+  if(_portSelected===port){ _portSelected=null; panel.classList.add('hidden'); renderPort(); return; }
+  _portSelected = port;
+  panel.classList.remove('hidden');
+
+  const thaiMo=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const years = Object.keys(DB_STATS.year_stats).sort();
+
+  // Heatmap ปี×เดือน
+  let maxEq=0;
+  years.forEach(y=>{for(let m=1;m<=12;m++){const d=p.months[y+'-'+String(m).padStart(2,'0')];if(d&&d.e>maxEq)maxEq=d.e;}});
+
+  let heat='<div style="overflow-x:auto"><table style="border-collapse:separate;border-spacing:3px"><thead><tr><td style="min-width:40px"></td>';
+  thaiMo.forEach(m=>{heat+=`<td style="min-width:50px;text-align:center;font-size:9px;color:#4b5563;font-weight:600;padding-bottom:4px">${m}</td>`;});
+  heat+='<td style="min-width:56px;text-align:center;font-size:9px;color:#fbbf24;font-weight:700;padding-bottom:4px;border-left:1px solid #374151">รวมปี</td>';
+  heat+='</tr></thead><tbody>';
+  years.forEach(y=>{
+    let yHas=false;
+    for(let m=1;m<=12;m++){if(p.months[y+'-'+String(m).padStart(2,'0')]?.o){yHas=true;break;}}
+    heat+=`<tr><td style="text-align:right;padding-right:6px;font-size:10px;font-family:monospace;color:${yHas?'#9ca3af':'#374151'};font-weight:${yHas?700:400}">${y}</td>`;
+    let yearSum=0;
+    for(let m=1;m<=12;m++){
+      const ym=y+'-'+String(m).padStart(2,'0');
+      const d=p.months[ym];
+      const has=!!(d&&d.o>0);
+      if(has) yearSum+=d.e;
+      let bg='#0f172a',tc='transparent';
+      if(has){const t=0.18+0.82*(d.e/maxEq);bg=`rgb(${Math.round(59*t)},${Math.round(130*t)},${Math.round(246*t)})`;tc=t>0.5?'#0c1a33':'#93c5fd';}
+      const tip=has?`${ym}: ${d.o} orders · ${fK(d.e)} แผ่น · $${fK(d.u)}`:`${ym}: ไม่มี`;
+      heat+=`<td style="padding:0"><div title="${tip}" style="width:50px;height:26px;background:${bg};border-radius:3px;display:flex;align-items:center;justify-content:center"><span style="font-size:8px;font-weight:700;color:${tc};font-family:monospace">${has?fK(d.e):''}</span></div></td>`;
+    }
+    heat+=`<td style="padding:0;border-left:1px solid #1f2937"><div style="width:56px;height:26px;background:#1a1f2e;border-radius:3px;display:flex;align-items:center;justify-content:center"><span style="font-size:9px;font-weight:700;color:${yearSum>0?'#fbbf24':'#374151'};font-family:monospace">${yearSum>0?fK(yearSum):'—'}</span></div></td>`;
+    heat+='</tr>';
+  });
+  heat+='</tbody></table></div>';
+
+  // ลูกค้าในพอร์ต
+  const custs = Object.entries(p.customers).slice(0,15);
+  const maxC = custs.length ? custs[0][1] : 1;
+  const custList = custs.map(([c,v],i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #111827">
+      <span style="font-size:10px;color:#374151;width:18px">${i+1}</span>
+      <span style="font-size:11px;color:#e2e8f0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" title="${c}" onclick="switchTab('timeline');setTimeout(()=>{const s=document.getElementById('tl-search');if(s){s.value='${c.replace(/'/g,"\\'").slice(0,20)}';tlFilter();}},150)">${c}</span>
+      <div style="width:120px;height:5px;background:#1f2937;border-radius:3px"><div style="height:100%;width:${Math.round(v/maxC*100)}%;background:#3b82f6;border-radius:3px"></div></div>
+      <span style="font-size:10px;color:#60a5fa;font-family:monospace;width:60px;text-align:right">${fK(v)}</span>
+    </div>`).join('');
+
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+      <div>
+        <p style="font-size:15px;font-weight:700;color:#e2e8f0">🚢 ${port}</p>
+        <p style="font-size:11px;color:#6b7280">${p.country||'—'} · ${p.area||'—'} · ลูกค้า ${Object.keys(p.customers).length} ราย · รวม ${fK(p.e)} แผ่น · $${fK(p.u)}</p>
+      </div>
+      <button onclick="_portSelected=null;document.getElementById('port-detail').classList.add('hidden');renderPort()" style="color:#6b7280;font-size:22px;background:none;border:none;cursor:pointer;line-height:1">×</button>
+    </div>
+    <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;margin-bottom:8px">🗓 การซื้อ ปี × เดือน (สีเข้ม=น้อย สว่าง=มาก)</p>
+    ${heat}
+    <p style="font-size:10px;color:#4b5563;font-weight:600;text-transform:uppercase;margin:16px 0 8px">👥 ลูกค้าในพอร์ตนี้ (คลิกชื่อเพื่อดู Timeline)</p>
+    ${custList}
+    ${Object.keys(p.customers).length>15?`<p style="font-size:10px;color:#374151;margin-top:6px">+${Object.keys(p.customers).length-15} รายอื่น</p>`:''}`;
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  renderPort();
+}
+
+
+// ===== COMMISSION TAB =====
+function renderComm() {
+  const sel = document.getElementById('comm-year');
+  if(sel && !sel.options.length) {
+    const yrs = [...new Set(Object.keys(DB_STATS.com_month||{}).map(m=>m.slice(0,4)))].sort().reverse();
+    yrs.forEach(y=>{const o=document.createElement('option');o.value=y;o.textContent='ปี '+y;sel.appendChild(o);});
+  }
+  const yr = sel?.value || '2026';
+  const cmn = DB_STATS.com_month||{};
+  const months = Object.keys(cmn).filter(m=>m.startsWith(yr)).sort();
+
+  let tG=0,tA=0,tS=0,tF=0,tI=0,tN=0,tE=0;
+  const rows = months.map(ym=>{
+    const d=cmn[ym];
+    tG+=d.gross; tA+=d.agency_com; tS+=d.staff_com; tF+=d.freight; tI+=d.insurance; tN+=d.net; tE+=d.eq25||0;
+    const eq = (DB_STATS.month_stats[ym]||{}).eq25||0;
+    const comPer = eq>0 ? (d.agency_com+d.staff_com)/eq : 0;
+    return `<tr style="border-bottom:1px solid #111827">
+      <td style="padding:6px 10px;color:#e2e8f0;font-family:monospace">${ym}</td>
+      <td style="padding:6px 10px;text-align:right;color:#9ca3af;font-family:monospace">$${fK(d.gross)}</td>
+      <td style="padding:6px 10px;text-align:right;color:#f59e0b;font-family:monospace">${d.agency_com>0?'$'+fK(d.agency_com):'—'}</td>
+      <td style="padding:6px 10px;text-align:right;color:#a78bfa;font-family:monospace">$${d.staff_com.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td style="padding:6px 10px;text-align:right;color:#60a5fa;font-family:monospace">$${fK(d.freight)}</td>
+      <td style="padding:6px 10px;text-align:right;color:#6b7280;font-family:monospace">$${d.insurance.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td style="padding:6px 10px;text-align:right;color:#4ade80;font-family:monospace;font-weight:700">$${fK(d.net)}</td>
+      <td style="padding:6px 10px;text-align:right;color:#4b5563;font-family:monospace">$${comPer.toFixed(3)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('comm-tbody').innerHTML = rows +
+    `<tr style="border-top:2px solid #374151;font-weight:700">
+      <td style="padding:7px 10px;color:#e2e8f0">รวม ${yr}</td>
+      <td style="padding:7px 10px;text-align:right;color:#e2e8f0;font-family:monospace">$${fK(tG)}</td>
+      <td style="padding:7px 10px;text-align:right;color:#f59e0b;font-family:monospace">${tA>0?'$'+fK(tA):'—'}</td>
+      <td style="padding:7px 10px;text-align:right;color:#a78bfa;font-family:monospace">$${fK(tS)}</td>
+      <td style="padding:7px 10px;text-align:right;color:#60a5fa;font-family:monospace">$${fK(tF)}</td>
+      <td style="padding:7px 10px;text-align:right;color:#6b7280;font-family:monospace">$${fK(tI)}</td>
+      <td style="padding:7px 10px;text-align:right;color:#4ade80;font-family:monospace">$${fK(tN)}</td><td></td></tr>`;
+
+  const yrEq = (DB_STATS.year_stats[yr]||{}).eq25||1;
+  document.getElementById('comm-summary').innerHTML = `
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">Gross ปี ${yr}</p><p style="font-size:20px;font-weight:700;color:#e2e8f0;font-family:monospace">$${fK(tG)}</p></div>
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">ค่าใช้จ่ายรวม</p><p style="font-size:20px;font-weight:700;color:#f87171;font-family:monospace">$${fK(tA+tS+tF+tI)}</p><p style="font-size:9px;color:#6b7280">${((tA+tS+tF+tI)/Math.max(tG,1)*100).toFixed(1)}% ของ Gross</p></div>
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">NET สุทธิ</p><p style="font-size:20px;font-weight:700;color:#4ade80;font-family:monospace">$${fK(tN)}</p></div>
+    <div class="card p-3"><p style="font-size:10px;color:#4b5563">คอมรวม/แผ่น 2.5</p><p style="font-size:20px;font-weight:700;color:#f59e0b;font-family:monospace">$${((tA+tS)/yrEq).toFixed(3)}</p></div>`;
+
+  // Agency
+  const ag = DB_STATS.agency||{};
+  const agEl = document.getElementById('comm-agency');
+  const names = Object.keys(ag);
+  if(!names.length) {
+    agEl.innerHTML = `<p style="font-size:11px;color:#4b5563;text-align:center;padding:20px">ยังไม่มีข้อมูลเอเจนซี่ — เมื่อฝ่ายขายกรอกค่าคอม (ช่อง AA) และชื่อเอเจนซี่ (ช่อง AS) ในไฟล์ Excel แล้วอัปโหลดผ่านปุ่ม "📥 อัปเดตจาก Excel" ข้อมูลจะแสดงที่นี่อัตโนมัติ</p>`;
+  } else {
+    agEl.innerHTML = names.sort((a,b)=>ag[b].com_usd-ag[a].com_usd).map((n,i)=>{
+      const a=ag[n];
+      const per = a.eq25>0 ? a.com_usd/a.eq25 : 0;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #111827">
+        <span style="font-size:10px;color:#374151;width:20px">${i+1}</span>
+        <div style="flex:1"><p style="font-size:12px;color:#e2e8f0;font-weight:600">${n}</p>
+          <p style="font-size:9px;color:#6b7280">ลูกค้า: ${Object.keys(a.customers||{}).slice(0,4).join(', ')}</p></div>
+        <div style="text-align:right"><p style="font-size:13px;color:#f59e0b;font-family:monospace;font-weight:700">$${fK(a.com_usd)}</p>
+          <p style="font-size:9px;color:#6b7280">${fK(a.eq25)} แผ่น · $${per.toFixed(3)}/แผ่น</p></div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ===== EXCEL UPLOAD =====
+let _xlParsed = null;
+
+function xlOpenModal(){ document.getElementById('xl-modal').style.display='flex'; }
+function xlCloseModal(){ document.getElementById('xl-modal').style.display='none'; _xlParsed=null;
+  document.getElementById('xl-preview').innerHTML=''; document.getElementById('xl-status').innerHTML='';
+  document.getElementById('xl-btn-apply').style.display='none'; document.getElementById('xl-btn-download').style.display='none'; }
+
+function xlNum(v){ if(v==null||v==='')return 0; const f=parseFloat(String(v).replace(/,/g,'')); return isNaN(f)?0:f; }
+function xlThick(v){ const m=String(v||'').match(/([\d.]+)/); return m?parseFloat(m[1]):null; }
+function xlSize(v){ const m=String(v||'').match(/^\s*([\d.]+)\s*[xX*]\s*([\d.]+)/); return m?[parseFloat(m[1]),parseFloat(m[2])]:[null,null]; }
+function xlDate(v){
+  if(v==null) return null;
+  if(typeof v==='number'){ const d=XLSX.SSF.parse_date_code(v); return d?new Date(d.y,d.m-1,d.d):null; }
+  const d=new Date(v); return isNaN(d)?null:d;
+}
+
+function xlHandleFile(file){
+  if(!file) return;
+  const st=document.getElementById('xl-status');
+  st.innerHTML='<p style="font-size:11px;color:#60a5fa">⏳ กำลังอ่านไฟล์...</p>';
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try {
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:false});
+      const recs=[];
+      wb.SheetNames.forEach(sn=>{
+        const isDom=/dome/i.test(sn);
+        if(!/export|dome/i.test(sn)) return;
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null});
+        // หา header row (แถวที่มี 'Invoice Date')
+        let hIdx=-1;
+        for(let i=0;i<Math.min(6,rows.length);i++){
+          if((rows[i]||[]).some(c=>String(c||'').trim()==='Invoice Date')){hIdx=i;break;}
+        }
+        if(hIdx<0) return;
+        const H=rows[hIdx].map(c=>String(c||'').trim());
+        const col=n=>H.indexOf(n);
+        // Customer.1 = ชื่อคอลัมน์ Customer ตัวที่สอง
+        let custIdx=-1,seen=0;
+        H.forEach((h,i)=>{if(h==='Customer'){seen++;if(seen===2)custIdx=i;}});
+        if(custIdx<0) custIdx=col('Customer');
+        const iDate=col('Invoice Date'),iPost=col('Post Invoice Date'),iQT=col('QT Date');
+        const iQty=col('QTY(Pcs.)'),iT=col('Thickness'),iSz=col('Size'),iGr=col('Grade');
+        const iAmt=col('Amount'),iCur=col('Currency'),iEx=col('Ex.Rate'),iMST=col('Amount MST');
+        const iComA=col('Commission'),iComT=col('TOTAL COM ($)'),iFr=col('Freight Total'),iIn=col('Insurance Total');
+        const iSale=col('Salesman'),iPort=col('Port (แก้แล้ว)'),iCty=col('Country (แก้แล้ว)'),iArea=col('Area');
+        const iAg=H.findIndex(h=>/^(Agency|Agent|AS)$/i.test(h));
+        const iInv=col('Invoice'),iItem=col('Item Code'),iPostNo=col('Post Invoice No.');
+        for(let i=hIdx+1;i<rows.length;i++){
+          const r=rows[i]; if(!r) continue;
+          const cust=String(r[custIdx]||'').trim();
+          if(!cust) continue;
+          let dt=null;
+          for(const ii of [iDate,iPost,iQT]){ if(ii>=0&&r[ii]!=null){dt=xlDate(r[ii]); if(dt)break;} }
+          if(!dt||dt.getFullYear()<2014||dt.getFullYear()>2035) continue;
+          const qty=xlNum(r[iQty]); if(!qty) continue;
+          // กันซ้ำระดับแถว: กุญแจเฉพาะจาก Invoice + Post Invoice No + Item Code + qty
+          // (ตรงกับ invoice/item เดิม = แถวเดียวกันแน่นอน ไม่นับซ้ำ)
+          const invKey = [
+            iInv>=0?String(r[iInv]||''):'',
+            iPostNo>=0?String(r[iPostNo]||''):'',
+            iItem>=0?String(r[iItem]||''):'',
+            qty
+          ].join('|');
+          recs.push({
+            ym:dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'),
+            yr:String(dt.getFullYear()), cust, isDom, invKey,
+            qty, t:xlThick(r[iT]), wh:xlSize(r[iSz]),
+            grade:String(r[iGr]||'').trim(),
+            gross:xlNum(r[iAmt]), curr:String(r[iCur]||'').trim().toUpperCase(),
+            exrate:xlNum(r[iEx]), mst:xlNum(r[iMST]),
+            comA:xlNum(r[iComA]), comT:xlNum(r[iComT]), fr:xlNum(r[iFr]), ins:xlNum(r[iIn]),
+            sale:String(r[iSale]||'').trim(),
+            port:iPort>=0?String(r[iPort]||'').trim():'', country:iCty>=0?String(r[iCty]||'').trim():'',
+            area:iArea>=0?String(r[iArea]||'').trim():'', agency:iAg>=0?String(r[iAg]||'').trim():''
+          });
+        }
+      });
+      // ===== ชั้นป้องกันที่ 1: กันแถวซ้ำแท้ๆ ภายในไฟล์เดียวกัน (invKey ซ้ำ) =====
+      const seenInFile = new Set();
+      let dupInFile = 0;
+      const dedupedRecs = recs.filter(r=>{
+        if(!r.invKey || r.invKey==='|||'+r.qty){ return true; } // ไม่มี invoice no → ปล่อยผ่าน (ไม่พอจะเช็ค)
+        if(seenInFile.has(r.invKey)){ dupInFile++; return false; }
+        seenInFile.add(r.invKey); return true;
+      });
+      recs.length = 0; recs.push(...dedupedRecs);
+      if(!recs.length){ st.innerHTML='<p style="font-size:11px;color:#f87171">❌ ไม่พบข้อมูล — ตรวจว่าไฟล์มี sheet ชื่อ export/dometic และ header "Invoice Date"</p>'; return; }
+      _xlParsed=recs;
+      // Preview
+      const byMonth={};
+      recs.forEach(r=>{
+        if(!byMonth[r.ym]) byMonth[r.ym]={n:0,qty:0};
+        byMonth[r.ym].n++; byMonth[r.ym].qty+=r.qty;
+      });
+      const months=Object.keys(byMonth).sort();
+      const dupWarn = dupInFile>0 ? `<br><span style="color:#f59e0b">⚠️ พบแถวซ้ำภายในไฟล์ ${dupInFile} รายการ (Invoice+Item+จำนวนเดียวกัน) — ตัดออกให้อัตโนมัติแล้ว ไม่นับซ้ำ</span>` : '';
+      st.innerHTML=`<p style="font-size:11px;color:#4ade80">✅ อ่านไฟล์สำเร็จ — ${recs.length.toLocaleString()} รายการ ${months.length} เดือน${dupWarn}</p>`;
+      document.getElementById('xl-preview').innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:1px solid #374151">
+          <th style="padding:5px 8px;text-align:left;color:#4b5563;font-size:10px">เดือน</th>
+          <th style="padding:5px 8px;text-align:right;color:#4b5563;font-size:10px">รายการ</th>
+          <th style="padding:5px 8px;text-align:right;color:#4b5563;font-size:10px">แผ่นจริง</th>
+          <th style="padding:5px 8px;text-align:center;color:#4b5563;font-size:10px">สถานะ</th></tr></thead><tbody>` +
+        months.map(m=>{
+          const has=!!DB_STATS.month_stats[m];
+          return `<tr style="border-bottom:1px solid #111827">
+            <td style="padding:5px 8px;color:#e2e8f0;font-family:monospace">${m}</td>
+            <td style="padding:5px 8px;text-align:right;color:#9ca3af;font-family:monospace">${byMonth[m].n}</td>
+            <td style="padding:5px 8px;text-align:right;color:#60a5fa;font-family:monospace">${fK(byMonth[m].qty)}</td>
+            <td style="padding:5px 8px;text-align:center"><span style="font-size:9px;padding:2px 7px;border-radius:3px;${has?'background:rgba(245,158,11,.15);color:#f59e0b':'background:rgba(34,197,94,.15);color:#22c55e'}">${has?'♻️ แทนที่ของเดิม':'✅ เดือนใหม่'}</span></td></tr>`;
+        }).join('')+'</tbody></table>';
+      document.getElementById('xl-btn-apply').style.display='inline-block';
+    } catch(err){ st.innerHTML='<p style="font-size:11px;color:#f87171">❌ อ่านไฟล์ไม่สำเร็จ: '+err.message+'</p>'; }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function xlApply(){
+  if(!_xlParsed) return;
+  let recs=_xlParsed;
+  const updMonths=new Set(recs.map(r=>r.ym));
+
+  // ===== ชั้นป้องกันที่ 2: Invoice Registry ถาวร (กันซ้ำข้ามเดือน/ข้ามรอบอัปโหลด) =====
+  // เก็บ invKey ทุกอันที่เคยนำเข้าแล้ว ผูกไว้กับ DB_STATS โดยตรง (ติดไปกับไฟล์เว็บเวลาดาวน์โหลด)
+  if(!DB_STATS._invoice_registry) DB_STATS._invoice_registry = {};
+  const REG = DB_STATS._invoice_registry;
+
+  // ก่อนอื่น: ถอน registry ของ invKey ที่อยู่ในเดือนที่กำลังจะแทนที่ (เพื่อให้ correction เดือนเดิมทำได้ปกติ)
+  Object.keys(REG).forEach(k=>{ if(updMonths.has(REG[k])) delete REG[k]; });
+
+  // กรอง: ถ้า invKey นี้เคยถูกนำเข้าไปแล้วในเดือนอื่น (ที่ไม่ได้ถูกแทนที่รอบนี้) → เป็น invoice ซ้ำจริง ห้ามเบิ้ล
+  let blockedCrossMonth = 0;
+  recs = recs.filter(r=>{
+    if(!r.invKey || r.invKey.startsWith('|||')) return true; // ไม่มีเลขที่ invoice ให้เช็ค → ปล่อยผ่าน
+    if(REG[r.invKey] && REG[r.invKey]!==r.ym){ blockedCrossMonth++; return false; }
+    return true;
+  });
+  if(blockedCrossMonth>0){
+    document.getElementById('xl-status').innerHTML += `<br><span style="font-size:11px;color:#f87171">🛑 พบ ${blockedCrossMonth} invoice ที่เคยนำเข้าไปแล้วในเดือนอื่นก่อนหน้า — บล็อกไม่ให้เพิ่มซ้ำ</span>`;
+  }
+  if(!recs.length){
+    document.getElementById('xl-status').innerHTML += `<br><span style="font-size:11px;color:#f59e0b">⚠️ ไม่มีข้อมูลใหม่ให้เพิ่ม (ทั้งหมดซ้ำกับที่มีอยู่แล้ว)</span>`;
+    return;
+  }
+
+  // 1) ลบ contribution เดือนที่จะแทนที่ (idempotent — รองรับกรณีแก้ไขข้อมูลเดือนเดิม)
+  updMonths.forEach(ym=>{
+    delete DB_STATS.month_stats[ym];
+    if(DB_STATS.com_month) delete DB_STATS.com_month[ym];
+    Object.entries(CUST_MONTHLY).forEach(([c,ms])=>{
+      if(ms[ym]){
+        const old=ms[ym], s=DB_STATS.top_customers[c];
+        if(s){ s.orders=Math.max(0,(s.orders||0)-(old.o||0));
+          s.eq25=Math.max(0,Math.round((s.eq25||0)-(old.e||0)));
+          s.net_usd=Math.max(0,Math.round((s.net_usd||0)-(old.u||0)));
+          s.active_months=Math.max(0,(s.active_months||0)-1); }
+        delete ms[ym];
+      }
+    });
+    Object.values(PORT_DATA).forEach(p=>{
+      if(p.months[ym]){ const m=p.months[ym];
+        p.o-=m.o; p.e=Math.round(p.e-m.e); p.u=Math.round(p.u-m.u);
+        delete p.months[ym]; }
+    });
+  });
+
+  // 2) เพิ่มข้อมูลใหม่
+  const FXA=DB_STATS.fx_rates_annual||{};
+  recs.forEach(r=>{
+    // ลงทะเบียน invoice key ว่านำเข้าแล้ว (กันซ้ำในอนาคต)
+    if(r.invKey && !r.invKey.startsWith('|||')) REG[r.invKey]=r.ym;
+    const fx=FXA[r.yr]||33.0;
+    let sheets=r.qty, eq25=r.qty;
+    // ไม้นิ้ว (25x2052): 41 แผ่น = 1 แผ่นมาตรฐาน 1220x2440 (สูตรพิเศษ กันการเสียเนื้อไม้จากรอยตัด)
+    const isNarrowWood = r.wh[0]===25 && r.wh[1]===2052;
+    if(isNarrowWood){ sheets=r.qty/41; eq25=r.t?sheets*(r.t/2.5):sheets; }
+    else if(r.t&&r.wh[0]&&r.wh[1]&&r.wh[0]>50){ sheets=r.qty*(r.wh[0]/1220)*(r.wh[1]/2440); eq25=sheets*(r.t/2.5); }
+    const isNarrow=false; // ค่านี้เดิมใช้กันไม้เส้นออกจากสถิติ eq25 — ตอนนี้ไม้นิ้วนับรวมแล้วด้วยสูตรข้างบน
+    // สกุลเงินจากช่อง V + Ex.Rate ช่อง W (สกุล→บาท) — ทุก sheet เหมือนกัน
+    const netRaw=r.gross-r.comA-r.comT-r.fr-r.ins;         // สกุลตามช่อง V
+    let exr=r.exrate>0?r.exrate:(r.curr==='THB'?1.0:fx);
+    const net_thb=netRaw*exr;
+    const net_usd=r.curr==='USD'?netRaw:net_thb/fx;
+    const div=r.curr==='USD'?1.0:fx/exr;                    // expense→USD: หารด้วย div
+    const isPos=r.qty>0;
+    const port=r.isDom?'ในประเทศ':(String(r.port).toUpperCase().replace(/\s+/g,' ').replace(' PORT','').trim()||'(ไม่ระบุพอร์ต)');
+    let area;
+    if(r.isDom){ area='ในประเทศ'; }
+    else { area=r.area||((DB_STATS.top_customers[r.cust]||{}).area||''); if(area==='ในประเทศ') area=''; }
+    const country=r.isDom?'THAILAND':r.country;
+    const sale=((DB_STATS.top_customers[r.cust]||{}).salesman||[])[0]||(r.isDom?'ในประเทศ':'K.Angkana');
+
+    // month_stats
+    if(!DB_STATS.month_stats[r.ym]) DB_STATS.month_stats[r.ym]={orders:0,eq25:0,net_usd:0,cont:0};
+    const ms=DB_STATS.month_stats[r.ym];
+    ms.orders+=isPos?1:0; ms.eq25=Math.round(ms.eq25+eq25); ms.net_usd=Math.round(ms.net_usd+net_usd);
+    if(!isNarrow) ms.net_usd_sheets=Math.round((ms.net_usd_sheets||0)+net_usd);
+    // com_month
+    if(!DB_STATS.com_month) DB_STATS.com_month={};
+    if(!DB_STATS.com_month[r.ym]) DB_STATS.com_month[r.ym]={agency_com:0,staff_com:0,freight:0,insurance:0,gross:0,net:0,eq25:0};
+    const cmm=DB_STATS.com_month[r.ym];
+    cmm.agency_com+=r.comA/div; cmm.staff_com+=r.comT/div; cmm.freight+=r.fr/div; cmm.insurance+=r.ins/div;
+    cmm.gross+=r.gross/div; cmm.net+=netRaw/div;
+    // CUST_MONTHLY + top_customers
+    if(!CUST_MONTHLY[r.cust]) CUST_MONTHLY[r.cust]={};
+    if(!CUST_MONTHLY[r.cust][r.ym]) CUST_MONTHLY[r.cust][r.ym]={o:0,e:0,u:0};
+    const cmo=CUST_MONTHLY[r.cust][r.ym];
+    cmo.o+=isPos?1:0; cmo.e=Math.round(cmo.e+eq25); cmo.u=Math.round(cmo.u+net_usd);
+    if(!DB_STATS.top_customers[r.cust]){
+      DB_STATS.top_customers[r.cust]={orders:0,eq25:0,net_usd:0,net_usd_sheets:0,net_thb:0,area,salesman:[sale],country,port,
+        first_order:r.ym,last_order:r.ym,active_months:0,top_grade:r.grade||'',top_thickness:r.t||0};
+    }
+    const tc=DB_STATS.top_customers[r.cust];
+    tc.orders+=isPos?1:0; tc.eq25=Math.round(tc.eq25+eq25); tc.net_usd=Math.round(tc.net_usd+net_usd);
+    if(!isNarrow) tc.net_usd_sheets=Math.round((tc.net_usd_sheets||0)+net_usd);
+    if(r.ym<tc.first_order) tc.first_order=r.ym;
+    if(r.ym>tc.last_order) tc.last_order=r.ym;
+    // PORT
+    if(!PORT_DATA[port]) PORT_DATA[port]={country,area,o:0,e:0,u:0,months:{},customers:{}};
+    const pp=PORT_DATA[port];
+    pp.o+=isPos?1:0; pp.e=Math.round(pp.e+eq25); pp.u=Math.round(pp.u+net_usd);
+    if(!pp.months[r.ym]) pp.months[r.ym]={o:0,e:0,u:0};
+    pp.months[r.ym].o+=isPos?1:0; pp.months[r.ym].e=Math.round(pp.months[r.ym].e+eq25); pp.months[r.ym].u=Math.round(pp.months[r.ym].u+net_usd);
+    pp.customers[r.cust]=Math.round((pp.customers[r.cust]||0)+eq25);
+    // Agency (ข้อ 6)
+    if(r.agency){
+      if(!DB_STATS.agency) DB_STATS.agency={};
+      if(!DB_STATS.agency[r.agency]) DB_STATS.agency[r.agency]={com_usd:0,sheets:0,eq25:0,months:{},customers:{}};
+      const ag=DB_STATS.agency[r.agency];
+      ag.com_usd+=r.comA/div; ag.sheets+=sheets; ag.eq25=Math.round(ag.eq25+eq25);
+      if(!ag.months[r.ym]) ag.months[r.ym]={com:0,e:0};
+      ag.months[r.ym].com+=r.comA/div; ag.months[r.ym].e=Math.round(ag.months[r.ym].e+eq25);
+      ag.customers[r.cust]=(ag.customers[r.cust]||0)+1;
+    }
+    // grade/thick/area/salesman year
+    if(r.grade){ if(!DB_STATS.grade_year[r.yr]) DB_STATS.grade_year[r.yr]={};
+      DB_STATS.grade_year[r.yr][r.grade]=Math.round((DB_STATS.grade_year[r.yr][r.grade]||0)+eq25); }
+    if(r.t){ const tk=String(r.t).replace(/\.?0+$/,'');
+      if(!DB_STATS.thick_year[r.yr]) DB_STATS.thick_year[r.yr]={};
+      DB_STATS.thick_year[r.yr][tk]=Math.round((DB_STATS.thick_year[r.yr][tk]||0)+sheets); }
+    if(area){ if(!DB_STATS.area_year[r.yr]) DB_STATS.area_year[r.yr]={};
+      if(!DB_STATS.area_year[r.yr][area]) DB_STATS.area_year[r.yr][area]={eq25:0,net_usd:0};
+      const ay=DB_STATS.area_year[r.yr][area];
+      ay.eq25=Math.round(ay.eq25+eq25); ay.net_usd=Math.round(ay.net_usd+net_usd); }
+    if(!DB_STATS.salesman_year[sale]) DB_STATS.salesman_year[sale]={};
+    if(!DB_STATS.salesman_year[sale][r.yr]) DB_STATS.salesman_year[sale][r.yr]={orders:0,eq25:0,net_usd:0};
+    const sy=DB_STATS.salesman_year[sale][r.yr];
+    sy.orders+=isPos?1:0; sy.eq25=Math.round(sy.eq25+eq25); sy.net_usd=Math.round(sy.net_usd+net_usd);
+  });
+
+  // 3) year_stats รวมใหม่จาก month_stats (idempotent)
+  const ny={};
+  Object.entries(DB_STATS.month_stats).forEach(([ym,s])=>{
+    const y=ym.slice(0,4);
+    if(!ny[y]) ny[y]={orders:0,eq25:0,net_usd:0,net_usd_sheets:0,cont:0};
+    ny[y].orders+=s.orders; ny[y].eq25+=s.eq25; ny[y].net_usd+=s.net_usd; ny[y].net_usd_sheets+=(s.net_usd_sheets||s.net_usd); ny[y].cont+=s.cont||0;
+  });
+  Object.keys(ny).forEach(y=>{ ny[y].eq25=Math.round(ny[y].eq25); ny[y].net_usd=Math.round(ny[y].net_usd); ny[y].net_usd_sheets=Math.round(ny[y].net_usd_sheets); DB_STATS.year_stats[y]=ny[y]; });
+
+  // 4) เก็บลง localStorage เพื่อคงข้อมูลเมื่อ reload บนเครื่องนี้
+  try { localStorage.setItem('aaf_xl_updates', JSON.stringify({ts:new Date().toISOString(),months:[...updMonths]})); } catch(e){}
+
+  renderAll();
+  if(typeof renderDashboard==='function') renderDashboard();
+  document.getElementById('xl-status').innerHTML=`<p style="font-size:11px;color:#4ade80">✅ เพิ่มข้อมูล ${recs.length.toLocaleString()} รายการ (${[...updMonths].sort().join(', ')}) เข้าเว็บแล้ว${blockedCrossMonth>0?` · บล็อกซ้ำ ${blockedCrossMonth} รายการ`:''} — กดดาวน์โหลดไฟล์ฉบับอัปเดตเพื่อเอาไปอัปขึ้น GitHub</p>`;
+  document.getElementById('xl-btn-apply').style.display='none';
+  document.getElementById('xl-btn-download').style.display='inline-block';
+}
+
+function xlDownloadUpdated(){
+  // สร้างไฟล์ HTML ใหม่ที่ฝังข้อมูลปัจจุบัน (หลัง merge) — เอาไปอัป GitHub ได้เลย
+  fetch(location.href).then(r=>r.text()).catch(()=>null).then(src=>{
+    let html = src || document.documentElement.outerHTML;
+    const njs = 'const DB_STATS = '';\nconst CUST_MONTHLY = '+JSON.stringify(CUST_MONTHLY)+';\nconst PORT_DATA = '+JSON.stringify(PORT_DATA)+';';
+    // แทนที่บล็อกข้อมูลเดิมด้วยของใหม่
+    const re=/const DB_STATS = []*?;\s*\nconst CUST_MONTHLY = [\s\S]*?;\s*\nconst PORT_DATA = [\s\S]*?;/;
+    if(re.test(html)) html=html.replace(re,njs);
+    const blob=new Blob([html],{type:'text/html'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='history_database.html'; a.click();
+    URL.revokeObjectURL(a.href);
+  });
+}
+
+
+// ===== EXECUTIVE SUMMARY TAB =====
+function execExportCSV() {
+  const table = document.getElementById('exec-table');
+  if(!table) return;
+  let csv = [];
+  table.querySelectorAll('tr').forEach(tr=>{
+    const cells = [...tr.querySelectorAll('th,td')].map(td=>{
+      let t = td.textContent.trim().replace(/,/g,'');
+      return '"'+t+'"';
+    });
+    csv.push(cells.join(','));
+  });
+  const blob = new Blob(['\ufeff'+csv.join('\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'AAF_สรุปผู้บริหาร_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+function renderExec() {
+  const YEARS_SORTED = Object.keys(DB_STATS.year_stats).sort();
+  const GRADES = ['AAA','A','B','C','F','AV','UN','CTS'];
+  const SALESMEN = Object.keys(DB_STATS.salesman_year).sort((a,b)=>{
+    if(a==='ในประเทศ') return 1; if(b==='ในประเทศ') return -1;
+    return a.localeCompare(b);
+  });
+
+  // ===== คำนวณ area (ต่างประเทศ/ในประเทศ) ต่อปี =====
+  const areaPerYear = {};
+  YEARS_SORTED.forEach(y=>{
+    let dom=0, exp=0;
+    Object.entries(DB_STATS.area_year[y]||{}).forEach(([a,d])=>{
+      if(a==='ในประเทศ') dom+=d.eq25; else exp+=d.eq25;
+    });
+    areaPerYear[y]={dom,exp};
+  });
+
+  // ===== ความหนาเฉลี่ย (weighted) ต่อปี — จาก thick_year (sheets ที่ area-normalized) =====
+  const avgThickPerYear = {};
+  YEARS_SORTED.forEach(y=>{
+    const ts = DB_STATS.thick_year[y]||{};
+    let num=0, den=0;
+    Object.entries(ts).forEach(([t,sheets])=>{
+      const tv = parseFloat(t); if(isNaN(tv)) return;
+      num += tv*sheets; den += sheets;
+    });
+    avgThickPerYear[y] = den>0 ? num/den : 0;
+  });
+
+  // ===== % เกรดต่อปี =====
+  const gradePctPerYear = {};
+  YEARS_SORTED.forEach(y=>{
+    const gs = DB_STATS.grade_year[y]||{};
+    const tot = Object.values(gs).reduce((s,v)=>s+v,0) || 1;
+    gradePctPerYear[y] = {};
+    GRADES.forEach(g=>{ gradePctPerYear[y][g] = (gs[g]||0)/tot*100; });
+  });
+
+  // ===== ราคาเฉลี่ย/แผ่น 2.5 ต่อปี =====
+  const priceP25PerYear = {};
+  YEARS_SORTED.forEach(y=>{
+    const s = DB_STATS.year_stats[y];
+    priceP25PerYear[y] = s.eq25>0 ? (s.net_usd_sheets!=null?s.net_usd_sheets:s.net_usd)/s.eq25 : 0;
+  });
+
+  // ===== แผ่น 2.5 ต่อเซลส์ต่อปี =====
+  const salePerYear = {};
+  SALESMEN.forEach(sl=>{
+    salePerYear[sl] = {};
+    YEARS_SORTED.forEach(y=>{
+      salePerYear[sl][y] = (DB_STATS.salesman_year[sl]?.[y]?.eq25) || 0;
+    });
+    salePerYear[sl]._sum = YEARS_SORTED.reduce((s,y)=>s+salePerYear[sl][y],0);
+  });
+
+  // ===== Build table =====
+  const yrLabel = YEARS_SORTED.map(y=>`<th style="padding:7px 10px;text-align:right;color:#9ca3af;font-family:monospace;font-weight:700;border-bottom:2px solid #374151;position:sticky;top:0;background:#0d1117;z-index:5">${y}</th>`).join('');
+  let html = `<thead><tr style="background:#0d1117">
+    <th style="padding:7px 10px;text-align:left;color:#e2e8f0;border-bottom:2px solid #374151;position:sticky;left:0;top:0;background:#0d1117;z-index:6">รายการ</th>
+    ${yrLabel}
+    <th style="padding:7px 10px;text-align:right;color:#f59e0b;font-weight:700;border-bottom:2px solid #374151;position:sticky;top:0;background:#0d1117;z-index:5">Sum/Avg</th>
+  </tr></thead><tbody>`;
+
+  const sectionRow = (label) => `<tr><td colspan="${YEARS_SORTED.length+2}" style="padding:10px 10px 4px;color:#60a5fa;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #1f2937">${label}</td></tr>`;
+  const dataRow = (label, vals, fmt, sumFn, highlight) => {
+    const cells = vals.map(v=>`<td style="padding:6px 10px;text-align:right;font-family:monospace;color:${highlight?'#e2e8f0':'#9ca3af'}">${fmt(v)}</td>`).join('');
+    const sumVal = sumFn ? sumFn(vals) : '';
+    return `<tr style="border-bottom:1px solid #111827">
+      <td style="padding:6px 10px;color:#e2e8f0;position:sticky;left:0;background:#0b0f17">${label}</td>
+      ${cells}
+      <td style="padding:6px 10px;text-align:right;font-family:monospace;color:#f59e0b;font-weight:700">${sumVal!==''?fmt(sumVal):''}</td>
+    </tr>`;
+  };
+
+  // --- ยอดขายรวม ---
+  html += sectionRow('📦 ยอดขายรวม (แผ่น 2.5)');
+  html += dataRow('รวมทั้งหมด', YEARS_SORTED.map(y=>DB_STATS.year_stats[y].eq25), v=>fK(v), a=>a.reduce((s,v)=>s+v,0), true);
+  html += dataRow('Orders', YEARS_SORTED.map(y=>DB_STATS.year_stats[y].orders), v=>v.toLocaleString(), a=>a.reduce((s,v)=>s+v,0));
+
+  // --- ต่างประเทศ vs ในประเทศ ---
+  html += sectionRow('🌍 ต่างประเทศ vs ในประเทศ (แผ่น 2.5)');
+  html += dataRow('ต่างประเทศ (Export)', YEARS_SORTED.map(y=>areaPerYear[y].exp), v=>fK(v), a=>a.reduce((s,v)=>s+v,0), true);
+  html += dataRow('ในประเทศ (Domestic)', YEARS_SORTED.map(y=>areaPerYear[y].dom), v=>fK(v), a=>a.reduce((s,v)=>s+v,0));
+  html += dataRow('% ต่างประเทศ', YEARS_SORTED.map(y=>{const t=areaPerYear[y].exp+areaPerYear[y].dom; return t>0?areaPerYear[y].exp/t*100:0;}), v=>v.toFixed(1)+'%', null);
+
+  // --- ความหนาเฉลี่ย ---
+  html += sectionRow('📏 ความหนาเฉลี่ยที่ขาย (mm)');
+  html += dataRow('ความหนาเฉลี่ย', YEARS_SORTED.map(y=>avgThickPerYear[y]), v=>v.toFixed(2), null, true);
+
+  // --- % เกรด ---
+  html += sectionRow('🏷️ สัดส่วนเกรดที่ขาย (%)');
+  GRADES.forEach(g=>{
+    const vals = YEARS_SORTED.map(y=>gradePctPerYear[y][g]);
+    if(vals.every(v=>v<0.05)) return; // ข้ามเกรดที่ไม่มีเลย
+    html += dataRow('% '+g, vals, v=>v.toFixed(2)+'%', null);
+  });
+
+  // --- ราคาเฉลี่ย ---
+  html += sectionRow('💰 ราคาเฉลี่ยขาย ณ ความหนา 2.5mm (USD/แผ่น)');
+  html += dataRow('ราคาเฉลี่ย/แผ่น 2.5', YEARS_SORTED.map(y=>priceP25PerYear[y]), v=>'$'+v.toFixed(2), null, true);
+  html += dataRow('อัตราแลกเปลี่ยนเฉลี่ย', YEARS_SORTED.map(y=>DB_STATS.fx_rates_annual[y]||0), v=>v.toFixed(2), null);
+
+  // --- เซลส์ ---
+  html += sectionRow('👥 แผ่น 2.5 แยกตามเซลส์');
+  SALESMEN.forEach(sl=>{
+    html += dataRow(sl, YEARS_SORTED.map(y=>salePerYear[sl][y]), v=>v>0?fK(v):'—', ()=>salePerYear[sl]._sum);
+  });
+  const totalCheck = YEARS_SORTED.map(y=>SALESMEN.reduce((s,sl)=>s+salePerYear[sl][y],0));
+  html += dataRow('รวมทุกเซลส์', totalCheck, v=>fK(v), a=>a.reduce((s,v)=>s+v,0), true);
+
+  html += '</tbody>';
+  document.getElementById('exec-table').innerHTML = html;
+}
+
+
+// Boot
+initFilters();
+renderAll();
+renderDashboard();
+</script>
+<div id="ed-toast" style="position:fixed;bottom:24px;right:24px;background:#1f2937;border:1px solid #374151;border-radius:8px;padding:10px 16px;font-size:12px;opacity:0;transform:translateY(10px);transition:all .2s;z-index:999;color:#e2e8f0;pointer-events:none"></div>
+
+<!-- Excel Update Modal -->
+<div id="xl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#161b22;border:1px solid #21262d;border-radius:12px;padding:24px;max-width:600px;width:92%;max-height:88vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <p style="font-size:15px;font-weight:700;color:#e2e8f0">📥 อัปเดตข้อมูลจากไฟล์ Excel</p>
+      <button onclick="xlCloseModal()" style="color:#6b7280;font-size:22px;background:none;border:none;cursor:pointer">×</button>
+    </div>
+    <div id="xl-dropzone" ondragover="event.preventDefault();this.style.borderColor='#3b82f6'" ondragleave="this.style.borderColor='#374151'"
+      ondrop="event.preventDefault();this.style.borderColor='#374151';xlHandleFile(event.dataTransfer.files[0])"
+      onclick="document.getElementById('xl-file-input').click()"
+      style="border:2px dashed #374151;border-radius:10px;padding:34px;text-align:center;cursor:pointer;margin-bottom:14px">
+      <p style="font-size:28px;margin-bottom:8px">📄</p>
+      <p style="font-size:13px;color:#9ca3af">ลากไฟล์ Excel มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</p>
+      <p style="font-size:10px;color:#4b5563;margin-top:6px">รองรับไฟล์บัญชีรูปแบบเดียวกับ data_sale v2 (sheets: export / dometic, header แถว 3)</p>
+    </div>
+    <input type="file" id="xl-file-input" accept=".xlsx,.xls" style="display:none" onchange="xlHandleFile(this.files[0])">
+    <div id="xl-status" style="margin-bottom:12px"></div>
+    <div id="xl-preview" style="margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button onclick="xlCloseModal()" style="font-size:11px;background:#374151;color:#9ca3af;border:none;border-radius:6px;padding:8px 16px;cursor:pointer">ยกเลิก</button>
+      <button id="xl-btn-apply" onclick="xlApply()" style="display:none;font-size:11px;background:rgba(34,197,94,.2);color:#4ade80;border:1px solid rgba(34,197,94,.4);border-radius:6px;padding:8px 16px;cursor:pointer">✅ เพิ่มข้อมูลเข้าเว็บ</button>
+      <button id="xl-btn-download" onclick="xlDownloadUpdated()" style="display:none;font-size:11px;background:rgba(59,130,246,.2);color:#60a5fa;border:1px solid rgba(59,130,246,.4);border-radius:6px;padding:8px 16px;cursor:pointer">💾 ดาวน์โหลดไฟล์เว็บฉบับอัปเดต (เอาไปอัป GitHub)</button>
+    </div>
+    <p style="font-size:10px;color:#4b5563;margin-top:10px">📌 ข้อมูลเดือนที่มีอยู่แล้วจะถูกแทนที่ด้วยข้อมูลใหม่ (กดซ้ำได้ไม่นับซ้ำ) เดือนอื่นๆ ไม่ถูกแตะต้อง — เพื่อให้ทุกคนเห็นข้อมูลใหม่ ให้กดดาวน์โหลดไฟล์เว็บฉบับอัปเดตแล้วอัปขึ้น GitHub ทับไฟล์เดิม</p>
+  </div>
+</div>
+</body>
+</html>
