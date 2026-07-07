@@ -2399,20 +2399,24 @@ function portDrill(port) {
 
   let heat='<div style="overflow-x:auto"><table style="border-collapse:separate;border-spacing:3px"><thead><tr><td style="min-width:40px"></td>';
   thaiMo.forEach(m=>{heat+=`<td style="min-width:50px;text-align:center;font-size:9px;color:#4b5563;font-weight:600;padding-bottom:4px">${m}</td>`;});
+  heat+='<td style="min-width:56px;text-align:center;font-size:9px;color:#fbbf24;font-weight:700;padding-bottom:4px;border-left:1px solid #374151">รวมปี</td>';
   heat+='</tr></thead><tbody>';
   years.forEach(y=>{
     let yHas=false;
     for(let m=1;m<=12;m++){if(p.months[y+'-'+String(m).padStart(2,'0')]?.o){yHas=true;break;}}
     heat+=`<tr><td style="text-align:right;padding-right:6px;font-size:10px;font-family:monospace;color:${yHas?'#9ca3af':'#374151'};font-weight:${yHas?700:400}">${y}</td>`;
+    let yearSum=0;
     for(let m=1;m<=12;m++){
       const ym=y+'-'+String(m).padStart(2,'0');
       const d=p.months[ym];
       const has=!!(d&&d.o>0);
+      if(has) yearSum+=d.e;
       let bg='#0f172a',tc='transparent';
       if(has){const t=0.18+0.82*(d.e/maxEq);bg=`rgb(${Math.round(59*t)},${Math.round(130*t)},${Math.round(246*t)})`;tc=t>0.5?'#0c1a33':'#93c5fd';}
       const tip=has?`${ym}: ${d.o} orders · ${fK(d.e)} แผ่น · $${fK(d.u)}`:`${ym}: ไม่มี`;
       heat+=`<td style="padding:0"><div title="${tip}" style="width:50px;height:26px;background:${bg};border-radius:3px;display:flex;align-items:center;justify-content:center"><span style="font-size:8px;font-weight:700;color:${tc};font-family:monospace">${has?fK(d.e):''}</span></div></td>`;
     }
+    heat+=`<td style="padding:0;border-left:1px solid #1f2937"><div style="width:56px;height:26px;background:#1a1f2e;border-radius:3px;display:flex;align-items:center;justify-content:center"><span style="font-size:9px;font-weight:700;color:${yearSum>0?'#fbbf24':'#374151'};font-family:monospace">${yearSum>0?fK(yearSum):'—'}</span></div></td>`;
     heat+='</tr>';
   });
   heat+='</tbody></table></div>';
