@@ -641,9 +641,11 @@
 </div>
 
 <script>
+/*AAF_DATA_START_v1*/
 const DB_STATS = {}
 const CUST_MONTHLY = {};
 const PORT_DATA = {};
+/*AAF_DATA_END_v1*/
 const YEARS = Object.keys(DB_STATS.year_stats).sort();
 const SALESMEN = Object.keys(DB_STATS.salesman_year);
 const AREAS = ['Africa','Oceania','South Asia','South East Asia','China','Europe','Unknown','East Asia','NORTH & SOUTH AMERICA','Middle East','Other/Port'];
@@ -2564,8 +2566,8 @@ function xlHandleFile(file){
         const iAmt=col('Amount'),iCur=col('Currency'),iEx=col('Ex.Rate'),iMST=col('Amount MST');
         const iComA=col('Commission'),iComT=col('TOTAL COM ($)'),iFr=col('Freight Total'),iIn=col('Insurance Total');
         const iSale=col('Salesman'),iPort=col('Port (แก้แล้ว)'),iCty=col('Country (แก้แล้ว)'),iArea=col('Area');
-        const iAg=H.findIndex(h=>/^(Agency|Agent|AS)$/i.test(h));
-        const iInv=col('Invoice'),iItem=col('Item Code'),iPostNo=col('Post Invoice No.');
+        const iAg=H.findIndex(h=>/agency|agent/i.test(h)||/^AS$/i.test(h));
+        const iInv=col('Invoice')>=0?col('Invoice'):col('Invoice Number'),iItem=col('Item Code'),iPostNo=col('Post Invoice No.')>=0?col('Post Invoice No.'):col('Tax Reciept');
         for(let i=hIdx+1;i<rows.length;i++){
           const r=rows[i]; if(!r) continue;
           const cust=String(r[custIdx]||'').trim();
@@ -2665,6 +2667,7 @@ function xlApply(){
   }
 
   // 1) ลบ contribution เดือนที่จะแทนที่ (idempotent — รองรับกรณีแก้ไขข้อมูลเดือนเดิม)
+  if(!DB_STATS._month_records) DB_STATS._month_records={};
   updMonths.forEach(ym=>{
     delete DB_STATS.month_stats[ym];
     if(DB_STATS.com_month) delete DB_STATS.com_month[ym];
@@ -2683,6 +2686,33 @@ function xlApply(){
         p.o-=m.o; p.e=Math.round(p.e-m.e); p.u=Math.round(p.u-m.u);
         delete p.months[ym]; }
     });
+    // ลบ contribution เก่าออกจาก เกรด/ความหนา/ภูมิภาค/เซลส์/เอเจนซี่/ลูกค้าต่อพอร์ต
+    // โดยใช้บันทึกดิบที่เก็บไว้ตอนเพิ่มเดือนนี้ครั้งก่อน (ถ้ามี)
+    const oldRecs = DB_STATS._month_records[ym];
+    if(oldRecs && oldRecs.length){
+      oldRecs.forEach(o=>{
+        if(o.grade && DB_STATS.grade_year[o.yr]) DB_STATS.grade_year[o.yr][o.grade]=Math.max(0,Math.round((DB_STATS.grade_year[o.yr][o.grade]||0)-o.eq25));
+        if(o.tk && DB_STATS.thick_year[o.yr]) DB_STATS.thick_year[o.yr][o.tk]=Math.max(0,Math.round((DB_STATS.thick_year[o.yr][o.tk]||0)-o.sheets));
+        if(o.area && DB_STATS.area_year[o.yr] && DB_STATS.area_year[o.yr][o.area]){
+          const ay=DB_STATS.area_year[o.yr][o.area];
+          ay.eq25=Math.max(0,Math.round(ay.eq25-o.eq25)); ay.net_usd=Math.max(0,Math.round(ay.net_usd-o.net_usd));
+        }
+        if(DB_STATS.salesman_year[o.sale] && DB_STATS.salesman_year[o.sale][o.yr]){
+          const sy=DB_STATS.salesman_year[o.sale][o.yr];
+          sy.orders=Math.max(0,sy.orders-(o.isPos?1:0)); sy.eq25=Math.max(0,Math.round(sy.eq25-o.eq25)); sy.net_usd=Math.max(0,Math.round(sy.net_usd-o.net_usd));
+        }
+        if(o.agency && DB_STATS.agency && DB_STATS.agency[o.agency]){
+          const ag=DB_STATS.agency[o.agency];
+          ag.com_usd=Math.max(0,ag.com_usd-o.comAdiv); ag.sheets=Math.max(0,ag.sheets-o.sheets); ag.eq25=Math.max(0,Math.round(ag.eq25-o.eq25));
+          if(ag.months[ym]){ ag.months[ym].com=Math.max(0,ag.months[ym].com-o.comAdiv); ag.months[ym].e=Math.max(0,Math.round(ag.months[ym].e-o.eq25)); }
+          if(ag.customers[o.cust]) ag.customers[o.cust]=Math.max(0,ag.customers[o.cust]-1);
+        }
+        if(o.port && PORT_DATA[o.port] && PORT_DATA[o.port].customers[o.cust]!=null){
+          PORT_DATA[o.port].customers[o.cust]=Math.max(0,Math.round(PORT_DATA[o.port].customers[o.cust]-o.eq25));
+        }
+      });
+    }
+    DB_STATS._month_records[ym]=[]; // เคลียร์ไว้รอบันทึกชุดใหม่ในขั้นตอนถัดไป
   });
 
   // 2) เพิ่มข้อมูลใหม่
@@ -2767,6 +2797,11 @@ function xlApply(){
     if(!DB_STATS.salesman_year[sale][r.yr]) DB_STATS.salesman_year[sale][r.yr]={orders:0,eq25:0,net_usd:0};
     const sy=DB_STATS.salesman_year[sale][r.yr];
     sy.orders+=isPos?1:0; sy.eq25=Math.round(sy.eq25+eq25); sy.net_usd=Math.round(sy.net_usd+net_usd);
+    // บันทึกดิบของแถวนี้ไว้ เพื่อให้ลบล้างค่าได้แม่นยำถ้าเดือนนี้ถูกแทนที่อีกในอนาคต
+    DB_STATS._month_records[r.ym].push({
+      yr:r.yr, grade:r.grade||'', tk:r.t?String(r.t).replace(/\.?0+$/,''):'', area:area||'',
+      sale, agency:r.agency||'', cust:r.cust, port, eq25, sheets, net_usd, comAdiv:r.agency?(r.comA/div):0, isPos
+    });
   });
 
   // 3) year_stats รวมใหม่จาก month_stats (idempotent)
@@ -2790,16 +2825,25 @@ function xlApply(){
 
 function xlDownloadUpdated(){
   // สร้างไฟล์ HTML ใหม่ที่ฝังข้อมูลปัจจุบัน (หลัง merge) — เอาไปอัป GitHub ได้เลย
-  fetch(location.href).then(r=>r.text()).catch(()=>null).then(src=>{
-    let html = src || document.documentElement.outerHTML;
-    const njs = 'const DB_STATS = '';\nconst CUST_MONTHLY = '+JSON.stringify(CUST_MONTHLY)+';\nconst PORT_DATA = '+JSON.stringify(PORT_DATA)+';';
-    // แทนที่บล็อกข้อมูลเดิมด้วยของใหม่
-    const re=/const DB_STATS = []*?;\s*\nconst CUST_MONTHLY = [\s\S]*?;\s*\nconst PORT_DATA = [\s\S]*?;/;
-    if(re.test(html)) html=html.replace(re,njs);
+  // สำคัญ: ดึงไฟล์ต้นฉบับแบบ no-store กันโดนแคชเก่าหลอก, ไม่ใช้ outerHTML fallback (เสี่ยง DOM มั่ว)
+  fetch(location.href, {cache:'no-store'}).then(r=>{
+    if(!r.ok) throw new Error('fetch failed: '+r.status);
+    return r.text();
+  }).then(html=>{
+    const njs = '/*AAF_DATA_START_v1*/\nconst DB_STATS = '+JSON.stringify(DB_STATS)+';\nconst CUST_MONTHLY = '+JSON.stringify(CUST_MONTHLY)+';\nconst PORT_DATA = '+JSON.stringify(PORT_DATA)+';\n/*AAF_DATA_END_v1*/';
+    // แทนที่บล็อกข้อมูลเดิมด้วยของใหม่ โดยหาขอบเขตจาก "หมุดหมาย" ที่ชัดเจน (ไม่เดาจาก ; ที่อาจอยู่ในชื่อลูกค้า/ที่อยู่)
+    const re=/\/\*AAF_DATA_START_v1\*\/[\s\S]*?\/\*AAF_DATA_END_v1\*\//;
+    if(!re.test(html)){
+      alert('⚠️ ไม่พบตำแหน่งข้อมูลเดิมในไฟล์ต้นฉบับ (อาจเป็นไฟล์เวอร์ชันเก่าที่ไม่มีหมุดหมาย) — กรุณาติดต่อผู้ดูแลระบบก่อนอัปเดต ไม่ควรอัปโหลดไฟล์นี้ทับ GitHub');
+      return;
+    }
+    html=html.replace(re,njs);
     const blob=new Blob([html],{type:'text/html'});
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob); a.download='history_database.html'; a.click();
     URL.revokeObjectURL(a.href);
+  }).catch(err=>{
+    alert('❌ ดึงไฟล์ต้นฉบับไม่สำเร็จ: '+err.message+'\n\nลองรีเฟรชหน้านี้ (Cmd+Shift+R) แล้วกดอัปเดตข้อมูลใหม่อีกครั้ง');
   });
 }
 
