@@ -37,6 +37,9 @@
 <script>
 const PAGES = {
   admin: [
+    { href: 'production_plan.html', icon: '🏭', title: 'แผนผลิตประจำวัน',
+      desc: 'กรอกความหนา/ชม.ผลิต · เป้า 4x8 อัตโนมัติ · Rev.04',
+      color: 'amber', badge: 'Admin' },
     { href: 'history_database.html', icon: '📊', title: 'ฐานข้อมูลประวัติการขาย',
       desc: 'ยอดขาย 2014–2026 · Timeline · Insights · Health Score · Price Trend',
       color: 'green', badge: 'ทุกคน' },
@@ -61,6 +64,7 @@ const PAGES = {
 };
 
 const COLORS = {
+  amber:  { border: 'border-amber-500/30',  hover: 'hover:border-amber-400/60',  arrow: 'group-hover:text-amber-400' },
   green:  { border: 'border-green-500/30',  hover: 'hover:border-green-400/60',  arrow: 'group-hover:text-green-400' },
   purple: { border: 'border-purple-500/30', hover: 'hover:border-purple-400/60', arrow: 'group-hover:text-purple-400' },
   blue:   { border: 'border-blue-500/30',   hover: 'hover:border-blue-400/60',   arrow: 'group-hover:text-blue-400' },
