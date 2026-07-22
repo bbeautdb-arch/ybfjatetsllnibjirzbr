@@ -189,11 +189,19 @@ function doLogin() {
     salesman: found.salesman, loginAt: new Date().toISOString(),
   }));
 
-  setTimeout(()=>{ window.location.href = 'dashboard_home.html'; }, 300);
+  const target = found.role === 'production' ? 'production_plan.html' : 'dashboard_home.html';
+  setTimeout(()=>{ window.location.href = target; }, 300);
 }
 
 const sess = sessionStorage.getItem('aaf_user');
-if(sess) window.location.href = 'dashboard_home.html';
+if(sess){
+  try{
+    const parsed = JSON.parse(sess);
+    window.location.href = parsed.role === 'production' ? 'production_plan.html' : 'dashboard_home.html';
+  }catch(e){
+    window.location.href = 'dashboard_home.html';
+  }
+}
 
 document.getElementById('username').focus();
 </script>
