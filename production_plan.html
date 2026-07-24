@@ -1,0 +1,1846 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>แผนผลิตประจำวัน — AAF</title>
+<style>
+  :root{
+    --bg:#12181b; --panel:#1a2226; --panel2:#202a2f; --ink:#e8edee; --sub:#93a3a8;
+    --line1:#e8975a; --line1-soft:#3a2c1f;
+    --line2:#5db3d6; --line2-soft:#1c2f38;
+    --line3:#8bc48a; --line3-soft:#1f2f22;
+    --amber:#f2c14e; --today:#33422f; --grid:#2a3438; --danger:#e06a5f; --ok:#5fbf7a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Bai Jamjuree','Sarabun','TH Sarabun New','Segoe UI',sans-serif;}
+  header{padding:18px 20px 14px;border-bottom:1px solid var(--grid);position:sticky;top:0;background:var(--bg);z-index:30;}
+  header .top{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+  h1{font-size:1.3rem;margin:0;font-weight:700;}
+  h1 small{display:block;font-weight:400;font-size:.76rem;color:var(--sub);margin-top:2px;}
+  #clock{font-variant-numeric:tabular-nums;font-size:.9rem;color:var(--sub);}
+  .userbar{display:flex;align-items:center;gap:10px;font-size:.85rem;color:var(--sub);}
+  .userbar b{color:var(--ink);}
+  .badge{padding:2px 9px;border-radius:999px;font-size:.7rem;font-weight:700;}
+  .badge.admin{background:#3a2c1f;color:var(--line1);}
+  .badge.production{background:#1c2f38;color:var(--line2);}
+  .btn{border:1px solid var(--grid);background:var(--panel);color:var(--ink);padding:7px 14px;border-radius:8px;font-size:.82rem;cursor:pointer;font-weight:600;}
+  .btn:hover{background:var(--panel2);}
+  .btn.primary{background:#1d4ed8;border-color:#1d4ed8;color:#fff;}
+  .btn.danger{background:transparent;border-color:var(--danger);color:var(--danger);padding:3px 9px;font-size:.75rem;}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap;}
+  .toolbar input[type=month]{background:var(--panel);border:1px solid var(--grid);color:var(--ink);padding:7px 10px;border-radius:8px;font-size:.85rem;}
+  .tabs{display:flex;gap:8px;}
+  .tab{border:1px solid var(--grid);background:var(--panel);color:var(--ink);padding:8px 16px;border-radius:999px;font-size:.88rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;}
+  .tab .dot{width:9px;height:9px;border-radius:50%;}
+  .tab[data-line="Line 1"] .dot{background:var(--line1);} .tab[data-line="Line 2"] .dot{background:var(--line2);} .tab[data-line="Line 3"] .dot{background:var(--line3);}
+  .tab.active{background:var(--panel2);border-color:currentColor;}
+  .tab[data-line="Line 1"].active{color:var(--line1);} .tab[data-line="Line 2"].active{color:var(--line2);} .tab[data-line="Line 3"].active{color:var(--line3);}
+  #syncstatus{font-size:.75rem;color:var(--sub);}
+  #syncstatus.saving{color:var(--amber);}
+  #syncstatus.ok{color:var(--ok);}
+  #syncstatus.err{color:var(--danger);}
+
+  main{padding:16px 20px 60px;}
+  .linewrap{display:none;} .linewrap.active{display:block;}
+  .scrollhint{color:var(--sub); font-size:.78rem; margin-bottom:8px;}
+  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
+  .card{background:var(--panel);border:1px solid var(--grid);border-radius:10px;padding:12px 14px;}
+  .card .label{font-size:.7rem;color:var(--sub);text-transform:uppercase;letter-spacing:.03em;}
+  .card .value{font-size:1.4rem;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .card .value span{font-size:.8rem;font-weight:500;color:var(--sub);}
+
+  .daysrow{display:flex;gap:10px;overflow-x:auto;padding-bottom:14px;}
+  .daycard{
+    flex:0 0 auto; background:var(--panel); border:1px solid var(--grid); border-radius:12px;
+    min-width:158px; overflow:hidden;
+  }
+  @keyframes today-pulse { 0%,100%{ box-shadow:0 0 0 1px var(--amber); } 50%{ box-shadow:0 0 0 3px var(--amber); } }
+  .daycard.today{border-color:var(--amber); animation: today-pulse 1.6s ease-in-out infinite;}
+  .daycard .dayhead{
+    background:var(--panel2); padding:8px 10px; display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--grid);
+  }
+  .daycard .dayhead .num{font-weight:800;font-size:1.05rem;}
+  .daycard .dayhead .dow{color:var(--sub);font-size:.72rem;}
+  .runcol{border-bottom:1px solid var(--grid); padding:8px 10px;}
+  .runcol:last-child{border-bottom:none;}
+  .runcol .rowline{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px;font-size:.74rem;color:var(--sub);}
+  select.thickness-sel, input.hr-input, input.note-input{
+    width:100%; background:var(--panel2); border:1px solid var(--grid); color:var(--ink);
+    padding:5px 7px; border-radius:6px; font-size:.82rem; margin-bottom:6px;
+  }
+  .calc-line{display:flex; justify-content:space-between; font-size:.78rem; padding:2px 0;}
+  .calc-line .k{color:var(--sub);}
+  .calc-line .v{font-variant-numeric:tabular-nums;font-weight:700;}
+  .l1 .calc-line .v{color:var(--line1);} .l2 .calc-line .v{color:var(--line2);} .l3 .calc-line .v{color:var(--line3);}
+  .emptyday{padding:16px 10px; text-align:center; color:var(--sub); font-size:.82rem;}
+  .addrun-btn{
+    width:100%; padding:8px; background:none; border:1px dashed var(--grid); color:var(--sub);
+    border-radius:8px; cursor:pointer; font-size:.78rem; margin-top:4px;
+  }
+  .addrun-btn:hover{color:var(--ink); border-color:var(--sub);}
+  .rm-btn{background:none;border:none;color:var(--danger);cursor:pointer;font-size:.85rem;padding:0 4px;}
+
+  footer{padding:16px 20px 40px;color:var(--sub);font-size:.78rem;border-top:1px solid var(--grid);margin-top:10px;}
+  @media (max-width:640px){ h1{font-size:1.05rem;} }
+
+  .pagenav{display:flex;gap:8px;}
+  .pagebtn.active{background:var(--panel2);border-color:var(--ink);}
+
+  .previewbox{background:var(--panel);border:1px solid var(--grid);border-radius:12px;padding:12px;margin-bottom:18px;}
+  .previewhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .previewhead b{font-size:.95rem;}
+  .tablewrap{overflow-x:auto;overflow-y:clip;border:1px solid var(--grid);border-radius:10px;}
+  table.preview-table{border-collapse:collapse;font-size:.76rem;white-space:nowrap;}
+  table.preview-table th, table.preview-table td{border-bottom:1px solid var(--grid);border-right:1px solid var(--grid);padding:5px 8px;text-align:center;font-variant-numeric:tabular-nums;}
+  table.preview-table thead th{background:#1e3350;color:#e8edee;z-index:1;border-bottom:2px solid #3d5a80;}
+  #floatingDayHeader{position:fixed;overflow:hidden;z-index:50;display:none;background:#1e3350;border-bottom:2px solid #3d5a80;box-shadow:0 4px 10px rgba(0,0,0,0.4);}
+  #floatingDayHeader table{border-collapse:collapse;}
+  #floatingDayHeader th{padding:8px 10px;font-size:.78rem;color:#e8edee;white-space:nowrap;box-sizing:border-box;}
+  table.preview-table th.rowlabel-corner{position:sticky;left:0;z-index:7;}
+  table.preview-table tbody th{text-align:left;background:var(--panel2);color:var(--sub);position:sticky;left:0;z-index:2;white-space:nowrap;}
+  table.preview-table tr.line-sep th{background:var(--panel2);font-weight:800;font-size:.82rem;text-align:left;position:sticky;left:0;padding-top:10px;padding-bottom:10px;border-top:3px solid var(--grid);}
+  table.preview-table tr.line-sep.l1 th{color:var(--line1);border-top-color:var(--line1);}
+  table.preview-table tr.line-sep.l2 th{color:var(--line2);border-top-color:var(--line2);}
+  table.preview-table tr.line-sep.l3 th{color:var(--line3);border-top-color:var(--line3);}
+  table.preview-table td.l1{color:var(--line1);} table.preview-table td.l2{color:var(--line2);} table.preview-table td.l3{color:var(--line3);}
+  tr.bd-row td{padding:3px 8px;}
+  .bd-size{font-size:.68rem;color:var(--sub);white-space:nowrap;}
+  .bd-count{font-size:.78rem;font-weight:700;}
+  .day-even{background:rgba(255,255,255,0.03);}
+  td.day-start, th.day-start{border-left:3px solid #45575d;}
+  td.day-end, th.day-end{border-right:3px solid #45575d;}
+  .day-ctl{display:flex;gap:4px;justify-content:center;margin-top:4px;}
+  thead .pv-add-btn, thead .pv-rm-btn{width:18px;height:18px;font-size:.72rem;}
+  input.pv-input{
+    width:56px; background:var(--panel2); border:1px solid var(--grid); color:var(--ink);
+    padding:3px 4px; border-radius:5px; font-size:.76rem; text-align:center; font-variant-numeric:tabular-nums;
+  }
+  @keyframes blink-warn { 0%,100%{ box-shadow: 0 0 0 2px var(--danger); } 50%{ box-shadow: 0 0 0 2px transparent; } }
+  input.not-std, td.not-std, div.not-std{ animation: blink-warn 1s infinite; }
+  input.pv-note{width:90px; text-align:left;}
+  tr.addrow td{background:var(--panel2);}
+  .pv-add-btn, .pv-rm-btn{
+    border:1px solid var(--grid); background:var(--panel); color:var(--ink);
+    width:22px; height:22px; border-radius:5px; cursor:pointer; font-weight:800; font-size:.85rem; line-height:1;
+  }
+  .pv-add-btn:hover{background:var(--ok); color:#0d1117; border-color:var(--ok);}
+  .pv-rm-btn{margin-left:4px;}
+  .pv-rm-btn:hover{background:var(--danger); color:#0d1117; border-color:var(--danger);}
+
+  table.std-table{border-collapse:collapse;width:100%;max-width:520px;}
+  table.std-table th, table.std-table td{border-bottom:1px solid var(--grid);padding:8px 12px;text-align:center;}
+  table.std-table thead th{background:var(--panel2);color:var(--sub);font-size:.78rem;}
+  table.std-table td.thk{text-align:left;font-weight:700;background:var(--panel2);}
+  table.std-table th.l1, table.std-table td.l1{color:var(--line1);} table.std-table th.l2, table.std-table td.l2{color:var(--line2);} table.std-table th.l3, table.std-table td.l3{color:var(--line3);}
+  input.std-input{width:70px;background:var(--panel2);border:1px solid var(--grid);color:var(--ink);padding:5px 6px;border-radius:6px;text-align:center;font-variant-numeric:tabular-nums;}
+  table.size-table{width:auto;}
+  input.size-name-input{width:120px;text-align:left;}
+  input.size-wl-input{width:56px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="top">
+    <h1>แผนผลิตประจำวัน <small>AAF · Advance Asia Fiber — ระบบแผนผลิตและมาตรฐานโรงงาน</small></h1>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <div class="userbar" id="userbar"></div>
+      <div id="clock"></div>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="pagenav" id="pagenav">
+      <button class="btn pagebtn active" data-page="entry">แผนผลิตรายวัน</button>
+      <button class="btn pagebtn" data-page="std">มาตรฐาน</button>
+      <button class="btn pagebtn" data-page="eff">ประเมิน Eff</button>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <input type="month" id="monthPicker">
+    <span id="revBadge" style="font-size:.78rem;color:var(--amber);font-weight:700;"></span>
+    <span id="syncstatus"></span>
+    <span style="flex:1"></span>
+    <button class="btn" id="backBtn" style="display:none">← ระบบขาย</button>
+    <button class="btn" id="saveBtn" style="display:none">💾 บันทึกข้อมูล</button>
+    <button class="btn" id="logoutBtn">ออกจากระบบ</button>
+  </div>
+</header>
+
+<main id="main"></main>
+
+<footer>
+  เป้าแผ่นผลิต คำนวณอัตโนมัติจาก: STD P/hr (ตามความหนา+Line) × ชม.ผลิต × จำนวน "แผ่นที่" ของขนาดที่เลือก × จำนวนชั้นของ Line · ข้อมูลซิงค์ผ่าน Google Sheet แบบเรียลไทม์
+</footer>
+
+<script>
+/* ============== CONFIG ============== */
+const API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxkh2u5qiN4o9OqrHCTH5N4SSAzNzLGmduJxFakDgLnBpeX6KMwYcKh2mh5hGxLrQwAEg/exec';
+const API_SECRET = ''; // ต้องตรงกับ SHARED_SECRET ในไฟล์ Apps Script
+
+/* ============== STANDARDS (จากตาราง KPI) — ค่าเริ่มต้น, แก้ไขได้ผ่านหน้า "มาตรฐาน P/hr" ============== */
+const STD_PHR_DEFAULT = {};
+const DENSITY_DEFAULT = {
+  1.6:890, 1.8:890, 2.0:890, 2.1:900, 2.2:900, 2.3:920, 2.5:940, 2.7:940, 2.8:940,
+  3.0:960, 3.2:960, 3.5:970, 3.8:970, 4.0:980, 4.5:980, 4.8:990, 5.0:990, 5.5:990,
+  6.0:1000, 8.0:1000, 9.0:1000,
+};
+let densityOverrides = {}; // thickness -> density (kg/m3) — โหลดจาก backend ทับค่า default
+const YIELD_DEFAULT = {
+  1.6:1.95, 1.8:2.00, 2.0:2.10, 2.1:2.20, 2.2:2.25, 2.3:2.30, 2.5:2.35, 2.7:2.35, 2.8:2.35,
+  3.0:2.40, 3.2:2.40, 3.5:2.45, 3.8:2.45, 4.0:2.50, 4.5:2.50, 4.8:2.55, 5.0:2.55, 5.5:2.55, 6.0:2.60,
+}; // ตันไม้ท่อนยูคาลิปตัสที่ต้องใช้ ต่อ 1 ตัน FG ของความหนานั้น (ค่าที่ผู้ใช้กำหนดเอง ปรับได้)
+let yieldOverrides = {}; // thickness -> ยิว (ตัน) — โหลดจาก backend ทับค่า default
+const STD_THICKNESS = 2.5; // ความหนามาตรฐานอ้างอิง (ใช้ทั่วระบบ)
+
+/* ============== ประมาณการใช้ไม้ยูคาลิปตัสประจำวัน ============== */
+let rawBoardConfig = {
+  'Line 1': {w:1.26, l:4.97, density:910},
+  'Line 2': {w:1.26, l:4.97, density:910},
+  'Line 3': {w:1.26, l:4.97, density:910},
+}; // ขนาด+เดนซิตี้ Raw Board (ก่อนตัด) แยกราย Line — โหลดจาก backend ทับค่าเริ่มต้นนี้
+let yieldCalcConst = 2.45;   // "ยิวการใช้ไม้คำนวณ" ใช้กับสาย 1 (ตัวมาตรฐาน จาก Density จริงรายความหนา)
+let yieldTargetConst = 2.15; // "ยิว Target" ใช้กับสาย 2 (ตัวควบคุม จาก Raw Board equivalent)
+
+function sheetsPerTonRawBoard(line){
+  const spec = rawBoardConfig[line] || {w:1.26, l:4.97, density:910};
+  const weightPerStdSheetEquiv = (spec.w * spec.l * (STD_THICKNESS/1000) * spec.density) / 2;
+  return weightPerStdSheetEquiv > 0 ? 1000 / weightPerStdSheetEquiv : 0;
+}
+
+// สาย 1: น้ำหนักไม้จริงจากความหนา+ขนาดจริงที่ผลิต × ยิวคำนวณ (ตัวมาตรฐาน)
+function calcWoodTonsStandard(line, run){
+  if(!run.thickness) return 0;
+  const density = getDensity(run.thickness);
+  const breakdown = calcRunSizeBreakdown(line, run);
+  let weightKg = 0;
+  breakdown.forEach(item=>{
+    const w = Number(item.w)||0, l = Number(item.l)||0;
+    weightKg += w * l * (run.thickness/1000) * density * item.count;
+  });
+  return (weightKg/1000) * yieldCalcConst;
+}
+
+// สาย 2: แปลงเป็นหน่วยมาตรฐาน 2.5mm/1220x2440 ก่อน (ทั้งขนาดและความหนา) แล้วหารแผ่นต่อตันแบบ Raw Board (รายไลน์) × ยิว Target (ตัวควบคุม)
+function calcWoodTonsTarget(line, run){
+  if(!run.thickness) return 0;
+  const STD_AREA_M2 = 1.22 * 2.44;
+  const breakdown = calcRunSizeBreakdown(line, run);
+  let stdEquivBoards = 0;
+  breakdown.forEach(item=>{
+    const areaM2 = (Number(item.w)||0) * (Number(item.l)||0);
+    stdEquivBoards += item.count * (areaM2/STD_AREA_M2) * (run.thickness/STD_THICKNESS);
+  });
+  const perTon = sheetsPerTonRawBoard(line);
+  const tonsRaw = perTon > 0 ? stdEquivBoards / perTon : 0;
+  return tonsRaw * yieldTargetConst;
+}
+const EFF = {'Line 1':0.76,'Line 2':1.00,'Line 3':0.88}; // ค่าเริ่มต้นสำหรับ "ประเมิน Eff" เท่านั้น ไม่ได้ใช้ในแผนหลัก
+let effEvalValues = {'Line 1': EFF['Line 1']*100, 'Line 2': EFF['Line 2']*100, 'Line 3': EFF['Line 3']*100};
+const LAYERS = {'Line 1':28,'Line 2':20,'Line 3':23}; // จำนวนชั้นต่อ Line — คูณกับจำนวน "แผ่นที่" ของขนาดที่เลือก เพื่อได้จำนวนแผ่นจริง (แทนค่าคงที่ 56/40/46 เดิม เพราะตอนนี้ขึ้นกับขนาดที่เลือกด้วย)
+const LINE_CLASS = {'Line 1':'l1','Line 2':'l2','Line 3':'l3'};
+const THICKNESS_LIST = Object.keys(STD_PHR_DEFAULT).map(Number).sort((a,b)=>a-b);
+const DOW = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+let STD_OVERRIDES = {}; // {thickness: {line: value}} — โหลดจาก backend, ทับค่า default
+let sizeStdRows = {};    // rowId -> {name, sheets:[{w,l},...]} (w,l หน่วยเมตร)
+let gradePct = {b:null, f:null, rej:null}; // % เกรดเดียวใช้ร่วมกันทุกความหนา (กรอกครั้งเดียวด้านบน)
+let stdConfigLoaded = false;   // true หลังโหลด STD P/hr เสร็จอย่างน้อย 1 ครั้ง
+let sizeConfigLoaded = false;  // true หลังโหลดมาตรฐานขนาดไม้เสร็จอย่างน้อย 1 ครั้ง
+let sizeStdColCount = 2; // จำนวนคอลัมน์ "แผ่นที่" ที่แสดง (เพิ่มได้เรื่อยๆ)
+function getStdPhr(thickness, line){
+  if(thickness===null || thickness===undefined || thickness==='') return 0;
+  const t = Number(thickness);
+  if(STD_OVERRIDES[t] && STD_OVERRIDES[t][line]!=null && STD_OVERRIDES[t][line]!=='') return Number(STD_OVERRIDES[t][line]);
+  return (STD_PHR_DEFAULT[t] ? STD_PHR_DEFAULT[t][line] : 0) || 0;
+}
+
+function getDensity(thickness){
+  if(thickness===null || thickness===undefined || thickness==='') return 0;
+  const t = Number(thickness);
+  if(densityOverrides[t]!=null && densityOverrides[t]!=='') return Number(densityOverrides[t]);
+  return DENSITY_DEFAULT[t] || 0;
+}
+
+function getYieldRatio(thickness){
+  if(thickness===null || thickness===undefined || thickness==='') return 0;
+  const t = Number(thickness);
+  if(yieldOverrides[t]!=null && yieldOverrides[t]!=='') return Number(yieldOverrides[t]);
+  return YIELD_DEFAULT[t] || 0;
+}
+
+// น้ำหนัก FG ต่อแผ่น (kg) — D = m/v โดย v = กว้าง(ม.) × ยาว(ม.) × ความหนา(ม.) ขนาดมาตรฐาน 1220x2440
+function getFgWeightPerSheet(thickness){
+  const density = getDensity(thickness);
+  const t = Number(thickness);
+  const volumeM3 = 1.22 * 2.44 * (t/1000);
+  return density * volumeM3;
+}
+
+// จำนวนแผ่นต่อ 1 ตัน FG (ปัดเศษใกล้เคียงสุด)
+function getSheetsPerTon(thickness){
+  const w = getFgWeightPerSheet(thickness);
+  return w > 0 ? Math.round(1000 / w) : 0;
+}
+
+/* ============== AUTH GUARD ============== */
+let SESSION = null;
+try { SESSION = JSON.parse(sessionStorage.getItem('aaf_user') || 'null'); } catch(e){ SESSION = null; }
+if(!SESSION){
+  window.location.href = 'login.html';
+}
+const IS_ADMIN = SESSION && SESSION.role === 'admin';
+const CAN_VIEW = SESSION && (SESSION.role === 'admin' || SESSION.role === 'production');
+if(!CAN_VIEW){
+  window.location.href = 'login.html';
+}
+
+/* ============== STATE ============== */
+let currentMonth = new Date().toISOString().slice(0,7); // YYYY-MM
+let planData = {}; // key `${line}_${day}` -> array of runs {thickness, hours, note}
+let saveTimers = {};
+let currentPage = 'entry'; // 'entry' | 'std'
+let currentStdTab = 'phr'; // 'phr' | 'wood_size' | ... (เพิ่มมาตรฐานใหม่ๆ ได้เรื่อยๆ ในนี้)
+const STD_TABS = [
+  {key:'phr', label:'มาตรฐาน P/hr'},
+  {key:'wood_size', label:'มาตรฐาน ขนาดไม้'},
+  {key:'density', label:'มาตรฐาน Density'},
+  {key:'yield', label:'มาตรฐาน ยิวการใช้ไม้'},
+];
+let previewOpen = true;
+let currentRev = 0;
+let revBumpedForMonth = null; // ป้องกันการนับ rev ซ้ำหลายรอบในเซสชันเดียวกัน
+
+function daysInMonth(ym){
+  const [y,m] = ym.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+}
+function num(v, digits){
+  if(v===null||v===undefined||Number.isNaN(Number(v))) return '—';
+  digits = digits===undefined?2:digits;
+  let s = Number(v).toFixed(digits).replace(/\.0+$/,'').replace(/(\.\d*[1-9])0+$/,'$1');
+  let parts = s.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  return parts.join('.');
+}
+function getSizeSheets(sizeName){
+  if(!sizeName) return [];
+  const trimmed = String(sizeName).trim();
+  for(const rid of Object.keys(sizeStdRows)){
+    const row = sizeStdRows[rid];
+    if(row && row.name && row.name.trim() === trimmed){
+      return (row.sheets||[]).filter(s => s && Number(s.w) > 0 && Number(s.l) > 0);
+    }
+  }
+  return [];
+}
+
+function calcRun(line, run){
+  const stdphr = getStdPhr(run.thickness, line);
+  const hours = Number(run.hours)||0;
+  // หมายเหตุ: แผนหลักไม่หัก Eff — ใส่เต็มจำนวนปกติเสมอ Eff ใช้เฉพาะในหน้า "ประเมิน Eff" เท่านั้น
+  const presses = stdphr * hours;
+  const sheets = getSizeSheets(run.size);
+  const layers = LAYERS[line] || 0;
+  const boards = presses * sheets.length * layers;
+  return {stdphr, presses, boards, sheets, layers};
+}
+
+function calcRunSizeBreakdown(line, run){
+  const c = calcRun(line, run);
+  const perSlotCount = c.presses * c.layers;
+  const groups = {};
+  c.sheets.forEach(s=>{
+    const key = `${s.w}x${s.l}`;
+    if(!groups[key]) groups[key] = {w:s.w, l:s.l, count:0};
+    groups[key].count += perSlotCount;
+  });
+  return Object.values(groups);
+}
+
+/* ============== SYNC ============== */
+function setSyncStatus(state, msg){
+  const el = document.getElementById('syncstatus');
+  el.className = state;
+  el.textContent = msg || (state==='saving'?'กำลังบันทึก...':state==='ok'?'บันทึกแล้ว':state==='err'?'บันทึกไม่สำเร็จ':'');
+}
+
+async function loadMonth(ym){
+  setSyncStatus('saving','กำลังโหลดข้อมูล...');
+  currentRev = 0;
+  revBumpedForMonth = null;
+  effEvalValues = {'Line 1': EFF['Line 1']*100, 'Line 2': EFF['Line 2']*100, 'Line 3': EFF['Line 3']*100};
+  try{
+    const res = await fetch(`${API_ENDPOINT}?action=load&month=${ym}`);
+    const json = await res.json();
+    planData = {};
+    if(json.ok){
+      Object.keys(json.data).forEach(key=>{
+        // key = YYYY-MM_Line X_day  (or YYYY-MM_META_rev for revision counter, or YYYY-MM_EFFCFG_Line X for Eff%)
+        const parts = key.split('_');
+        const day = parts[parts.length-1];
+        const line = parts.slice(1,-1).join('_');
+        if(line === 'META' && day === 'rev'){
+          const runs = json.data[key];
+          currentRev = (runs && runs[0] && runs[0].count) ? Number(runs[0].count) : 0;
+          return;
+        }
+        if(line === 'EFFCFG'){
+          const runs = json.data[key];
+          const pct = (runs && runs[0] && runs[0].pct!=null) ? Number(runs[0].pct) : null;
+          if(pct!==null) effEvalValues[day] = pct; // day ในที่นี้คือชื่อ Line เช่น "Line 1"
+          return;
+        }
+        planData[`${line}_${day}`] = json.data[key] || [];
+      });
+    }
+    setSyncStatus('ok','โหลดข้อมูลล่าสุดแล้ว');
+  }catch(err){
+    setSyncStatus('err','โหลดข้อมูลไม่สำเร็จ — ตรวจสอบการเชื่อมต่อ API');
+    console.error(err);
+  }
+  updateRevBadge();
+  renderAll();
+}
+
+function updateRevBadge(){
+  const el = document.getElementById('revBadge');
+  if(!el) return;
+  const [y,m] = currentMonth.split('-');
+  const yy = y.slice(2);
+  el.textContent = currentRev > 0 ? `${m}-${yy} Rev.${String(currentRev).padStart(2,'0')}` : `${m}-${yy} (ยังไม่มีการแก้ไข)`;
+}
+
+async function bumpRevision(ym){
+  currentRev += 1;
+  updateRevBadge();
+  try{
+    await fetch(API_ENDPOINT, {
+      method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({
+        secret: API_SECRET, month: ym, line: 'META', day: 'rev',
+        runs: [{count: currentRev}], updatedBy: SESSION.username,
+      }),
+    });
+  }catch(err){ console.error('bumpRevision error', err); }
+}
+
+async function loadStdConfig(){
+  try{
+    const res = await fetch(`${API_ENDPOINT}?action=load&month=STD`);
+    const json = await res.json();
+    STD_OVERRIDES = {};
+    if(json.ok){
+      Object.keys(json.data).forEach(key=>{
+        // key = STD_Line X_thickness
+        const parts = key.split('_');
+        const thickness = parts[parts.length-1];
+        const line = parts.slice(1,-1).join('_');
+        const runs = json.data[key];
+        const val = (runs && runs[0] && runs[0].value!=null) ? runs[0].value : null;
+        if(val!==null){
+          if(!STD_OVERRIDES[thickness]) STD_OVERRIDES[thickness] = {};
+          STD_OVERRIDES[thickness][line] = Number(val);
+        }
+      });
+    }
+  }catch(err){ console.error('loadStdConfig error', err); }
+  stdConfigLoaded = true;
+  renderAll();
+}
+
+async function loadSizeStdConfig(){
+  try{
+    const res = await fetch(`${API_ENDPOINT}?action=load&month=SIZESTD`);
+    const json = await res.json();
+    sizeStdRows = {};
+    if(json.ok){
+      Object.keys(json.data).forEach(key=>{
+        // key = SIZESTD_row_<rowId>
+        const parts = key.split('_');
+        const rowId = parts[parts.length-1];
+        const runs = json.data[key];
+        const rowObj = (runs && runs[0]) ? runs[0] : null;
+        if(rowObj){
+          sizeStdRows[rowId] = {
+            name: rowObj.name || '',
+            sheets: Array.isArray(rowObj.sheets) ? rowObj.sheets : [],
+          };
+          sizeStdColCount = Math.max(sizeStdColCount, rowObj.sheets ? rowObj.sheets.length : 0);
+        }
+      });
+    }
+  }catch(err){ console.error('loadSizeStdConfig error', err); }
+  sizeConfigLoaded = true;
+  renderAll();
+}
+
+async function loadGradeConfig(){
+  try{
+    const res = await fetch(`${API_ENDPOINT}?action=load&month=GRADECFG`);
+    const json = await res.json();
+    gradePct = {b:null, f:null, rej:null};
+    if(json.ok){
+      const key = Object.keys(json.data).find(k => k.endsWith('_global_pct'));
+      if(key){
+        const runs = json.data[key];
+        const g = (runs && runs[0]) ? runs[0] : null;
+        if(g) gradePct = {b:g.b??null, f:g.f??null, rej:g.rej??null};
+      }
+    }
+  }catch(err){ console.error('loadGradeConfig error', err); }
+  renderAll();
+}
+
+async function loadDensityConfig(){
+  try{
+    const res = await fetch(`${API_ENDPOINT}?action=load&month=DENSITYCFG`);
+    const json = await res.json();
+    densityOverrides = {};
+    if(json.ok){
+      Object.keys(json.data).forEach(key=>{
+        // key = DENSITYCFG_row_<thickness>
+        const parts = key.split('_');
+        const thickness = parts[parts.length-1];
+        const runs = json.data[key];
+        const val = (runs && runs[0] && runs[0].value!=null) ? runs[0].value : null;
+        if(val!==null) densityOverrides[thickness] = Number(val);
+      });
+    }
+  }catch(err){ console.error('loadDensityConfig error', err); }
+  renderAll();
+}
+
+async function loadYieldConfig(){
+  try{
+    const res = await fetch(`${API_ENDPOINT}?action=load&month=YIELDCFG`);
+    const json = await res.json();
+    yieldOverrides = {};
+    if(json.ok){
+      Object.keys(json.data).forEach(key=>{
+        // key = YIELDCFG_row_<thickness>
+        const parts = key.split('_');
+        const thickness = parts[parts.length-1];
+        const runs = json.data[key];
+        const val = (runs && runs[0] && runs[0].value!=null) ? runs[0].value : null;
+        if(val!==null) yieldOverrides[thickness] = Number(val);
+      });
+    }
+  }catch(err){ console.error('loadYieldConfig error', err); }
+  renderAll();
+}
+
+async function loadWoodConfig(){
+  try{
+    const res = await fetch(`${API_ENDPOINT}?action=load&month=WOODCFG`);
+    const json = await res.json();
+    if(json.ok){
+      Object.keys(json.data).forEach(key=>{
+        const parts = key.split('_');
+        const day = parts[parts.length-1];
+        const line = parts.slice(1,-1).join('_');
+        const runs = json.data[key];
+        const g = (runs && runs[0]) ? runs[0] : null;
+        if(!g) return;
+        if(line==='global' && day==='consts'){
+          if(g.yieldCalc!=null) yieldCalcConst = Number(g.yieldCalc);
+          if(g.yieldTarget!=null) yieldTargetConst = Number(g.yieldTarget);
+        } else if(line==='rawboard'){
+          rawBoardConfig[day] = {
+            w: g.w!=null ? Number(g.w) : 1.26,
+            l: g.l!=null ? Number(g.l) : 4.97,
+            density: g.density!=null ? Number(g.density) : 910,
+          };
+        }
+      });
+    }
+  }catch(err){ console.error('loadWoodConfig error', err); }
+  renderAll();
+}
+
+/* ============== DIRTY TRACKING (แก้ไขสะสมไว้ก่อน กดปุ่ม "บันทึกข้อมูล" ทีเดียว) ============== */
+let dirtyDays = new Set();  // keys `${line}_${day}`
+let dirtyStd = new Set();   // keys `${thickness}||${line}`
+let dirtySizeRows = new Set(); // rowIds ของ "มาตรฐานขนาดไม้" ที่แก้ไขแล้ว
+let dirtyEff = new Set(); // ชื่อ Line ที่แก้ % Eff แล้ว
+let dirtyGrade = new Set(); // ใส่ 'global' เมื่อแก้ %B/%F/%Rej (ค่าเดียวใช้ร่วมกันทุกความหนา)
+let dirtyDensity = new Set(); // ความหนาที่แก้ Density แล้ว
+let dirtyYield = new Set(); // ความหนาที่แก้ยิวการใช้ไม้แล้ว
+let dirtyWoodCfg = new Set(); // 'consts' และ/หรือชื่อ Line ที่แก้ raw board แล้ว
+
+function markDirtyDay(line, day){ dirtyDays.add(`${line}_${day}`); updateDirtyIndicator(); }
+function markDirtyStd(thickness, line){ dirtyStd.add(`${thickness}||${line}`); updateDirtyIndicator(); }
+function markDirtyGrade(){ dirtyGrade.add('global'); updateDirtyIndicator(); }
+function markDirtyDensity(thickness){ dirtyDensity.add(thickness); updateDirtyIndicator(); }
+function markDirtyYield(thickness){ dirtyYield.add(thickness); updateDirtyIndicator(); }
+function markDirtyWoodCfg(key){ dirtyWoodCfg.add(key); updateDirtyIndicator(); }
+function markDirtySizeRow(rowId){ dirtySizeRows.add(rowId); updateDirtyIndicator(); }
+function markDirtyEff(line){ dirtyEff.add(line); updateDirtyIndicator(); }
+
+function updateDirtyIndicator(){
+  const el = document.getElementById('syncstatus');
+  const btn = document.getElementById('saveBtn');
+  const n = dirtyDays.size + dirtyStd.size + dirtySizeRows.size + dirtyEff.size + dirtyGrade.size + dirtyDensity.size + dirtyYield.size + dirtyWoodCfg.size;
+  if(!el) return;
+  if(n > 0){
+    el.className = 'saving';
+    el.textContent = `มีการแก้ไข ${n} รายการที่ยังไม่บันทึก`;
+    if(btn) btn.classList.add('primary');
+  } else {
+    el.className = 'ok';
+    el.textContent = 'บันทึกล่าสุดแล้ว';
+    if(btn) btn.classList.remove('primary');
+  }
+}
+
+async function saveAllChanges(){
+  if(!IS_ADMIN) return;
+  const btn = document.getElementById('saveBtn');
+  const total = dirtyDays.size + dirtyStd.size + dirtySizeRows.size + dirtyEff.size + dirtyGrade.size + dirtyDensity.size + dirtyYield.size + dirtyWoodCfg.size;
+  if(total === 0){
+    setSyncStatus('ok', 'ไม่มีการเปลี่ยนแปลงที่ต้องบันทึก');
+    return;
+  }
+  btn.disabled = true;
+  let done = 0;
+  setSyncStatus('saving', `กำลังบันทึก... (0/${total})`);
+
+  for(const key of Array.from(dirtyDays)){
+    const us = key.lastIndexOf('_');
+    const line = key.slice(0, us);
+    const day = key.slice(us+1);
+    try{
+      await fetch(API_ENDPOINT, {
+        method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: API_SECRET, month: currentMonth, line, day,
+          runs: planData[key] || [], updatedBy: SESSION.username,
+        }),
+      });
+      dirtyDays.delete(key);
+    }catch(err){ console.error('save day error', key, err); }
+    done++;
+    setSyncStatus('saving', `กำลังบันทึก... (${done}/${total})`);
+  }
+
+  for(const key of Array.from(dirtyStd)){
+    const [thickness, line] = key.split('||');
+    const value = (STD_OVERRIDES[thickness] && STD_OVERRIDES[thickness][line]!=null) ? STD_OVERRIDES[thickness][line] : null;
+    try{
+      await fetch(API_ENDPOINT, {
+        method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: API_SECRET, month:'STD', line, day: thickness,
+          runs: [{value}], updatedBy: SESSION.username,
+        }),
+      });
+      dirtyStd.delete(key);
+    }catch(err){ console.error('save std error', key, err); }
+    done++;
+    setSyncStatus('saving', `กำลังบันทึก... (${done}/${total})`);
+  }
+
+  for(const rowId of Array.from(dirtySizeRows)){
+    const row = sizeStdRows[rowId];
+    const runs = row ? [{name: row.name, sheets: row.sheets}] : [];
+    try{
+      await fetch(API_ENDPOINT, {
+        method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: API_SECRET, month:'SIZESTD', line:'row', day: rowId,
+          runs, updatedBy: SESSION.username,
+        }),
+      });
+      dirtySizeRows.delete(rowId);
+      if(!row) delete sizeStdRows[rowId];
+    }catch(err){ console.error('save size row error', rowId, err); }
+    done++;
+    setSyncStatus('saving', `กำลังบันทึก... (${done}/${total})`);
+  }
+
+  for(const line of Array.from(dirtyEff)){
+    const pct = effEvalValues[line];
+    try{
+      await fetch(API_ENDPOINT, {
+        method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: API_SECRET, month: currentMonth, line:'EFFCFG', day: line,
+          runs: [{pct}], updatedBy: SESSION.username,
+        }),
+      });
+      dirtyEff.delete(line);
+    }catch(err){ console.error('save eff error', line, err); }
+    done++;
+    setSyncStatus('saving', `กำลังบันทึก... (${done}/${total})`);
+  }
+
+  for(const marker of Array.from(dirtyGrade)){
+    try{
+      await fetch(API_ENDPOINT, {
+        method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: API_SECRET, month:'GRADECFG', line:'global', day:'pct',
+          runs: [{b:gradePct.b??null, f:gradePct.f??null, rej:gradePct.rej??null}], updatedBy: SESSION.username,
+        }),
+      });
+      dirtyGrade.delete(marker);
+    }catch(err){ console.error('save grade error', err); }
+    done++;
+    setSyncStatus('saving', `กำลังบันทึก... (${done}/${total})`);
+  }
+
+  for(const thickness of Array.from(dirtyDensity)){
+    const val = densityOverrides[thickness];
+    try{
+      await fetch(API_ENDPOINT, {
+        method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: API_SECRET, month:'DENSITYCFG', line:'row', day: thickness,
+          runs: [{value: val??null}], updatedBy: SESSION.username,
+        }),
+      });
+      dirtyDensity.delete(thickness);
+    }catch(err){ console.error('save density error', thickness, err); }
+    done++;
+    setSyncStatus('saving', `กำลังบันทึก... (${done}/${total})`);
+  }
+
+  for(const thickness of Array.from(dirtyYield)){
+    const val = yieldOverrides[thickness];
+    try{
+      await fetch(API_ENDPOINT, {
+        method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          secret: API_SECRET, month:'YIELDCFG', line:'row', day: thickness,
+          runs: [{value: val??null}], updatedBy: SESSION.username,
+        }),
+      });
+      dirtyYield.delete(thickness);
+    }catch(err){ console.error('save yield error', thickness, err); }
+    done++;
+    setSyncStatus('saving', `กำลังบันทึก... (${done}/${total})`);
+  }
+
+  for(const key of Array.from(dirtyWoodCfg)){
+    try{
+      if(key === 'consts'){
+        await fetch(API_ENDPOINT, {
+          method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
+          body: JSON.stringify({
+            secret: API_SECRET, month:'WOODCFG', line:'global', day:'consts',
+            runs: [{yieldCalc: yieldCalcConst, yieldTarget: yieldTargetConst}], updatedBy: SESSION.username,
+          }),
+        });
+      } else {
+        // key = ชื่อ Line
+        const spec = rawBoardConfig[key];
+        await fetch(API_ENDPOINT, {
+          method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
+          body: JSON.stringify({
+            secret: API_SECRET, month:'WOODCFG', line:'rawboard', day: key,
+            runs: [{w:spec.w, l:spec.l, density:spec.density}], updatedBy: SESSION.username,
+          }),
+        });
+      }
+      dirtyWoodCfg.delete(key);
+    }catch(err){ console.error('save wood cfg error', key, err); }
+    done++;
+    setSyncStatus('saving', `กำลังบันทึก... (${done}/${total})`);
+  }
+
+  if(revBumpedForMonth !== currentMonth){
+    revBumpedForMonth = currentMonth;
+    await bumpRevision(currentMonth);
+  }
+
+  btn.disabled = false;
+  updateDirtyIndicator();
+  alert('บันทึกข้อมูลเรียบร้อยแล้ว');
+}
+
+/* ============== RENDER ============== */
+function dowForDay(ym, dayNum){
+  const [y,m] = ym.split('-').map(Number);
+  return DOW[new Date(y, m-1, dayNum).getDay()];
+}
+
+function thicknessOptions(selected){
+  let html = `<option value="">—เลือก—</option>`;
+  THICKNESS_LIST.forEach(t=>{
+    html += `<option value="${t}" ${Number(selected)===t?'selected':''}>${t}</option>`;
+  });
+  return html;
+}
+
+function isValidThickness(t){
+  if(t===null || t===undefined || t==='') return true; // ยังไม่กรอก ยังไม่ต้องเตือน
+  return THICKNESS_LIST.includes(Number(t));
+}
+
+function isValidSizeName(name){
+  if(!name) return true; // ยังไม่กรอก ถือว่ายังไม่ต้องเตือน
+  if(!sizeConfigLoaded) return true; // ข้อมูลมาตรฐานขนาดยังโหลดไม่เสร็จ อย่าเพิ่งเตือนผิดๆ
+  const trimmed = String(name).trim();
+  return Object.keys(sizeStdRows).some(rid=>{
+    const row = sizeStdRows[rid];
+    return row && row.name && row.name.trim() === trimmed;
+  });
+}
+
+function thicknessDatalist(){
+  let html = `<datalist id="thicknessList">`;
+  THICKNESS_LIST.forEach(t=>{ html += `<option value="${t}">`; });
+  html += `</datalist>`;
+  return html;
+}
+
+function sizeDatalist(){
+  let html = `<datalist id="sizeList">`;
+  Object.keys(sizeStdRows).forEach(rid=>{
+    const row = sizeStdRows[rid];
+    if(row && row.name) html += `<option value="${row.name}">`;
+  });
+  html += `</datalist>`;
+  return html;
+}
+
+function buildDayCard(line, ym, dayNum, isToday){
+  const key = `${line}_${dayNum}`;
+  const runs = planData[key] || [];
+  const cls = LINE_CLASS[line];
+  let html = `<div class="daycard ${isToday?'today':''}" data-key="${key}">
+    <div class="dayhead"><span class="num">${dayNum}</span><span class="dow">${dowForDay(ym,dayNum)}</span></div>`;
+
+  if(runs.length===0){
+    html += `<div class="emptyday ${cls}">ไม่มีแผน</div>`;
+  } else {
+    runs.forEach((run, ri)=>{
+      const c = calcRun(line, run);
+      const breakdown = calcRunSizeBreakdown(line, run);
+      html += `<div class="runcol ${cls}" data-idx="${ri}">`;
+      if(IS_ADMIN){
+        html += `<div class="rowline"><span>รอบที่ ${ri+1}</span><button class="rm-btn" onclick="removeRun('${line}',${dayNum},${ri})">ลบ ✕</button></div>
+          <input class="thickness-sel${!isValidThickness(run.thickness)?' not-std':''}" type="text" list="thicknessList" placeholder="ความหนา" value="${run.thickness!==undefined&&run.thickness!==null&&run.thickness!==''?run.thickness:''}" onchange="updateRun('${line}',${dayNum},${ri},'thickness',this.value)">
+          <input class="thickness-sel${run.size && !isValidSizeName(run.size)?' not-std':''}" type="text" list="sizeList" placeholder="ขนาด (พิมพ์/วางได้)" value="${run.size||''}" onchange="updateRun('${line}',${dayNum},${ri},'size',this.value)">
+          <input class="hr-input" type="number" min="0" step="0.5" placeholder="ชม.ผลิต" value="${run.hours||''}" onchange="updateRun('${line}',${dayNum},${ri},'hours',this.value)">
+          <input class="note-input" type="text" placeholder="หมายเหตุ" value="${run.note||''}" onchange="updateRun('${line}',${dayNum},${ri},'note',this.value)">`;
+      } else {
+        const sizeName = run.size || '—';
+        html += `<div class="rowline"><span>รอบที่ ${ri+1}</span><span>${run.thickness?run.thickness+' mm.':'—'} · ${sizeName}</span></div>`;
+      }
+      const stdMissing = run.thickness && c.stdphr===0;
+      html += `<div class="calc-line${stdMissing?' not-std':''}"><span class="k">P/hr STD</span><span class="v">${num(c.stdphr,1)}</span></div>
+        <div class="calc-line"><span class="k">จำนวนเพรส</span><span class="v">${num(c.presses,1)}</span></div>
+        <div class="calc-line"><span class="k">เป้าแผ่นผลิต</span><span class="v">${num(c.boards,0)}</span></div>`;
+      breakdown.forEach(g=>{
+        html += `<div class="calc-line" style="font-size:.72rem;"><span class="k">↳ ${g.w}×${g.l} m.</span><span class="v">${num(g.count,0)}</span></div>`;
+      });
+      if(!IS_ADMIN && run.note){
+        html += `<div class="calc-line" style="color:var(--amber)"><span class="k">หมายเหตุ</span><span class="v">${run.note}</span></div>`;
+      }
+      html += `</div>`;
+    });
+  }
+  if(IS_ADMIN){
+    html += `<button class="addrun-btn" onclick="addRun('${line}',${dayNum})">+ เพิ่มรอบ</button>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function buildLine(line){
+  const ym = currentMonth;
+  const nd = daysInMonth(ym);
+  const todayStr = new Date().toISOString().slice(0,10);
+  const todayDay = todayStr.slice(0,7)===ym ? Number(todayStr.slice(8,10)) : -1;
+
+  let totalTarget=0, activeDays=0, thicknessSet=new Set();
+  for(let d=1; d<=nd; d++){
+    const runs = planData[`${line}_${d}`] || [];
+    if(runs.length) activeDays++;
+    runs.forEach(r=>{
+      const c = calcRun(line, r);
+      totalTarget += c.boards;
+      if(r.thickness) thicknessSet.add(r.thickness);
+    });
+  }
+
+  let html = `<div class="summary">
+    <div class="card"><div class="label">รวมเป้าเดือนนี้</div><div class="value">${num(totalTarget,0)} <span>แผ่น 4x8</span></div></div>
+    <div class="card"><div class="label">วันเดินเครื่อง</div><div class="value">${activeDays} <span>/ ${nd} วัน</span></div></div>
+    <div class="card"><div class="label">ความหนาที่ใช้เดือนนี้</div><div class="value" style="font-size:1rem;">${[...thicknessSet].sort((a,b)=>a-b).join(', ')||'—'} <span>mm.</span></div></div>
+  </div>`;
+
+  html += `<div class="daysrow">`;
+  for(let d=1; d<=nd; d++){
+    html += buildDayCard(line, ym, d, d===todayDay);
+  }
+  html += `</div>`;
+  return html;
+}
+
+function buildLineRows(line, dayRunsCount, totalCols, nd){
+  const cls = LINE_CLASS[line];
+  function slotClasses(cls, d, i, cols){
+    const zebra = d%2===0 ? 'day-even' : '';
+    const start = i===0 ? 'day-start' : '';
+    const end = i===cols-1 ? 'day-end' : '';
+    return `${cls} ${zebra} ${start} ${end}`.trim();
+  }
+  let html = '';
+  html += `<tr class="line-sep ${cls}"><th colspan="${totalCols}">${line}</th></tr>`;
+
+  // ความหนา (แก้ไขได้)
+  html += `<tr><th>ความหนา</th>`;
+  for(let d=1; d<=nd; d++){
+    const runs = planData[`${line}_${d}`] || [];
+    const cols = dayRunsCount[d-1];
+    for(let i=0; i<cols; i++){
+      const run = runs[i];
+      const tdCls = slotClasses(cls, d, i, cols);
+      if(IS_ADMIN){
+        const v = run && run.thickness!==null && run.thickness!==undefined ? run.thickness : '';
+        html += `<td class="${tdCls}"><input type="text" list="thicknessList" class="pv-input pv-thk${!isValidThickness(v)?' not-std':''}" value="${v}"
+          onchange="updateRun('${line}',${d},${i},'thickness',this.value)"></td>`;
+      } else {
+        const v = run && run.thickness ? run.thickness : '—';
+        html += `<td class="${tdCls}">${v}</td>`;
+      }
+    }
+  }
+  html += `</tr>`;
+
+  // ขนาด (แก้ไขได้)
+  html += `<tr><th>ขนาด</th>`;
+  for(let d=1; d<=nd; d++){
+    const runs = planData[`${line}_${d}`] || [];
+    const cols = dayRunsCount[d-1];
+    for(let i=0; i<cols; i++){
+      const run = runs[i];
+      const tdCls = slotClasses(cls, d, i, cols);
+      if(IS_ADMIN){
+        html += `<td class="${tdCls}"><input type="text" list="sizeList" class="pv-input pv-size${run && run.size && !isValidSizeName(run.size) ? ' not-std' : ''}" style="width:80px;" value="${run ? (run.size||'') : ''}"
+          onchange="updateRun('${line}',${d},${i},'size',this.value)"></td>`;
+      } else {
+        const sizeName = (run && run.size) ? run.size : '—';
+        html += `<td class="${tdCls}">${sizeName}</td>`;
+      }
+    }
+  }
+  html += `</tr>`;
+
+  // เป้าแผ่นผลิต (คำนวณอัตโนมัติ)
+  html += `<tr><th>เป้าแผ่นผลิต</th>`;
+  const breakdownCache = {};
+  let maxBreakdown = 0;
+  for(let d=1; d<=nd; d++){
+    const runs = planData[`${line}_${d}`] || [];
+    const cols = dayRunsCount[d-1];
+    for(let i=0; i<cols; i++){
+      const run = runs[i];
+      const tdCls = slotClasses(cls, d, i, cols);
+      const val = run ? num(calcRun(line, run).boards, 0) : '—';
+      html += `<td class="${tdCls}">${val}</td>`;
+      const bd = run ? calcRunSizeBreakdown(line, run) : [];
+      breakdownCache[`${d}_${i}`] = bd;
+      if(bd.length > maxBreakdown) maxBreakdown = bd.length;
+    }
+  }
+  html += `</tr>`;
+
+  for(let j=0; j<maxBreakdown; j++){
+    html += `<tr class="bd-row"><th></th>`;
+    for(let d=1; d<=nd; d++){
+      const cols = dayRunsCount[d-1];
+      for(let i=0; i<cols; i++){
+        const tdCls = slotClasses(cls, d, i, cols);
+        const item = (breakdownCache[`${d}_${i}`] || [])[j];
+        if(item){
+          html += `<td class="${tdCls}"><div class="bd-size">${item.w}×${item.l} m.</div><div class="bd-count">${num(item.count,0)}</div></td>`;
+        } else {
+          html += `<td class="${tdCls}"></td>`;
+        }
+      }
+    }
+    html += `</tr>`;
+  }
+
+  // P/hr เป้า (คำนวณอัตโนมัติ)
+  html += `<tr><th>P/hr เป้า</th>`;
+  for(let d=1; d<=nd; d++){
+    const runs = planData[`${line}_${d}`] || [];
+    const cols = dayRunsCount[d-1];
+    for(let i=0; i<cols; i++){
+      const run = runs[i];
+      const tdCls = slotClasses(cls, d, i, cols);
+      const stdphr = run ? calcRun(line, run).stdphr : null;
+      const stdMissing = run && run.thickness && stdphr===0;
+      const val = run ? num(stdphr, 1) : '—';
+      html += `<td class="${tdCls}${stdMissing?' not-std':''}">${val}</td>`;
+    }
+  }
+  html += `</tr>`;
+
+  // ชม.ผลิต (แก้ไขได้)
+  html += `<tr><th>ชม.ผลิต</th>`;
+  for(let d=1; d<=nd; d++){
+    const runs = planData[`${line}_${d}`] || [];
+    const cols = dayRunsCount[d-1];
+    for(let i=0; i<cols; i++){
+      const run = runs[i];
+      const tdCls = slotClasses(cls, d, i, cols);
+      if(IS_ADMIN){
+        const v = run && run.hours!==null && run.hours!==undefined ? run.hours : '';
+        html += `<td class="${tdCls}"><input type="number" step="0.5" min="0" class="pv-input pv-hr" value="${v}"
+          onchange="updateRun('${line}',${d},${i},'hours',this.value)"></td>`;
+      } else {
+        const v = run && (run.hours!==null && run.hours!==undefined && run.hours!=='') ? run.hours : '—';
+        html += `<td class="${tdCls}">${v}</td>`;
+      }
+    }
+  }
+  html += `</tr>`;
+
+  // หมายเหตุ (แก้ไขได้)
+  html += `<tr><th>หมายเหตุ</th>`;
+  for(let d=1; d<=nd; d++){
+    const runs = planData[`${line}_${d}`] || [];
+    const cols = dayRunsCount[d-1];
+    for(let i=0; i<cols; i++){
+      const run = runs[i];
+      const tdCls = slotClasses(cls, d, i, cols);
+      if(IS_ADMIN){
+        const v = run && run.note ? run.note : '';
+        html += `<td class="${tdCls}"><input type="text" class="pv-input pv-note" value="${v}"
+          onchange="updateRun('${line}',${d},${i},'note',this.value)"></td>`;
+      } else {
+        html += `<td class="${tdCls}">${run && run.note ? run.note : ''}</td>`;
+      }
+    }
+  }
+  html += `</tr>`;
+  return html;
+}
+
+function buildWoodConfigPanel(){
+  const lines = ['Line 1','Line 2','Line 3'];
+  let html = `<div class="previewbox" style="margin-bottom:14px;">
+    <div class="previewhead"><b>ตั้งค่าประมาณการใช้ไม้ยูคาลิปตัส</b></div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:12px;">
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--sub);">
+        ยิวการใช้ไม้คำนวณ (สาย มาตรฐาน)
+        <input type="number" step="0.01" min="0" class="std-input" style="width:90px" ${IS_ADMIN?'':'disabled'} value="${yieldCalcConst}" onchange="updateWoodConst('yieldCalc',this.value)">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--sub);">
+        ยิว Target (สาย ควบคุม)
+        <input type="number" step="0.01" min="0" class="std-input" style="width:90px" ${IS_ADMIN?'':'disabled'} value="${yieldTargetConst}" onchange="updateWoodConst('yieldTarget',this.value)">
+      </label>
+    </div>
+    <div style="font-size:.78rem;color:var(--sub);margin-bottom:6px;">ขนาด Raw Board (ก่อนตัด) และ Density แยกราย Line</div>
+    <div class="tablewrap"><table class="std-table"><thead><tr>
+      <th>Line</th><th>กว้าง (ม.)</th><th>ยาว (ม.)</th><th>Density (kg/m³)</th>
+    </tr></thead><tbody>`;
+  lines.forEach(line=>{
+    const spec = rawBoardConfig[line] || {w:1.26,l:4.97,density:910};
+    const cls = LINE_CLASS[line];
+    html += `<tr>
+      <td class="${cls}" style="font-weight:700;">${line}</td>
+      <td><input type="number" step="0.01" min="0" class="std-input" style="width:70px" ${IS_ADMIN?'':'disabled'} value="${spec.w}" onchange="updateRawBoard('${line}','w',this.value)"></td>
+      <td><input type="number" step="0.01" min="0" class="std-input" style="width:70px" ${IS_ADMIN?'':'disabled'} value="${spec.l}" onchange="updateRawBoard('${line}','l',this.value)"></td>
+      <td><input type="number" step="1" min="0" class="std-input" style="width:80px" ${IS_ADMIN?'':'disabled'} value="${spec.density}" onchange="updateRawBoard('${line}','density',this.value)"></td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>
+  </div>`;
+  return html;
+}
+
+function buildMonthSummarySection(){
+  const ym = currentMonth;
+  const nd = daysInMonth(ym);
+  const lines = ['Line 1','Line 2','Line 3'];
+  const STD_AREA_M2 = 1.22 * 2.44; // พื้นที่มาตรฐาน 1220x2440 mm. เป็น ตร.ม.
+
+  let html0 = IS_ADMIN ? buildWoodConfigPanel() : '';
+
+  let grandTotal = 0, grandStdEquiv = 0;
+  const lineTotals = {};
+  const lineStdEquiv = {};
+  const lineActiveDays = {};
+  const thicknessData = {}; // thickness -> {'Line 1':n,'Line 2':n,'Line 3':n, sizeConvert:n, fullConvert:n}
+
+  lines.forEach(line=>{
+    let total = 0, stdEquiv = 0, activeDays = 0;
+    for(let d=1; d<=nd; d++){
+      const runs = planData[`${line}_${d}`] || [];
+      if(runs.length) activeDays++;
+      runs.forEach(r=>{
+        const boards = calcRun(line, r).boards;
+        total += boards;
+        if(r.thickness){
+          const tKey = r.thickness;
+          if(!thicknessData[tKey]) thicknessData[tKey] = {'Line 1':0,'Line 2':0,'Line 3':0, sizeConvert:0, fullConvert:0};
+          thicknessData[tKey][line] += boards;
+
+          // แปลงเป็นค่ากลาง โดยใช้ขนาดจริงของแต่ละแผ่นที่ (breakdown)
+          const breakdown = calcRunSizeBreakdown(line, r);
+          breakdown.forEach(item=>{
+            const areaM2 = (Number(item.w)||0) * (Number(item.l)||0);
+            const sizeConv = item.count * (areaM2 / STD_AREA_M2); // แปลงขนาดอย่างเดียว (ยังเป็นความหนาจริง)
+            const fullConv = sizeConv * (tKey / STD_THICKNESS);   // แปลงทั้งขนาดและความหนา
+            thicknessData[tKey].sizeConvert += sizeConv;
+            thicknessData[tKey].fullConvert += fullConv;
+            stdEquiv += fullConv;
+          });
+        }
+      });
+    }
+    lineTotals[line] = total;
+    lineStdEquiv[line] = stdEquiv;
+    lineActiveDays[line] = activeDays;
+    grandTotal += total;
+    grandStdEquiv += stdEquiv;
+  });
+
+  let html = html0 + `<div class="summary" style="margin-bottom:14px;">
+    <div class="card"><div class="label">รวมเป้าทั้ง 3 Line</div><div class="value">${num(grandTotal,0)} <span>แผ่น</span></div><div style="font-size:.78rem;color:var(--sub);margin-top:4px;">≈ ${num(grandStdEquiv,0)} แผ่น (เทียบเท่ามาตรฐาน 2.5mm, 1220×2440)</div></div>
+    ${lines.map(line=>{
+      const colorVar = line==='Line 1' ? 'var(--line1)' : line==='Line 2' ? 'var(--line2)' : 'var(--line3)';
+      return `<div class="card"><div class="label" style="font-weight:700;color:${colorVar};">${line}</div><div class="value" style="color:${colorVar};">${num(lineTotals[line],0)} <span style="color:var(--sub);">แผ่น · เดินเครื่อง ${lineActiveDays[line]}/${nd} วัน</span></div><div style="font-size:.78rem;color:var(--sub);margin-top:4px;">≈ ${num(lineStdEquiv[line],0)} แผ่น เทียบเท่ามาตรฐาน</div></div>`;
+    }).join('')}
+  </div>`;
+
+  const thicknesses = Object.keys(thicknessData).map(Number).sort((a,b)=>a-b);
+  if(thicknesses.length){
+    const grandSizeConvert = thicknesses.reduce((s,t)=>s+thicknessData[t].sizeConvert, 0);
+    let sumL1=0, sumL2=0, sumL3=0, sumTotal=0, sumWeight=0, sumB=0, sumF=0, sumRej=0, sumSizeConvert=0, sumFullConvert=0, sumPct=0;
+    const bValHead = (gradePct.b!==undefined && gradePct.b!==null) ? gradePct.b : '';
+    const fValHead = (gradePct.f!==undefined && gradePct.f!==null) ? gradePct.f : '';
+    const rejValHead = (gradePct.rej!==undefined && gradePct.rej!==null) ? gradePct.rej : '';
+
+    html += `<div style="margin-bottom:14px;">
+      <div style="font-weight:700;margin-bottom:8px;color:var(--sub);font-size:.85rem;">สรุปตามความหนา — สัดส่วนการผลิตและน้ำหนักความหนาเฉลี่ย (รวมทั้ง 3 Line)</div>
+      <div class="tablewrap"><table class="std-table"><thead><tr>
+        <th>ความหนา<br>(mm.)</th><th class="l1">L1</th><th class="l2">L2</th><th class="l3">L3</th><th>Sum</th>
+        <th style="background:#3a2c1f;">%B<br><input type="number" step="0.1" class="std-input grade-input" style="width:52px;margin-top:4px;" value="${bValHead}" ${IS_ADMIN?'':'disabled'} onchange="updateGradePct('b',this.value)"></th>
+        <th style="background:#3a2c1f;">%F<br><input type="number" step="0.1" class="std-input grade-input" style="width:52px;margin-top:4px;" value="${fValHead}" ${IS_ADMIN?'':'disabled'} onchange="updateGradePct('f',this.value)"></th>
+        <th style="background:#3a2c1f;">%Rej<br><input type="number" step="0.1" class="std-input grade-input" style="width:52px;margin-top:4px;" value="${rejValHead}" ${IS_ADMIN?'':'disabled'} onchange="updateGradePct('rej',this.value)"></th>
+        <th>แปลงขนาด<br>1220×2440</th><th>แปลงความหนา<br>2.5</th><th>% ผลิตที่<br>1220×2440</th><th>น้ำหนัก<br>ความหนา</th>
+      </tr></thead><tbody>`;
+
+    thicknesses.forEach(t=>{
+      const row = thicknessData[t];
+      const sum = row['Line 1'] + row['Line 2'] + row['Line 3'];
+      const pct = grandSizeConvert > 0 ? (row.sizeConvert / grandSizeConvert * 100) : 0;
+      const weight = t * (pct/100);
+      sumL1 += row['Line 1']; sumL2 += row['Line 2']; sumL3 += row['Line 3']; sumTotal += sum; sumWeight += weight;
+      sumSizeConvert += row.sizeConvert; sumFullConvert += row.fullConvert; sumPct += pct;
+
+      const bBoards = (gradePct.b!=null) ? sum * (gradePct.b/100) : null;
+      const fBoards = (gradePct.f!=null) ? sum * (gradePct.f/100) : null;
+      const rejBoards = (gradePct.rej!=null) ? sum * (gradePct.rej/100) : null;
+      if(bBoards!=null) sumB += bBoards;
+      if(fBoards!=null) sumF += fBoards;
+      if(rejBoards!=null) sumRej += rejBoards;
+
+      html += `<tr>
+        <td class="thk">${t}</td>
+        <td>${num(row['Line 1'],0)}</td><td>${num(row['Line 2'],0)}</td><td>${num(row['Line 3'],0)}</td>
+        <td style="font-weight:700;">${num(sum,0)}</td>
+        <td style="background:rgba(58,44,31,0.4);">${bBoards!=null ? num(bBoards,0) : '—'}</td>
+        <td style="background:rgba(58,44,31,0.4);">${fBoards!=null ? num(fBoards,0) : '—'}</td>
+        <td style="background:rgba(58,44,31,0.4);">${rejBoards!=null ? num(rejBoards,0) : '—'}</td>
+        <td>${num(row.sizeConvert,0)}</td>
+        <td>${num(row.fullConvert,0)}</td>
+        <td>${num(pct,1)}%</td>
+        <td>${num(weight,2)}</td>
+      </tr>`;
+    });
+
+    html += `<tr style="font-weight:800;border-top:2px solid var(--grid);">
+      <td class="thk">รวม</td>
+      <td>${num(sumL1,0)}</td><td>${num(sumL2,0)}</td><td>${num(sumL3,0)}</td>
+      <td>${num(sumTotal,0)}</td>
+      <td>${gradePct.b!=null ? num(sumB,0) : ''}</td>
+      <td>${gradePct.f!=null ? num(sumF,0) : ''}</td>
+      <td>${gradePct.rej!=null ? num(sumRej,0) : ''}</td>
+      <td>${num(sumSizeConvert,0)}</td><td>${num(sumFullConvert,0)}</td><td>${num(sumPct,1)}%</td>
+      <td style="background:rgba(95,191,122,0.18);border:2px solid var(--ok);color:var(--ok);">${num(sumWeight,2)} mm.</td>
+    </tr>`;
+
+    html += `</tbody></table></div>
+    </div>`;
+
+    // สรุปโซนบาง (1.6-3.0mm) กับโซนหนา (3.2mm ขึ้นไป)
+    let thinSum=0, thickSum=0, thinPct=0, thickPct=0;
+    thicknesses.forEach(t=>{
+      const row = thicknessData[t];
+      const sum = row['Line 1'] + row['Line 2'] + row['Line 3'];
+      const pct = grandSizeConvert > 0 ? (row.sizeConvert / grandSizeConvert * 100) : 0;
+      if(t <= 3.0){ thinSum += sum; thinPct += pct; }
+      else { thickSum += sum; thickPct += pct; }
+    });
+
+    html += `<div style="margin-bottom:14px;">
+      <div style="font-weight:700;margin-bottom:8px;color:var(--sub);font-size:.85rem;">สรุปโซนความหนา — บาง (1.6–3.0mm) เทียบ หนา (3.2mm ขึ้นไป)</div>
+      <div class="tablewrap"><table class="std-table"><thead><tr><th>โซน</th><th>ช่วงความหนา</th><th>รวมแผ่น (Sum)</th><th>% ของทั้งหมด</th></tr></thead><tbody>
+        <tr><td class="thk">บาง</td><td>1.6 – 3.0 mm.</td><td style="font-weight:700;">${num(thinSum,0)}</td><td>${num(thinPct,1)}%</td></tr>
+        <tr><td class="thk">หนา</td><td>3.2 mm. ขึ้นไป</td><td style="font-weight:700;">${num(thickSum,0)}</td><td>${num(thickPct,1)}%</td></tr>
+      </tbody></table></div>
+    </div>`;
+  }
+
+  return html;
+}
+
+function buildPreviewAll(){
+  const ym = currentMonth;
+  const nd = daysInMonth(ym);
+  const lines = ['Line 1','Line 2','Line 3'];
+
+  // จำนวนช่องย่อยต่อวัน อ้างอิงจาก Line 1 เท่านั้น — Line 2,3 ใช้ผังวันเดียวกันเสมอ ต่อให้ยังไม่มีข้อมูล
+  const dayRunsCount = [];
+  for(let d=1; d<=nd; d++){
+    const runs = planData[`Line 1_${d}`] || [];
+    dayRunsCount.push(Math.max(runs.length, 1));
+  }
+  const totalCols = 1 + dayRunsCount.reduce((a,b)=>a+b,0);
+
+  let html = buildMonthSummarySection();
+  html += `<div class="tablewrap"><table class="preview-table"><thead><tr class="dayheader"><th class="rowlabel-corner">Line / วันที่</th>`;
+  for(let d=1; d<=nd; d++){
+    const runs1 = planData[`Line 1_${d}`] || [];
+    let ctl = '';
+    if(IS_ADMIN){
+      ctl = `<div class="day-ctl">
+        <button class="pv-add-btn" onclick="addRun('Line 1',${d})" title="เพิ่มความหนา/รอบใหม่ในวันนี้ (Line 1)">+</button>
+        ${runs1.length>0 ? `<button class="pv-rm-btn" onclick="previewRemoveLastRun('Line 1',${d})" title="ลบรอบสุดท้ายของวันนี้ (Line 1)">−</button>` : ''}
+      </div>`;
+    }
+    html += `<th colspan="${dayRunsCount[d-1]}" class="${d%2===0?'day-even':''} day-start day-end">${d}${ctl}</th>`;
+  }
+  html += `</tr></thead><tbody>`;
+  lines.forEach(line=>{ html += buildLineRows(line, dayRunsCount, totalCols, nd); });
+
+  // แถวประมาณการใช้ไม้ยูคาลิปตัสประจำวัน (รวมทั้ง 3 Line ต่อวัน)
+  html += `<tr class="line-sep" style="border-top-color:var(--sub);"><th colspan="${totalCols}">ประมาณการใช้ไม้ยูคาลิปตัสประจำวัน (ตัน)</th></tr>`;
+  html += `<tr><th>มาตรฐาน (จาก Density จริง)</th>`;
+  for(let d=1; d<=nd; d++){
+    const cols = dayRunsCount[d-1];
+    let dayTons = 0;
+    lines.forEach(line=>{
+      const runs = planData[`${line}_${d}`] || [];
+      runs.forEach(r=>{ dayTons += calcWoodTonsStandard(line, r); });
+    });
+    html += `<td colspan="${cols}" style="font-weight:700;">${dayTons>0 ? num(dayTons,2) : '—'}</td>`;
+  }
+  html += `</tr>`;
+  html += `<tr><th>Target (ควบคุม)</th>`;
+  for(let d=1; d<=nd; d++){
+    const cols = dayRunsCount[d-1];
+    let dayTons = 0;
+    lines.forEach(line=>{
+      const runs = planData[`${line}_${d}`] || [];
+      runs.forEach(r=>{ dayTons += calcWoodTonsTarget(line, r); });
+    });
+    html += `<td colspan="${cols}" style="font-weight:700;color:var(--amber);">${dayTons>0 ? num(dayTons,2) : '—'}</td>`;
+  }
+  html += `</tr>`;
+
+  html += `</tbody></table></div>`;
+  return html;
+}
+
+function buildProductionLineTable(line){
+  const ym = currentMonth;
+  const nd = daysInMonth(ym);
+
+  const dayRunsCount = [];
+  for(let d=1; d<=nd; d++){
+    const runs = planData[`Line 1_${d}`] || [];
+    dayRunsCount.push(Math.max(runs.length, 1));
+  }
+  const totalCols = 1 + dayRunsCount.reduce((a,b)=>a+b,0);
+
+  let totalTarget=0, activeDays=0, thicknessSet=new Set();
+  for(let d=1; d<=nd; d++){
+    const runs = planData[`${line}_${d}`] || [];
+    if(runs.length) activeDays++;
+    runs.forEach(r=>{
+      totalTarget += calcRun(line, r).boards;
+      if(r.thickness) thicknessSet.add(r.thickness);
+    });
+  }
+
+  let html = `<div class="summary">
+    <div class="card"><div class="label">รวมเป้าเดือนนี้</div><div class="value">${num(totalTarget,0)} <span>แผ่น</span></div></div>
+    <div class="card"><div class="label">วันเดินเครื่อง</div><div class="value">${activeDays} <span>/ ${nd} วัน</span></div></div>
+    <div class="card"><div class="label">ความหนาที่ใช้เดือนนี้</div><div class="value" style="font-size:1rem;">${[...thicknessSet].sort((a,b)=>a-b).join(', ')||'—'} <span>mm.</span></div></div>
+  </div>`;
+  html += `<div class="scrollhint">⇄ เลื่อนซ้าย-ขวาเพื่อดูวันที่ 1-${nd}</div>`;
+  html += `<div class="tablewrap"><table class="preview-table"><thead><tr class="dayheader"><th class="rowlabel-corner">วันที่</th>`;
+  for(let d=1; d<=nd; d++){
+    html += `<th colspan="${dayRunsCount[d-1]}" class="${d%2===0?'day-even':''} day-start day-end">${d}</th>`;
+  }
+  html += `</tr></thead><tbody>`;
+  html += buildLineRows(line, dayRunsCount, totalCols, nd).replace(/<tr class="line-sep[^>]*>.*?<\/tr>/, '');
+  html += `</tbody></table></div>`;
+  return html;
+}
+
+function renderStdYieldTab(){
+  let html = `<div style="margin-bottom:14px;color:var(--sub);font-size:.85rem;">
+    มาตรฐานยิวการใช้ไม้ (อัตราการใช้ไม้ท่อนยูคาลิปตัสต่อ 1 ตัน FG) — อ้างอิง Density จากแท็บ "มาตรฐาน Density" อัตโนมัติ — ${IS_ADMIN ? 'แก้ไขค่ายิวได้เฉพาะแอดมิน' : 'ดูอย่างเดียว'}
+  </div>`;
+  html += `<table class="std-table"><thead><tr>
+    <th>ความหนา<br>(mm.)</th><th>Density<br>(kg/m³)</th><th>FG หนัก<br>(kg/แผ่น)</th><th>ใช้คิดต้นทุน<br>(แผ่น/ตัน)</th><th>ยิวการใช้ไม้<br>(ตัน)</th>
+  </tr></thead><tbody>`;
+  THICKNESS_LIST.forEach(t=>{
+    const density = getDensity(t);
+    const fgWeight = getFgWeightPerSheet(t);
+    const sheetsPerTon = getSheetsPerTon(t);
+    const yieldVal = getYieldRatio(t);
+    html += `<tr>
+      <td class="thk">${t}</td>
+      <td>${num(density,0)}</td>
+      <td>${num(fgWeight,2)}</td>
+      <td>${num(sheetsPerTon,0)}</td>`;
+    if(IS_ADMIN){
+      html += `<td><input type="number" step="0.01" min="0" class="std-input" value="${yieldVal||''}" onchange="updateYield(${t},this.value)"></td>`;
+    } else {
+      html += `<td>${yieldVal ? num(yieldVal,2) : '—'}</td>`;
+    }
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderStdDensityTab(){
+  let html = `<div style="margin-bottom:14px;color:var(--sub);font-size:.85rem;">
+    มาตรฐานความหนาแน่น (Density, kg/m³) ตามความหนา — ${IS_ADMIN ? 'แก้ไขได้เฉพาะแอดมิน (พนักงานผลิตเห็นแบบดูอย่างเดียว)' : 'ดูอย่างเดียว'}
+  </div>`;
+  html += `<table class="std-table"><thead><tr><th>ความหนา (mm.)</th><th>Density (kg/m³)</th></tr></thead><tbody>`;
+  THICKNESS_LIST.forEach(t=>{
+    const val = getDensity(t);
+    html += `<tr><td class="thk">${t}</td>`;
+    if(IS_ADMIN){
+      html += `<td><input type="number" step="1" min="0" class="std-input" value="${val}" onchange="updateDensity(${t},this.value)"></td>`;
+    } else {
+      html += `<td>${num(val,0)}</td>`;
+    }
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderStdPhrTab(){
+  let html = `<div style="margin-bottom:14px;color:var(--sub);font-size:.85rem;">
+    มาตรฐานความเร็วการผลิต (Press/hr) ตามความหนาและ Line — ${IS_ADMIN ? 'แก้ไขได้เฉพาะแอดมิน (พนักงานผลิตเห็นแบบดูอย่างเดียว)' : 'ดูอย่างเดียว — ใช้อ้างอิงความเร็วที่ต้องเดินเครื่องตามความหนาที่ได้รับแจ้ง'}
+  </div>`;
+  html += `<table class="std-table"><thead><tr><th>ความหนา (mm.)</th><th class="l1">Line 1</th><th class="l2">Line 2</th><th class="l3">Line 3</th></tr></thead><tbody>`;
+  THICKNESS_LIST.forEach(t=>{
+    html += `<tr><td class="thk">${t}</td>`;
+    ['Line 1','Line 2','Line 3'].forEach(line=>{
+      const val = getStdPhr(t, line);
+      if(IS_ADMIN){
+        html += `<td><input type="number" step="0.1" min="0" class="std-input" value="${val}" onchange="updateStd(${t},'${line}',this.value)"></td>`;
+      } else {
+        html += `<td class="${LINE_CLASS[line]}">${num(val,1)}</td>`;
+      }
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+  return html;
+}
+
+function calcSizeRowArea(row){
+  if(!row || !Array.isArray(row.sheets)) return 0;
+  return row.sheets.reduce((sum, s)=>{
+    const w = Number(s && s.w) || 0;
+    const l = Number(s && s.l) || 0;
+    return sum + (w * l);
+  }, 0);
+}
+
+function findNormalRowArea(){
+  for(const rid of Object.keys(sizeStdRows)){
+    const row = sizeStdRows[rid];
+    if(row && row.name && row.name.trim().toLowerCase() === 'normal'){
+      return calcSizeRowArea(row);
+    }
+  }
+  return 0;
+}
+
+const SEED_SIZE_DATA = [];
+
+function renderStdWoodSizeTab(){
+  const rowIds = Object.keys(sizeStdRows).filter(rid => sizeStdRows[rid]);
+  const normalArea = findNormalRowArea();
+
+  let html = `<div style="margin-bottom:14px;color:var(--sub);font-size:.85rem;">
+    มาตรฐานขนาดไม้ FG — กว้าง×ยาว หน่วย <b>เมตร</b> (เช่น พิมพ์ 1.22 = 1220 mm.) — ${IS_ADMIN ? 'แก้ไข/เพิ่มขนาดได้เฉพาะแอดมิน' : 'ดูอย่างเดียว'}
+  </div>`;
+  html += `<div class="tablewrap"><table class="std-table size-table"><thead><tr><th>ชื่อขนาด</th>`;
+  for(let c=1; c<=sizeStdColCount; c++){
+    html += `<th>แผ่นที่ ${c}</th>`;
+  }
+  html += `<th>รวม พท. (ตร.ม.)</th><th>เท่าของมาตรฐาน</th>${IS_ADMIN ? '<th></th>' : ''}</tr></thead><tbody>`;
+
+  rowIds.forEach(rid=>{
+    const row = sizeStdRows[rid];
+    const area = calcSizeRowArea(row);
+    const ratio = normalArea > 0 ? area / normalArea : null;
+    html += `<tr>`;
+    if(IS_ADMIN){
+      html += `<td><input type="text" class="std-input size-name-input" value="${row.name||''}" placeholder="ชื่อขนาด" onchange="updateSizeRowName('${rid}',this.value)"></td>`;
+    } else {
+      html += `<td class="thk">${row.name||'—'}</td>`;
+    }
+    for(let c=0; c<sizeStdColCount; c++){
+      const sheet = row.sheets[c] || {w:'', l:''};
+      if(IS_ADMIN){
+        html += `<td>
+          <input type="number" step="0.01" min="0" class="std-input size-wl-input" placeholder="กว้าง" value="${sheet.w||''}" onchange="updateSizeSheet('${rid}',${c},'w',this.value)">
+          ×
+          <input type="number" step="0.01" min="0" class="std-input size-wl-input" placeholder="ยาว" value="${sheet.l||''}" onchange="updateSizeSheet('${rid}',${c},'l',this.value)">
+        </td>`;
+      } else {
+        html += `<td>${(sheet.w && sheet.l) ? `${sheet.w}×${sheet.l}` : '—'}</td>`;
+      }
+    }
+    html += `<td>${area>0 ? num(area,3) : '—'}</td>`;
+    html += `<td>${ratio!==null ? num(ratio,3) : '—'}</td>`;
+    if(IS_ADMIN){
+      html += `<td><button class="rm-btn" onclick="removeSizeRow('${rid}')">ลบ ✕</button></td>`;
+    }
+    html += `</tr>`;
+  });
+
+  html += `</tbody></table></div>`;
+
+  if(IS_ADMIN){
+    html += `<div style="display:flex;gap:10px;margin-top:12px;">
+      <button class="btn" onclick="addSizeRow()">+ เพิ่มขนาด</button>
+      <button class="btn" onclick="addSizeSheetCol()">+ เพิ่มแผ่นที่</button>
+      <button class="btn" onclick="importSizeSeed()">นำเข้าขนาดมาตรฐาน (ชุดเริ่มต้น)</button>
+    </div>`;
+  }
+  return html;
+}
+
+function renderStdPage(){
+  const mainEl = document.getElementById('main');
+  let html = `<div class="tabs" style="margin-bottom:16px;">`;
+  STD_TABS.forEach(t=>{
+    html += `<button class="btn pagebtn ${currentStdTab===t.key?'active':''}" data-stdtab="${t.key}">${t.label}</button>`;
+  });
+  html += `</div>`;
+
+  if(currentStdTab === 'phr') html += renderStdPhrTab();
+  else if(currentStdTab === 'wood_size') html += renderStdWoodSizeTab();
+  else if(currentStdTab === 'density') html += renderStdDensityTab();
+  else if(currentStdTab === 'yield') html += renderStdYieldTab();
+  mainEl.innerHTML = html;
+
+  mainEl.querySelectorAll('[data-stdtab]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      currentStdTab = btn.dataset.stdtab;
+      renderAll();
+    });
+  });
+}
+
+function renderEntryPage(){
+  const lines = ['Line 1','Line 2','Line 3'];
+  const mainEl = document.getElementById('main');
+
+  // เก็บตำแหน่งเลื่อนแนวนอนไว้ก่อน re-render ป้องกันไม่ให้กระโดดกลับไปวันที่ 1 ทุกครั้งที่แก้ข้อมูล
+  const prevScrolls = [];
+  mainEl.querySelectorAll('.tablewrap, .daysrow').forEach(el=>{ prevScrolls.push(el.scrollLeft); });
+
+  let html = sizeDatalist() + thicknessDatalist();
+  if(IS_ADMIN){
+    html += `<div class="previewbox">
+      <div class="previewhead">
+        <b>พรีวิวภาพรวมทั้ง 3 Line (แผนหลัก — เต็มจำนวน ไม่หัก Eff)</b>
+        <button class="btn" id="togglePreviewBtn">${previewOpen ? 'ซ่อนพรีวิว' : 'แสดงพรีวิว'}</button>
+      </div>
+      ${previewOpen ? buildPreviewAll() : ''}
+    </div>`;
+  }
+  html += lines.map((l,i)=>{
+    const active = document.querySelector(`.tab[data-line="${l}"]`)?.classList.contains('active') ?? (i===0);
+    const content = IS_ADMIN ? buildLine(l) : buildProductionLineTable(l);
+    return `<div class="linewrap ${active?'active':''}" data-line="${l}">${content}</div>`;
+  }).join('');
+  mainEl.innerHTML = html;
+
+  // คืนตำแหน่งเลื่อนแนวนอนกลับไปที่เดิม
+  mainEl.querySelectorAll('.tablewrap, .daysrow').forEach((el, idx)=>{
+    if(prevScrolls[idx] !== undefined) el.scrollLeft = prevScrolls[idx];
+  });
+
+  const toggleBtn = document.getElementById('togglePreviewBtn');
+  if(toggleBtn) toggleBtn.onclick = ()=>{ previewOpen = !previewOpen; renderAll(); };
+}
+
+function renderEffPage(){
+  const mainEl = document.getElementById('main');
+  const ym = currentMonth;
+  const nd = daysInMonth(ym);
+  const lines = ['Line 1','Line 2','Line 3'];
+
+  let html = `<div class="toolbar" style="margin:0 0 14px 0;">
+    <input type="month" id="effMonthPicker" value="${ym}">
+    <span style="color:var(--sub);font-size:.8rem;">${revBadgeText()}</span>
+  </div>`;
+  html += `<div class="previewhead" style="margin-bottom:10px;">
+    <b>ประเมินสถานการณ์ (Eff)</b>
+  </div>
+  <div style="color:var(--sub);font-size:.82rem;margin-bottom:14px;max-width:640px;">
+    ใช้ประเมินว่าถ้าเกิดเบรกดาวน์/ผลิตได้ไม่เต็มตามแผน จะได้ผลผลิตประมาณกี่แผ่นถึงสิ้นเดือน — ไม่กระทบแผนหลักและพนักงานผลิตไม่เห็นหน้านี้ ค่าที่กรอกจะถูกบันทึกไว้ตามเดือนนั้นๆ ให้ย้อนดูภายหลังได้ (เช่น ค่าที่ตั้งไว้ตอน Rev.01 เริ่มเดือน)
+  </div>`;
+
+  html += `<div style="display:flex;gap:20px;margin-bottom:14px;flex-wrap:wrap;">`;
+  lines.forEach(line=>{
+    const cls = LINE_CLASS[line];
+    html += `<label style="display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--sub);">
+      <span class="${cls}" style="font-weight:700;">${line} — Eff (%)</span>
+      <input type="number" min="0" max="150" step="1" class="std-input" style="width:80px" ${IS_ADMIN?'':'disabled'}
+        value="${effEvalValues[line]}" onchange="updateEffEval('${line}',this.value)">
+    </label>`;
+  });
+  html += `</div>`;
+
+  html += `<div class="tablewrap"><table class="preview-table"><thead><tr><th class="rowlabel-corner">Line / วันที่</th>`;
+  for(let d=1; d<=nd; d++) html += `<th>${d}</th>`;
+  html += `<th>รวมเดือน</th></tr></thead><tbody>`;
+
+  lines.forEach(line=>{
+    const cls = LINE_CLASS[line];
+    const pct = (Number(effEvalValues[line])||0) / 100;
+    let monthTotal = 0;
+    html += `<tr><th class="${cls}">${line} (Eff ${effEvalValues[line]}%)</th>`;
+    for(let d=1; d<=nd; d++){
+      const runs = planData[`${line}_${d}`] || [];
+      let dayTotal = 0;
+      runs.forEach(r=> dayTotal += calcRun(line, r).boards);
+      const effDay = dayTotal * pct;
+      monthTotal += effDay;
+      html += `<td class="${cls}">${effDay>0 ? num(effDay,0) : '—'}</td>`;
+    }
+    html += `<td class="${cls}" style="font-weight:800;">${num(monthTotal,0)}</td>`;
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div>`;
+  mainEl.innerHTML = html;
+
+  const effMonthPicker = document.getElementById('effMonthPicker');
+  if(effMonthPicker){
+    effMonthPicker.addEventListener('change', (e)=>{
+      currentMonth = e.target.value;
+      document.getElementById('monthPicker').value = currentMonth;
+      loadMonth(currentMonth);
+    });
+  }
+}
+
+function revBadgeText(){
+  const [y,m] = currentMonth.split('-');
+  const yy = y.slice(2);
+  return currentRev > 0 ? `${m}-${yy} Rev.${String(currentRev).padStart(2,'0')}` : `${m}-${yy} (ยังไม่มีการแก้ไข)`;
+}
+
+function renderAll(){
+  document.getElementById('tabs').style.display = currentPage==='entry' ? 'flex' : 'none';
+  document.getElementById('monthPicker').style.display = currentPage==='entry' ? 'inline-block' : 'none';
+  document.getElementById('revBadge').style.display = currentPage==='entry' ? 'inline' : 'none';
+  if(currentPage==='std'){ renderStdPage(); return; }
+  if(currentPage==='eff'){ renderEffPage(); return; }
+  renderEntryPage();
+}
+
+/* ============== EVENT HANDLERS (exposed to window for inline handlers) ============== */
+window.updateRun = function(line, day, idx, field, value){
+  const key = `${line}_${day}`;
+  if(!planData[key]) planData[key] = [];
+  if(!planData[key][idx]) planData[key][idx] = {};
+  if(field==='thickness') value = value ? Number(value) : '';
+  if(field==='hours') value = value ? Number(value) : '';
+
+  if(field==='hours'){
+    const runs = planData[key];
+    let total = 0;
+    runs.forEach((r,i)=>{ total += (i===idx ? (Number(value)||0) : (Number(r && r.hours)||0)); });
+    if(total > 24){
+      alert(`ชม.ผลิตรวมของ ${line} วันที่ ${day} เกิน 24 ชม. ไม่ได้ (ตอนนี้รวมจะเป็น ${total} ชม.) — รวมทุกความหนาในวันนั้นต้องไม่เกิน 24 ชม.`);
+      renderAll(); // รีเซ็ตช่องกรอกกลับเป็นค่าเดิม ไม่บันทึกค่าที่เกิน
+      return;
+    }
+  }
+
+  planData[key][idx][field] = value;
+  renderAll();
+  markDirtyDay(line, day);
+};
+window.addRun = function(line, day){
+  const key = `${line}_${day}`;
+  if(!planData[key]) planData[key] = [];
+  planData[key].push({thickness:'', hours:'', note:''});
+  renderAll();
+  markDirtyDay(line, day);
+};
+window.removeRun = function(line, day, idx){
+  const key = `${line}_${day}`;
+  if(planData[key]){
+    planData[key].splice(idx,1);
+  }
+  renderAll();
+  markDirtyDay(line, day);
+};
+window.previewRemoveLastRun = function(line, day){
+  const key = `${line}_${day}`;
+  if(planData[key] && planData[key].length > 0){
+    planData[key].pop();
+    renderAll();
+    markDirtyDay(line, day);
+  }
+};
+window.updateStd = function(thickness, line, value){
+  value = (value===''||value===null||value===undefined) ? null : Number(value);
+  if(!STD_OVERRIDES[thickness]) STD_OVERRIDES[thickness] = {};
+  STD_OVERRIDES[thickness][line] = value;
+  renderAll();
+  markDirtyStd(thickness, line);
+};
+
+window.updateDensity = function(thickness, value){
+  value = (value===''||value===null||value===undefined) ? null : Number(value);
+  densityOverrides[thickness] = value;
+  renderAll();
+  markDirtyDensity(thickness);
+};
+
+window.updateYield = function(thickness, value){
+  value = (value===''||value===null||value===undefined) ? null : Number(value);
+  yieldOverrides[thickness] = value;
+  renderAll();
+  markDirtyYield(thickness);
+};
+
+window.updateWoodConst = function(field, value){
+  const v = (value===''||value===null||value===undefined) ? 0 : Number(value);
+  if(field==='yieldCalc') yieldCalcConst = v;
+  else if(field==='yieldTarget') yieldTargetConst = v;
+  renderAll();
+  markDirtyWoodCfg('consts');
+};
+window.updateRawBoard = function(line, field, value){
+  const v = (value===''||value===null||value===undefined) ? 0 : Number(value);
+  if(!rawBoardConfig[line]) rawBoardConfig[line] = {w:1.26, l:4.97, density:910};
+  rawBoardConfig[line][field] = v;
+  renderAll();
+  markDirtyWoodCfg(line);
+};
+window.updateGradePct = function(field, value){
+  gradePct[field] = value === '' ? null : Number(value);
+  renderAll();
+  markDirtyGrade();
+};
+window.updateEffEval = function(line, value){
+  effEvalValues[line] = Number(value) || 0;
+  renderAll();
+  markDirtyEff(line);
+};
+window.updateSizeRowName = function(rowId, value){
+  if(!sizeStdRows[rowId]) sizeStdRows[rowId] = {name:'', sheets:[]};
+  sizeStdRows[rowId].name = value;
+  renderAll();
+  markDirtySizeRow(rowId);
+};
+window.updateSizeSheet = function(rowId, slotIdx, field, value){
+  if(!sizeStdRows[rowId]) sizeStdRows[rowId] = {name:'', sheets:[]};
+  if(!sizeStdRows[rowId].sheets[slotIdx]) sizeStdRows[rowId].sheets[slotIdx] = {w:'', l:''};
+  sizeStdRows[rowId].sheets[slotIdx][field] = value === '' ? '' : Number(value);
+  renderAll();
+  markDirtySizeRow(rowId);
+};
+window.importSizeSeed = async function(){
+  if(!confirm(`นำเข้าขนาดมาตรฐาน ${SEED_SIZE_DATA.length} แบบ ตามตารางที่เคยส่งให้ และบันทึกขึ้น Google Sheet ทันที? (จะเขียนทับถ้าเคยนำเข้าไปแล้ว)`)) return;
+  SEED_SIZE_DATA.forEach((item, idx)=>{
+    const rowId = `seed_${idx+1}`;
+    sizeStdRows[rowId] = {name: item.name, sheets: item.sheets.map(s=>({w:s.w, l:s.l}))};
+    sizeStdColCount = Math.max(sizeStdColCount, item.sheets.length);
+    markDirtySizeRow(rowId);
+  });
+  renderAll();
+  await saveAllChanges(); // บันทึกขึ้น Google Sheet ทันที ไม่ต้องกดปุ่มบันทึกแยกอีกที
+};
+window.addSizeRow = function(){
+  const rowId = String(Date.now());
+  sizeStdRows[rowId] = {name:'', sheets:[]};
+  renderAll();
+  markDirtySizeRow(rowId);
+};
+window.addSizeSheetCol = function(){
+  sizeStdColCount += 1;
+  renderAll();
+};
+window.removeSizeRow = function(rowId){
+  if(!confirm('ลบขนาดนี้ออกจากมาตรฐาน?')) return;
+  sizeStdRows[rowId] = null; // null = ถูกลบ รอบันทึกส่ง runs ว่างไปทับที่ backend
+  renderAll();
+  markDirtySizeRow(rowId);
+};
+
+/* ============== INIT ============== */
+function initTabs(){
+  const tabsEl = document.getElementById('tabs');
+  const lines = ['Line 1','Line 2','Line 3'];
+  tabsEl.innerHTML = lines.map((l,i)=>`<button class="tab ${i===0?'active':''}" data-line="${l}"><span class="dot"></span>${l}</button>`).join('');
+  tabsEl.querySelectorAll('.tab').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      tabsEl.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderAll();
+    });
+  });
+}
+
+function initPageNav(){
+  const nav = document.getElementById('pagenav');
+  nav.querySelectorAll('.pagebtn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      nav.querySelectorAll('.pagebtn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      currentPage = btn.dataset.page;
+      renderAll();
+    });
+  });
+}
+
+function initUserbar(){
+  const el = document.getElementById('userbar');
+  const roleLabel = SESSION.role==='admin' ? 'แอดมิน' : 'หัวหน้ากะผลิต';
+  el.innerHTML = `<b>${SESSION.name||SESSION.username}</b><span class="badge ${SESSION.role}">${roleLabel}</span>`;
+  if(SESSION.role==='admin'){
+    document.getElementById('backBtn').style.display = 'inline-block';
+    document.getElementById('backBtn').onclick = ()=> window.location.href='dashboard_home.html';
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.style.display = 'inline-block';
+    saveBtn.onclick = saveAllChanges;
+    updateDirtyIndicator();
+    window.addEventListener('beforeunload', (e)=>{
+      if(dirtyDays.size + dirtyStd.size > 0){
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+  }
+  document.getElementById('logoutBtn').onclick = ()=>{
+    if(IS_ADMIN && (dirtyDays.size + dirtyStd.size > 0)){
+      if(!confirm('มีข้อมูลที่ยังไม่ได้บันทึก ต้องการออกจากระบบเลยหรือไม่?')) return;
+    }
+    sessionStorage.removeItem('aaf_user');
+    window.location.href='login.html';
+  };
+}
+
+
+function tickClock(){
+  const el = document.getElementById('clock');
+  const d = new Date();
+  const dowNames = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  const pad = n => String(n).padStart(2,'0');
+  el.textContent = `${dowNames[d.getDay()]} ${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()+543}  ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function updateHeaderHeightVar(){
+  const headerEl = document.querySelector('header');
+  if(headerEl){
+    document.documentElement.style.setProperty('--header-h', headerEl.offsetHeight + 'px');
+  }
+}
+window.addEventListener('resize', updateHeaderHeightVar);
+
+function syncFloatingDayHeader(){
+  let bar = document.getElementById('floatingDayHeader');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'floatingDayHeader';
+    document.body.appendChild(bar);
+  }
+
+  // หาแถวหัววันที่ (dayheader) ที่กำลังแสดงอยู่จริงบนหน้าจอตอนนี้ (พรีวิวของแอดมิน หรือ ตารางของหัวหน้ากะ)
+  const wraps = document.querySelectorAll('#main .tablewrap');
+  let target = null;
+  wraps.forEach(w=>{
+    if(target) return;
+    const row = w.querySelector('table.preview-table thead tr.dayheader, table.preview-table thead tr:first-child');
+    if(row && w.offsetParent !== null) target = {wrap:w, row};
+  });
+
+  if(!target){ bar.style.display='none'; return; }
+
+  const headerEl = document.querySelector('header');
+  const headerH = headerEl ? headerEl.offsetHeight : 0;
+  const rowRect = target.row.getBoundingClientRect();
+  const wrapRect = target.wrap.getBoundingClientRect();
+
+  // แสดง floating bar เฉพาะตอนที่แถวหัวจริงเลื่อนขึ้นไปเลยจุดที่ควรอยู่ (บังใต้เมนูบนสุด) และตารางยังอยู่ในจอ
+  const shouldFloat = rowRect.top < headerH && wrapRect.bottom > headerH + 20;
+
+  if(!shouldFloat){
+    bar.style.display = 'none';
+    return;
+  }
+
+  bar.style.display = 'block';
+  bar.style.top = headerH + 'px';
+  bar.style.left = wrapRect.left + 'px';
+  bar.style.width = wrapRect.width + 'px';
+
+  // โคลนแถวหัว แล้วบังคับความกว้างแต่ละช่องให้ตรงกับของจริงเป๊ะ ก่อนเลื่อนตาม scrollLeft ของตาราง
+  bar.innerHTML = `<table><tbody><tr>${target.row.innerHTML}</tr></tbody></table>`;
+  const realCells = target.row.children;
+  const cloneRow = bar.querySelector('tr');
+  for(let i=0; i<realCells.length; i++){
+    const w = realCells[i].getBoundingClientRect().width;
+    if(cloneRow.children[i]){
+      cloneRow.children[i].style.width = w + 'px';
+      cloneRow.children[i].style.minWidth = w + 'px';
+      cloneRow.children[i].style.maxWidth = w + 'px';
+    }
+  }
+  bar.querySelector('table').style.transform = `translateX(${-target.wrap.scrollLeft}px)`;
+}
+setInterval(syncFloatingDayHeader, 150);
+window.addEventListener('scroll', syncFloatingDayHeader);
+window.addEventListener('resize', syncFloatingDayHeader);
+
+document.getElementById('monthPicker').value = currentMonth;
+document.getElementById('monthPicker').addEventListener('change', (e)=>{
+  currentMonth = e.target.value;
+  loadMonth(currentMonth);
+});
+
+initTabs();
+initPageNav();
+initUserbar();
+tickClock();
+setInterval(tickClock, 1000);
+updateHeaderHeightVar();
+setInterval(updateHeaderHeightVar, 1000); // เผื่อความสูงของ header เปลี่ยน (เช่น ตัวหนังสือ wrap ตอนหน้าจอเล็ก)
+loadMonth(currentMonth);
+loadStdConfig();
+loadSizeStdConfig();
+loadGradeConfig();
+loadDensityConfig();
+loadYieldConfig();
+loadWoodConfig();
+</script>
+</body>
+</html>
