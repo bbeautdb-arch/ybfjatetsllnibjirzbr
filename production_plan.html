@@ -2908,9 +2908,11 @@ function initUserbar(){
   const el = document.getElementById('userbar');
   const roleLabel = SESSION.role==='admin' ? 'แอดมิน' : SESSION.role==='purchase_material' ? 'จัดซื้อวัตถุดิบ' : 'หัวหน้ากะผลิต';
   el.innerHTML = `<b>${SESSION.name||SESSION.username}</b><span class="badge ${SESSION.role}">${roleLabel}</span>`;
-  if(SESSION.role==='admin'){
+  if(SESSION.role==='admin' || SESSION.role==='production'){
     document.getElementById('backBtn').style.display = 'inline-block';
     document.getElementById('backBtn').onclick = ()=> window.location.href='dashboard_home.html';
+  }
+  if(SESSION.role==='admin'){
     const purchaseNavBtn = document.getElementById('purchaseNavBtn');
     if(purchaseNavBtn) purchaseNavBtn.style.display = 'inline-block';
     const saveBtn = document.getElementById('saveBtn');

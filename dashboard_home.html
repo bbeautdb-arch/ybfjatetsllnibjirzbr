@@ -40,6 +40,9 @@ const PAGES = {
     { href: 'production_plan.html', icon: '🏭', title: 'แผนผลิตประจำวัน',
       desc: 'กรอกความหนา/ชม.ผลิต · เป้า 4x8 อัตโนมัติ · Rev.04',
       color: 'amber', badge: 'Admin' },
+    { href: 'grade_quality_dashboard.html', icon: '📈', title: '%เกรดและปัญหาประจำวัน',
+      desc: 'สรุปเกรด · ปัญหาคุณภาพรายวัน · แยก Line และ Code',
+      color: 'teal', badge: 'Admin · Shift 1' },
     { href: 'history_database.html', icon: '📊', title: 'ฐานข้อมูลประวัติการขาย',
       desc: 'ยอดขาย 2014–2026 · Timeline · Insights · Health Score · Price Trend',
       color: 'green', badge: 'ทุกคน' },
@@ -52,6 +55,19 @@ const PAGES = {
     { href: 'access_log.html',icon: '🔒', title: 'บันทึกการเข้าใช้งาน',
       desc: 'ใครเข้าเมื่อไร · ความถี่ · พยายามเข้าไม่สำเร็จ',
       color: 'red', badge: 'Admin เท่านั้น' },
+  ],
+  production: [
+    { href: 'production_plan.html', icon: '🏭', title: 'แผนผลิตประจำวัน',
+      desc: 'ดูแผนผลิตประจำวันของ Line 1–3',
+      color: 'amber', badge: 'ดูอย่างเดียว' },
+    { href: 'grade_quality_dashboard.html', icon: '📈', title: '%เกรดและปัญหาประจำวัน',
+      desc: 'สรุปเกรด · ปัญหาคุณภาพรายวัน · แยก Line และ Code',
+      color: 'teal', badge: 'Shift 1' },
+  ],
+  grade_admin: [
+    { href: 'grade_quality_dashboard.html', icon: '📈', title: '%เกรดและปัญหาประจำวัน',
+      desc: 'อัปโหลด · ตรวจสอบ · บันทึกข้อมูลเกรดและปัญหาประจำวัน',
+      color: 'teal', badge: 'ผู้ลงข้อมูล' },
   ],
   sales: [
     { href: 'history_database.html', icon: '📊', title: 'ฐานข้อมูลประวัติการขาย',
@@ -66,6 +82,7 @@ const PAGES = {
 const COLORS = {
   amber:  { border: 'border-amber-500/30',  hover: 'hover:border-amber-400/60',  arrow: 'group-hover:text-amber-400' },
   green:  { border: 'border-green-500/30',  hover: 'hover:border-green-400/60',  arrow: 'group-hover:text-green-400' },
+  teal:   { border: 'border-teal-500/30',   hover: 'hover:border-teal-400/60',   arrow: 'group-hover:text-teal-400' },
   purple: { border: 'border-purple-500/30', hover: 'hover:border-purple-400/60', arrow: 'group-hover:text-purple-400' },
   blue:   { border: 'border-blue-500/30',   hover: 'hover:border-blue-400/60',   arrow: 'group-hover:text-blue-400' },
   red:    { border: 'border-red-500/30',    hover: 'hover:border-red-400/60',    arrow: 'group-hover:text-red-400' },
@@ -80,6 +97,12 @@ const badge = document.getElementById('role-badge');
 if(user.role === 'admin') {
   badge.textContent = '👑 ผู้บริหาร';
   badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-amber-900/40 text-amber-400 border border-amber-500/30';
+} else if(user.role === 'production') {
+  badge.textContent = '🏭 หัวหน้ากะผลิต';
+  badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-teal-900/40 text-teal-400 border border-teal-500/30';
+} else if(user.role === 'grade_admin') {
+  badge.textContent = '📝 ผู้ลงข้อมูลเกรด';
+  badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-teal-900/40 text-teal-400 border border-teal-500/30';
 } else {
   badge.textContent = `🏷 เซลส์`;
   badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-blue-900/40 text-blue-400 border border-blue-500/30';
