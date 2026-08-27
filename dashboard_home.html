@@ -43,6 +43,9 @@ const PAGES = {
     { href: 'grade_quality_dashboard.html', icon: '📈', title: '%เกรดและปัญหาประจำวัน',
       desc: 'สรุปเกรด · ปัญหาคุณภาพรายวัน · แยก Line และ Code',
       color: 'teal', badge: 'Admin · Shift 1' },
+    { href: 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/#home', icon: '👥', title: 'ระบบ HR',
+      desc: 'ทะเบียนพนักงาน · ขาด ลา สาย · เวลาเข้างาน · ประวัติรายบุคคล',
+      color: 'cyan', badge: 'Admin เท่านั้น' },
     { href: 'history_database.html', icon: '📊', title: 'ฐานข้อมูลประวัติการขาย',
       desc: 'ยอดขาย 2014–2026 · Timeline · Insights · Health Score · Price Trend',
       color: 'green', badge: 'ทุกคน' },
@@ -83,6 +86,7 @@ const COLORS = {
   amber:  { border: 'border-amber-500/30',  hover: 'hover:border-amber-400/60',  arrow: 'group-hover:text-amber-400' },
   green:  { border: 'border-green-500/30',  hover: 'hover:border-green-400/60',  arrow: 'group-hover:text-green-400' },
   teal:   { border: 'border-teal-500/30',   hover: 'hover:border-teal-400/60',   arrow: 'group-hover:text-teal-400' },
+  cyan:   { border: 'border-cyan-500/30',   hover: 'hover:border-cyan-400/60',   arrow: 'group-hover:text-cyan-400' },
   purple: { border: 'border-purple-500/30', hover: 'hover:border-purple-400/60', arrow: 'group-hover:text-purple-400' },
   blue:   { border: 'border-blue-500/30',   hover: 'hover:border-blue-400/60',   arrow: 'group-hover:text-blue-400' },
   red:    { border: 'border-red-500/30',    hover: 'hover:border-red-400/60',    arrow: 'group-hover:text-red-400' },
@@ -134,7 +138,7 @@ container.innerHTML = pages.map(p => {
 function doLogout() {
   if(!confirm('ออกจากระบบ?')) return;
   sessionStorage.clear();
-  window.location.href = 'login.html';
+  window.location.href = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/logout';
 }
 </script>
 </body>

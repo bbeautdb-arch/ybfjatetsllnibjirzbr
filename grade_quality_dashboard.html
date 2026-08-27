@@ -53,17 +53,43 @@ try {
   session = null;
 }
 
-if (!session) {
-  window.location.replace('login.html');
-} else if (!['admin', 'production', 'grade_admin'].includes(session.role)) {
-  const fallback = session.role === 'purchase_material'
-    ? 'production_plan.html'
-    : 'dashboard_home.html';
-  window.location.replace(fallback);
-} else {
-  const accessMode = session.role === 'production' ? 'viewer' : 'editor';
-  const dashboardUrl = `${GRADE_DASHBOARD_BASE_URL}?source=aaf-system&access=${accessMode}#overview`;
-  window.location.replace(dashboardUrl);
+launchGradeDashboard();
+
+async function launchGradeDashboard() {
+  if (!session) {
+    window.location.replace('login.html');
+    return;
+  }
+  if (!['admin', 'production', 'grade_admin'].includes(session.role)) {
+    const fallback = session.role === 'purchase_material'
+      ? 'production_plan.html'
+      : 'dashboard_home.html';
+    window.location.replace(fallback);
+    return;
+  }
+  if (!session.gradeBridgeSessionToken) {
+    sessionStorage.removeItem('aaf_user');
+    window.location.replace('login.html?reason=grade-auth-required');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${GRADE_DASHBOARD_BASE_URL}api/aaf/launch`, {
+      method: 'POST',
+      mode: 'cors',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({ bridgeSessionToken: session.gradeBridgeSessionToken }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok || !result.handoffUrl) throw new Error('launch_failed');
+    window.location.replace(result.handoffUrl);
+  } catch (error) {
+    document.getElementById('launch-status').textContent =
+      'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่';
+    sessionStorage.removeItem('aaf_user');
+    setTimeout(() => window.location.replace('login.html?reason=grade-session-expired'), 700);
+  }
 }
 </script>
 </body>
