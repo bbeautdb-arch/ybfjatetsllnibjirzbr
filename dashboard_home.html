@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AAF — หน้าหลัก</title>
+<title>AAF Company Portal — หน้าหลัก</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-900 min-h-screen">
@@ -12,7 +12,7 @@
   <div class="flex items-center gap-3">
     <span class="text-2xl">🪵</span>
     <div>
-      <h1 class="text-white font-bold text-base">AAF Sales System</h1>
+      <h1 class="text-white font-bold text-base">AAF Company Portal</h1>
       <p id="welcome-text" class="text-gray-400 text-xs"></p>
     </div>
   </div>
@@ -37,15 +37,18 @@
 <script>
 const PAGES = {
   admin: [
+    { href: 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/', icon: '🛠️', title: 'งานช่าง PM / CM และแจ้งซ่อม',
+      desc: 'ทะเบียนเครื่องจักร · แจ้งซ่อมและ Warning · แผน PM · ใบงาน CM · แนบรูปยืนยัน',
+      color: 'orange', badge: 'ทีมช่าง · ฝ่ายผลิต' },
     { href: 'production_plan.html', icon: '🏭', title: 'แผนผลิตประจำวัน',
       desc: 'กรอกความหนา/ชม.ผลิต · เป้า 4x8 อัตโนมัติ · Rev.04',
       color: 'amber', badge: 'Admin' },
     { href: 'grade_quality_dashboard.html', icon: '📈', title: '%เกรดและปัญหาประจำวัน',
       desc: 'สรุปเกรด · ปัญหาคุณภาพรายวัน · แยก Line และ Code',
       color: 'teal', badge: 'Admin · Shift 1' },
-    { href: 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/#home', icon: '👥', title: 'ระบบ HR',
+    { href: 'hr_dashboard.html', icon: '👥', title: 'ระบบ HR',
       desc: 'ทะเบียนพนักงาน · ขาด ลา สาย · เวลาเข้างาน · ประวัติรายบุคคล',
-      color: 'cyan', badge: 'Admin เท่านั้น' },
+      color: 'cyan', badge: 'Admin · HR' },
     { href: 'history_database.html', icon: '📊', title: 'ฐานข้อมูลประวัติการขาย',
       desc: 'ยอดขาย 2014–2026 · Timeline · Insights · Health Score · Price Trend',
       color: 'green', badge: 'ทุกคน' },
@@ -60,6 +63,9 @@ const PAGES = {
       color: 'red', badge: 'Admin เท่านั้น' },
   ],
   production: [
+    { href: 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/', icon: '🛠️', title: 'งานช่าง PM / CM และแจ้งซ่อม',
+      desc: 'แจ้งซ่อม · บันทึก Warning · ดูสถานะเครื่องจักร · ติดตามงานซ่อม',
+      color: 'orange', badge: 'ฝ่ายผลิต · ทีมช่าง' },
     { href: 'production_plan.html', icon: '🏭', title: 'แผนผลิตประจำวัน',
       desc: 'ดูแผนผลิตประจำวันของ Line 1–3',
       color: 'amber', badge: 'ดูอย่างเดียว' },
@@ -72,6 +78,16 @@ const PAGES = {
       desc: 'อัปโหลด · ตรวจสอบ · บันทึกข้อมูลเกรดและปัญหาประจำวัน',
       color: 'teal', badge: 'ผู้ลงข้อมูล' },
   ],
+  hr: [
+    { href: 'hr_dashboard.html', icon: '👥', title: 'ระบบ HR',
+      desc: 'ทะเบียนพนักงาน · ขาด ลา สาย · เวลาเข้างาน · ประวัติรายบุคคล',
+      color: 'cyan', badge: 'ฝ่าย HR' },
+  ],
+  maintenance: [
+    { href: 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/', icon: '🛠️', title: 'งานช่าง PM / CM และแจ้งซ่อม',
+      desc: 'ทะเบียนเครื่องจักร · Warning · แผน PM · ใบงาน CM · แนบรูปยืนยัน',
+      color: 'orange', badge: 'ทีมช่าง' },
+  ],
   sales: [
     { href: 'history_database.html', icon: '📊', title: 'ฐานข้อมูลประวัติการขาย',
       desc: 'ยอดขาย · Timeline · Health Score',
@@ -83,6 +99,7 @@ const PAGES = {
 };
 
 const COLORS = {
+  orange: { border: 'border-orange-500/30', hover: 'hover:border-orange-400/60', arrow: 'group-hover:text-orange-400' },
   amber:  { border: 'border-amber-500/30',  hover: 'hover:border-amber-400/60',  arrow: 'group-hover:text-amber-400' },
   green:  { border: 'border-green-500/30',  hover: 'hover:border-green-400/60',  arrow: 'group-hover:text-green-400' },
   teal:   { border: 'border-teal-500/30',   hover: 'hover:border-teal-400/60',   arrow: 'group-hover:text-teal-400' },
@@ -94,7 +111,13 @@ const COLORS = {
 
 const sess = sessionStorage.getItem('aaf_user');
 if(!sess) { window.location.href = 'login.html'; }
-const user = JSON.parse(sess);
+let user = null;
+try { user = JSON.parse(sess); } catch (error) { user = null; }
+if(!user || !PAGES[user.role]) {
+  sessionStorage.clear();
+  window.location.replace('login.html');
+  throw new Error('invalid_session_role');
+}
 
 document.getElementById('welcome-text').textContent = `สวัสดี, ${user.name}`;
 const badge = document.getElementById('role-badge');
@@ -107,6 +130,12 @@ if(user.role === 'admin') {
 } else if(user.role === 'grade_admin') {
   badge.textContent = '📝 ผู้ลงข้อมูลเกรด';
   badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-teal-900/40 text-teal-400 border border-teal-500/30';
+} else if(user.role === 'hr') {
+  badge.textContent = '👥 ฝ่าย HR';
+  badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-cyan-900/40 text-cyan-400 border border-cyan-500/30';
+} else if(user.role === 'maintenance') {
+  badge.textContent = '🛠️ ทีมช่าง';
+  badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-orange-900/40 text-orange-400 border border-orange-500/30';
 } else {
   badge.textContent = `🏷 เซลส์`;
   badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-blue-900/40 text-blue-400 border border-blue-500/30';
@@ -116,7 +145,7 @@ if(user.role === 'admin') {
 if(user.salesman) sessionStorage.setItem('aaf_filter_salesman', user.salesman);
 else sessionStorage.removeItem('aaf_filter_salesman');
 
-const pages = PAGES[user.role] || PAGES.sales;
+const pages = PAGES[user.role];
 const container = document.getElementById('pages-container');
 container.innerHTML = pages.map(p => {
   const c = COLORS[p.color];
@@ -138,7 +167,9 @@ container.innerHTML = pages.map(p => {
 function doLogout() {
   if(!confirm('ออกจากระบบ?')) return;
   sessionStorage.clear();
-  window.location.href = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/logout';
+  const portalLogin = 'https://bbeautdb-arch.github.io/AAF-System/login.html';
+  const gradeLogout = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(portalLogin);
+  window.location.href = 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(gradeLogout);
 }
 </script>
 </body>

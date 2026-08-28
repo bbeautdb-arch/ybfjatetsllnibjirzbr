@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>📊 AAF Sales History Database</title>
+<script>
+(function(){
+  let user = null;
+  try { user = JSON.parse(sessionStorage.getItem('aaf_user') || 'null'); } catch (error) { user = null; }
+  if (!user || !['admin', 'sales'].includes(user.role)) {
+    window.location.replace(user ? 'dashboard_home.html' : 'login.html');
+    throw new Error('access_denied');
+  }
+})();
+</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');

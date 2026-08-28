@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AAF — บันทึกการเข้าใช้งาน</title>
+<script>
+(function(){
+  let user = null;
+  try { user = JSON.parse(sessionStorage.getItem('aaf_user') || 'null'); } catch (error) { user = null; }
+  if (!user || user.role !== 'admin') {
+    window.location.replace(user ? 'dashboard_home.html' : 'login.html');
+    throw new Error('access_denied');
+  }
+})();
+</script>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-900 min-h-screen">

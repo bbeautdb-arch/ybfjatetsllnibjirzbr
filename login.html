@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AAF Sales System — Login</title>
+<title>AAF Company Portal — Login</title>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
@@ -108,12 +108,13 @@
   <button id="btn-login" onclick="doLogin()" style="margin-top:6px">SIGN IN</button>
 </div>
 
-<p style="position:fixed;bottom:8px;left:8px;color:rgba(255,255,255,0.5);font-size:11px;z-index:5">v5-2026-07-07</p>
+<p style="position:fixed;bottom:8px;left:8px;color:rgba(255,255,255,0.5);font-size:11px;z-index:5">v6-2026-08-28</p>
 
 <script>
 const LOG_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwcerDqFFb0cYXmCsIz3LX79-IF_eX4XEA5CK_vgtpXCObS8xKrBDvfLFNSSArEy8KZ/exec';
 const LOG_SECRET    = '';
 const GRADE_AUTH_API = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/login';
+const HR_AUTH_API = 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/api/aaf/login';
 
 const USERS = {};
 
@@ -176,10 +177,11 @@ async function doLogin() {
   btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
 
   let found = configured;
-  let gradeBridgeSessionToken = null;
+  let bridgeSessionToken = null;
+  let authSource = null;
   if (configured?.serverAuth) {
     try {
-      const response = await fetch(GRADE_AUTH_API, {
+      const response = await fetch(configured.authApi || GRADE_AUTH_API, {
         method: 'POST',
         mode: 'cors',
         cache: 'no-store',
@@ -187,11 +189,14 @@ async function doLogin() {
         body: JSON.stringify({ username: user, password: pass }),
       });
       const result = await response.json();
-      if (!response.ok || !result.ok || !result.user || !result.bridgeSessionToken) {
+      const returnedUsername = String(result.user?.username || '').trim().toLowerCase();
+      if (!response.ok || !result.ok || !result.user || !result.bridgeSessionToken ||
+          returnedUsername !== user || result.user.role !== configured.role) {
         found = null;
       } else {
         found = result.user;
-        gradeBridgeSessionToken = result.bridgeSessionToken;
+        bridgeSessionToken = result.bridgeSessionToken;
+        authSource = configured.authSource || 'grade';
       }
     } catch (error) {
       found = null;
@@ -213,7 +218,9 @@ async function doLogin() {
   sessionStorage.setItem('aaf_user', JSON.stringify({
     username: user, name: found.name, role: found.role,
     salesman: found.salesman, loginAt: new Date().toISOString(),
-    gradeBridgeSessionToken: gradeBridgeSessionToken,
+    bridgeSessionToken: bridgeSessionToken,
+    gradeBridgeSessionToken: authSource === 'grade' ? bridgeSessionToken : null,
+    authSource: authSource,
   }));
 
   const target = found.role === 'purchase_material' ? 'production_plan.html' : 'dashboard_home.html';

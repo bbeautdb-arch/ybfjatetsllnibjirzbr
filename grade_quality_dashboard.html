@@ -67,7 +67,8 @@ async function launchGradeDashboard() {
     window.location.replace(fallback);
     return;
   }
-  if (!session.gradeBridgeSessionToken) {
+  const bridgeSessionToken = session.bridgeSessionToken || session.gradeBridgeSessionToken;
+  if (!bridgeSessionToken) {
     sessionStorage.removeItem('aaf_user');
     window.location.replace('login.html?reason=grade-auth-required');
     return;
@@ -79,7 +80,7 @@ async function launchGradeDashboard() {
       mode: 'cors',
       cache: 'no-store',
       headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify({ bridgeSessionToken: session.gradeBridgeSessionToken }),
+      body: JSON.stringify({ bridgeSessionToken: bridgeSessionToken }),
     });
     const result = await response.json();
     if (!response.ok || !result.ok || !result.handoffUrl) throw new Error('launch_failed');
