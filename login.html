@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site https://kabin-close.bbeautybbsoraai.chatgpt.site https://ipapi.co https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>AAF Company Portal — Login</title>
 <style>
   * { box-sizing: border-box; }
@@ -108,13 +109,15 @@
   <button id="btn-login" onclick="doLogin()" style="margin-top:6px">SIGN IN</button>
 </div>
 
-<p style="position:fixed;bottom:8px;left:8px;color:rgba(255,255,255,0.5);font-size:11px;z-index:5">v6-2026-08-28</p>
+<p style="position:fixed;bottom:8px;left:8px;color:rgba(255,255,255,0.5);font-size:11px;z-index:5">v8-2026-08-29</p>
 
 <script>
 const LOG_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwcerDqFFb0cYXmCsIz3LX79-IF_eX4XEA5CK_vgtpXCObS8xKrBDvfLFNSSArEy8KZ/exec';
 const LOG_SECRET    = '';
 const GRADE_AUTH_API = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/login';
 const HR_AUTH_API = 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/api/aaf/login';
+const MAINTENANCE_AUTH_API = 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/api/aaf/login';
+const CLOSING_AUTH_API = 'https://kabin-close.bbeautybbsoraai.chatgpt.site/api/aaf/login';
 
 const USERS = {};
 

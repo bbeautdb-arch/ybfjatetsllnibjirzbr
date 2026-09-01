@@ -1,0 +1,1716 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="description" content="ตรวจสอบไฟล์ค่าแรงผู้รับเหมาในเบราว์เซอร์ โดยข้อมูลอยู่ในอุปกรณ์ของผู้ใช้">
+<title>ระบบตรวจสอบค่าแรงผู้รับเหมา — AAF Audit 2.1</title>
+<script>
+(function enforceAccountingAccess(){
+  const raw=sessionStorage.getItem('aaf_user');
+  let user=null;
+  try{user=raw?JSON.parse(raw):null;}catch(error){user=null;}
+  if(!user||!['admin','accounting'].includes(user.role)){
+    window.location.replace(raw?'dashboard_home.html':'login.html');
+  }
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha384-bs/nf9FbdNouRbMiFcrcZfLXYPKiPaGVGplVbv7dLGECccEXDW+S3zjqSKR5ZEaD" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<style>
+:root{--navy:#17324f;--navy2:#244f79;--blue:#2368a2;--red:#a4161a;--green:#17642a;--amber:#8a6500;--light:#eef3f8;--border:#c5d0dc;--muted:#5b6876;--focus:#ffbf47}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'TH Sarabun New','Sarabun','Leelawadee UI',Tahoma,sans-serif;font-size:17px;background:#f4f6f9;color:#18222d;line-height:1.45}
+.skip-link{position:absolute;left:-9999px;top:8px;background:#fff;color:var(--navy);padding:8px 12px;border-radius:6px;z-index:999}
+.skip-link:focus{left:8px}
+.header{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:18px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.header h1{font-size:26px;font-weight:700}
+.header .sub{font-size:15px;opacity:.85}
+.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.header-actions a.btn{display:inline-flex;align-items:center;text-decoration:none}
+.container{max-width:1280px;margin:0 auto;padding:20px}
+.card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:18px 22px;margin-bottom:18px;box-shadow:0 1px 3px rgba(20,40,70,.06)}
+.card h2{font-size:20px;color:var(--navy);margin-bottom:12px;border-bottom:2px solid var(--light);padding-bottom:6px}
+.dropzone{border:2.5px dashed var(--blue);border-radius:12px;padding:38px;text-align:center;cursor:pointer;background:#f8fbff;transition:.2s}
+.dropzone.drag{background:#e3efff;border-color:var(--navy)}
+.dropzone:hover{background:#eef6ff}
+.dropzone:focus-visible,.btn:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.dropzone .big{font-size:22px;font-weight:700;color:var(--navy)}
+.dropzone .small{font-size:15px;color:#667;margin-top:6px}
+.filemeta{display:flex;gap:8px 18px;flex-wrap:wrap;justify-content:center;margin-top:10px;font-size:14px;color:var(--muted)}
+.selrow{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;align-items:end}
+.selrow label{display:block;font-size:14px;color:#556;font-weight:700;margin-bottom:3px}
+.selrow select{padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-family:inherit;font-size:16px;min-width:190px;background:#fff}
+.btn{background:var(--navy);color:#fff;border:none;border-radius:8px;padding:10px 26px;font-family:inherit;font-size:18px;font-weight:700;cursor:pointer;transition:.15s}
+.btn:hover{background:#2a527e}
+.btn.green{background:var(--green)} .btn.green:hover{background:#27803a}
+.btn.secondary{background:#e8eef5;color:var(--navy);border:1px solid #b8c5d3}.btn.secondary:hover{background:#dce6f0}
+.btn.danger-lite{background:#fff;color:var(--red);border:1px solid #d6a7a7}.btn.danger-lite:hover{background:#fff2f2}
+.btn:disabled{background:#9ab;cursor:not-allowed}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:18px}
+.kpi{background:#fff;border-radius:10px;border-top:5px solid var(--blue);padding:14px 16px;box-shadow:0 1px 3px rgba(20,40,70,.08)}
+.kpi .lbl{font-size:14px;color:#667;font-weight:700}
+.kpi .val{font-size:28px;font-weight:700;color:var(--navy);margin:2px 0}
+.kpi .sub{font-size:13px;color:#889}
+.kpi.red{border-top-color:var(--red)} .kpi.red .val{color:var(--red)}
+.kpi.green{border-top-color:var(--green)} .kpi.green .val{color:var(--green)}
+.kpi.amber{border-top-color:var(--amber)} .kpi.amber .val{color:var(--amber)}
+.checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+.chk{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:#fafcff}
+.chk .ic{font-size:20px;line-height:1;margin-top:2px}
+.chk.pass{border-color:#bfdec5;background:#f2faf3}
+.chk.fail{border-color:#e6b8b8;background:#fdf3f3}
+.chk.warn{border-color:#e8d9a8;background:#fdf9ec}
+.chk .t{font-weight:700;font-size:16px}
+.chk .d{font-size:14px;color:#556}
+table{border-collapse:collapse;width:100%;font-size:15.5px;margin-top:8px}
+th{background:var(--blue);color:#fff;padding:7px 9px;text-align:center;font-size:14.5px}
+td{border:1px solid var(--border);padding:6px 9px;vertical-align:top}
+tr:nth-child(even) td{background:#f7f9fc}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+td.ctr{text-align:center}
+.tag{display:inline-block;padding:1px 9px;border-radius:20px;font-size:13px;font-weight:700}
+.tag.red{background:#fbe4e4;color:var(--red)} .tag.green{background:#e2f3e5;color:var(--green)} .tag.amber{background:#fbf1d4;color:#8a6d00}
+.charts{display:grid;grid-template-columns:2fr 1fr;gap:18px}
+.chartbox{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px}
+.chartbox h3{font-size:17px;color:var(--navy);margin-bottom:6px;text-align:center}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.charts,.two{grid-template-columns:1fr}}
+.note{font-size:14px;color:#667;font-style:italic;margin-top:8px}
+.totalrow td{background:#dce6f0 !important;font-weight:700}
+.hidden{display:none}
+details summary{cursor:pointer;font-weight:700;color:var(--navy);font-size:17px;padding:4px 0}
+.footer{color:#687684;font-size:13.5px;text-align:center;padding:14px 20px 24px}
+.alertbanner{border-radius:10px;padding:14px 18px;margin-bottom:18px;font-size:18px;font-weight:700;display:flex;align-items:center;gap:12px}
+.alertbanner.ok{background:#e2f3e5;color:var(--green);border:1px solid #bfdec5}
+.alertbanner.bad{background:#fbe4e4;color:var(--red);border:1px solid #e6b8b8}
+.alertbanner.warn{background:#fff8df;color:#715300;border:1px solid #e5cf84}
+.appmsg{border-radius:9px;padding:12px 15px;margin-top:14px;border:1px solid var(--border);background:#f8fafc;color:#253444}
+.appmsg.error{background:#fff1f1;border-color:#e1adad;color:#86161a}
+.appmsg.warn{background:#fff9e8;border-color:#dfca89;color:#6f5200}
+.appmsg.success{background:#edf9ef;border-color:#b8dbbf;color:#145623}
+.appmsg strong{display:block;margin-bottom:2px}.appmsg .detail{font-size:14px;font-weight:400}
+.privacy-strip{display:flex;align-items:flex-start;gap:10px;margin-top:14px;padding:10px 12px;border-radius:8px;background:#eef7f0;color:#24522d;font-size:14px}
+.table-scroll{width:100%;overflow-x:auto;overscroll-behavior-inline:contain;border-radius:7px}
+.table-scroll table{min-width:720px}
+.audit-meta{display:flex;gap:8px 18px;flex-wrap:wrap;margin:-6px 0 14px;color:var(--muted);font-size:14px}
+.audit-meta span{display:inline-flex;align-items:center;gap:4px}
+.rules{margin-top:14px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:#fbfcfe}
+.rules summary{font-size:15px}.rules-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:12px}
+.rules-grid label{display:block;font-size:13px;font-weight:700;color:#455566;margin-bottom:3px}.rules-grid input{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:6px;font:inherit;background:#fff}
+#loading{display:none;text-align:center;padding:16px;color:var(--navy);font-weight:700;font-size:18px}
+.spin{display:inline-block;width:20px;height:20px;border:3px solid #cdd;border-top-color:var(--navy);border-radius:50%;animation:sp 1s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media(max-width:650px){.header{padding:15px 18px}.header-actions{width:100%;justify-content:flex-start}.container{padding:12px}.card{padding:15px}.dropzone{padding:26px 16px}.selrow>div{width:100%}.selrow select{width:100%}.btn{width:100%;padding:10px 14px}.kpi .val{font-size:24px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation-duration:.001ms!important;transition-duration:.001ms!important}}
+@media print{body{background:#fff;font-size:12pt}.header,#uploadCard,#loading,.footer,.header-actions{display:none!important}.container{max-width:none;padding:0}.card,.chartbox,.kpi{box-shadow:none;break-inside:avoid}.table-scroll{overflow:visible}.table-scroll table{min-width:0}canvas{max-height:240px}.alertbanner{break-inside:avoid}}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#uploadCard">ข้ามไปส่วนเลือกไฟล์</a>
+<div class="header">
+  <div>
+    <h1>ระบบตรวจสอบค่าแรงผู้รับเหมา</h1>
+    <div class="sub">Advance Asia Fiber Co., Ltd. — ตรวจไฟล์ทำจ่ายค่าแรง บจก.ศรีนาชา อัตโนมัติ • Audit 2.1</div>
+  </div>
+  <div class="header-actions" aria-label="คำสั่งรายงาน">
+    <a class="btn secondary" href="accounting_dashboard.html">← แผนบัญชี</a>
+    <button class="btn green hidden" id="btnExport" type="button" onclick="exportReport()">⬇ ผลตรวจ Excel</button>
+    <button class="btn hidden" id="btnWord" type="button" onclick="exportWordReport()">📄 รายงาน Word</button>
+    <button class="btn secondary hidden" id="btnPrint" type="button" onclick="printReport()">🖨 พิมพ์ / PDF</button>
+  </div>
+</div>
+<div class="container">
+
+  <div class="card" id="uploadCard">
+    <h2>1. เลือกไฟล์ค่าแรง</h2>
+    <div class="dropzone" id="dz" role="button" tabindex="0" aria-controls="fileInput" aria-describedby="dropHelp">
+      <div class="big">📂 ลากไฟล์ Excel ค่าแรงมาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</div>
+      <div class="small" id="dropHelp">รองรับ .xlsx และ .xls ขนาดไม่เกิน 50 MB • ชีทสรุปเดือน + detail + สแกนนิ้วมือ</div>
+      <div class="filemeta hidden" id="fileMeta"></div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" class="hidden">
+    <div class="privacy-strip"><span aria-hidden="true">🔒</span><span><strong>ข้อมูลอยู่ในอุปกรณ์นี้</strong> เนื้อหาใน Excel ประมวลผลภายในเบราว์เซอร์และไม่ถูกส่งออกผ่านเครือข่าย หน้าออนไลน์โหลดเฉพาะไลบรารีโปรแกรมที่ตรวจสอบเวอร์ชันแล้วจาก CDN</span></div>
+    <div id="appMessage" class="hidden" role="status" aria-live="polite"></div>
+    <div class="selrow hidden" id="sheetSel">
+      <div><label for="selMonth">ชีทสรุปรายเดือน <span aria-hidden="true">*</span></label><select id="selMonth" required></select></div>
+      <div><label for="selDetail">ชีทรายละเอียดรายคน (detail)</label><select id="selDetail"></select></div>
+      <div><label for="selTime">ชีทสแกนนิ้วมือ (Time)</label><select id="selTime"></select></div>
+      <div><button class="btn" id="btnRun" type="button" onclick="runAudit()">▶ เริ่มตรวจสอบ</button></div>
+      <div><button class="btn danger-lite" id="btnReset" type="button" onclick="resetApp()">ล้างไฟล์</button></div>
+    </div>
+    <details class="rules hidden" id="rulePanel">
+      <summary>ตั้งค่ากฎตรวจสอบ (ค่าเริ่มต้นที่ยืนยันแล้ว)</summary>
+      <div class="rules-grid">
+        <div><label for="ruleRate8">อัตรากะ 8 ชม. (บาท)</label><input id="ruleRate8" type="number" min="0.01" step="0.01" value="459"></div>
+        <div><label for="ruleRate12">อัตรากะ 12 ชม. (บาท)</label><input id="ruleRate12" type="number" min="0.01" step="0.01" value="684"></div>
+        <div><label for="ruleDayStart">เวลาเริ่มกะกลางวัน</label><input id="ruleDayStart" type="time" value="08:00"></div>
+        <div><label for="ruleNightStart">เวลาเริ่มกะกลางคืน</label><input id="ruleNightStart" type="time" value="20:00"></div>
+        <div><label for="ruleGrace">ผ่อนผันเวลาออก (นาที)</label><input id="ruleGrace" type="number" min="0" max="120" step="1" value="5"></div>
+      </div>
+      <div class="note">นโยบายที่ยืนยันแล้ว: ยอดทางการ = CX36 • อนุญาตกะเป็นขั้นละ 0.5 • 459 บาท/8 ชม. • 684 บาท/12 ชม. • ผ่อนผันเวลาออก 5 นาที หากนโยบายเปลี่ยน ให้แก้ค่าก่อนตรวจ รายการ “รอชี้แจง” จะไม่ถูกหักจากยอดโดยอัตโนมัติ</div>
+    </details>
+  </div>
+
+  <div id="loading" role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span><span id="loadingText">กำลังตรวจสอบ…</span></div>
+  <main id="results" tabindex="-1"></main>
+</div>
+<div class="footer">ตรวจสอบ: การคูณอัตรา • ยอดทางการ CX36/ยอดรายวัน • สูตรผิดพลาด/สูตรหาย • จำนวนกะเป็นขั้นละ 0.5 • พนักงานซ้ำหรือตกหล่น • เวลาออกงาน • ความต่อเนื่องวันที่ | Audit 2.1</div>
+
+<template id="thirdPartyLicenses"><pre>SheetJS 0.18.5 license
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "{}"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright (C) 2012-present   SheetJS LLC
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+
+Chart.js 4.4.1 license
+The MIT License (MIT)
+
+Copyright (c) 2014-2022 Chart.js Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+</pre></template>
+<script>
+/* ================= สถานะหลัก ================= */
+const APP_VERSION = '2.1.0';
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
+const MAX_MATRIX_CELLS = 2_000_000;
+const DEFAULT_RULES={rate8:459,rate12:684,dayStart:8*60,nightStart:20*60,grace:5,shiftIncrement:0.5,officialTotalCell:'CX36',profile:'AAF-confirmed'};
+let ACTIVE_RULES={...DEFAULT_RULES};
+let WB = null;            // workbook
+let AUDIT = null;         // ผลการตรวจล่าสุด
+let FILE_INFO = null;
+let RUN_ID = 0;
+const MATRIX_CACHE = new Map();
+const SHEET_RANGE_CACHE = new Map();
+const fmt = (n,d=2)=> (n==null||isNaN(n))?'-':Number(n).toLocaleString('th-TH',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmt0 = n=> fmt(n,0);
+const fmtClock=m=>{m=((Number(m)%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(Math.round(m%60)).padStart(2,'0');};
+const esc = s=> String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const safeCellText = s=> /^[=+\-@]/.test(String(s??'').trimStart()) ? "'"+String(s??'') : String(s??'');
+const nextFrame = ()=>new Promise(resolve=>requestAnimationFrame(()=>resolve()));
+function timeInputToMinutes(value){const m=String(value||'').match(/^(\d{1,2}):(\d{2})$/);return m?(+m[1])*60+(+m[2]):null;}
+function readRulesFromUI(){
+  const rate8=+document.getElementById('ruleRate8').value,rate12=+document.getElementById('ruleRate12').value;
+  const dayStart=timeInputToMinutes(document.getElementById('ruleDayStart').value),nightStart=timeInputToMinutes(document.getElementById('ruleNightStart').value),grace=+document.getElementById('ruleGrace').value;
+  if(!(rate8>0)||!(rate12>0)||dayStart==null||nightStart==null||!Number.isFinite(grace)||grace<0) throw new Error('ค่ากฎตรวจสอบไม่ครบหรือไม่ถูกต้อง');
+  return {...DEFAULT_RULES,rate8,rate12,dayStart,nightStart,grace,profile:'custom-'+rate8+'-'+rate12};
+}
+
+function showAppMessage(type,title,detail=''){
+  const box=document.getElementById('appMessage');
+  box.className='appmsg '+(type||'');
+  box.innerHTML='<strong>'+esc(title)+'</strong>'+(detail?'<div class="detail">'+esc(detail)+'</div>':'');
+}
+function hideAppMessage(){const box=document.getElementById('appMessage');box.className='hidden';box.textContent='';}
+function setLoading(show,text='กำลังตรวจสอบ…'){
+  document.getElementById('loading').style.display=show?'block':'none';
+  document.getElementById('loadingText').textContent=text;
+}
+function formatBytes(bytes){
+  if(bytes<1024) return bytes+' B';
+  if(bytes<1024*1024) return (bytes/1024).toFixed(1)+' KB';
+  return (bytes/1024/1024).toFixed(2)+' MB';
+}
+function libraryReady(){return typeof XLSX!=='undefined'&&XLSX&&XLSX.read&&XLSX.utils;}
+function sheetHiddenState(name){
+  const meta=WB&&WB.Workbook&&Array.isArray(WB.Workbook.Sheets)?WB.Workbook.Sheets.find(s=>s.name===name||s.Name===name):null;
+  return Number(meta&&(meta.Hidden??meta.hidden))||0;
+}
+function clearAuditState(keepMessage=false){
+  AUDIT=null;
+  document.getElementById('results').innerHTML='';
+  ['btnExport','btnWord','btnPrint'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  if(typeof CHARTS!=='undefined'){
+    CHARTS.forEach(c=>{try{c.destroy();}catch(_){}});
+    CHARTS=[];
+  }
+  if(!keepMessage) hideAppMessage();
+}
+
+/* ================= อ่านไฟล์ ================= */
+const dz = document.getElementById('dz');
+const fileInput = document.getElementById('fileInput');
+function openFilePicker(){fileInput.value='';fileInput.click();}
+dz.addEventListener('click',openFilePicker);
+dz.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openFilePicker();}});
+dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('drag');});
+dz.addEventListener('dragleave', ()=>dz.classList.remove('drag'));
+dz.addEventListener('drop', e=>{e.preventDefault();dz.classList.remove('drag');if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);});
+fileInput.addEventListener('change', e=>{if(e.target.files[0]) loadFile(e.target.files[0]);});
+['selMonth','selDetail','selTime'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{
+  if(AUDIT){clearAuditState(true);showAppMessage('warn','เปลี่ยนชีทแล้ว','กรุณากด “เริ่มตรวจสอบ” อีกครั้งก่อนดาวน์โหลดรายงาน');}
+}));
+['ruleRate8','ruleRate12','ruleDayStart','ruleNightStart','ruleGrace'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{
+  if(AUDIT){clearAuditState(true);showAppMessage('warn','เปลี่ยนกฎตรวจสอบแล้ว','กรุณากด “เริ่มตรวจสอบ” อีกครั้งก่อนดาวน์โหลดรายงาน');}
+}));
+
+function validSpreadsheetSignature(bytes,ext){
+  const zip=bytes[0]===0x50&&bytes[1]===0x4b;
+  const ole=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1].every((v,i)=>bytes[i]===v);
+  return ext==='.xlsx'?zip:(ext==='.xls'?ole:(zip||ole));
+}
+async function sha256Hex(buffer){
+  try{
+    if(!globalThis.crypto||!crypto.subtle) return null;
+    const digest=await crypto.subtle.digest('SHA-256',buffer);
+    return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  }catch(_){return null;}
+}
+async function loadFile(file){
+  RUN_ID++;
+  clearAuditState();
+  MATRIX_CACHE.clear();SHEET_RANGE_CACHE.clear(); WB=null; FILE_INFO=null;
+  document.getElementById('sheetSel').classList.add('hidden');
+  document.getElementById('rulePanel').classList.add('hidden');
+  document.getElementById('fileMeta').classList.add('hidden');
+  if(!libraryReady()){
+    showAppMessage('error','โหลดส่วนอ่าน Excel ไม่สำเร็จ','ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต แล้วโหลดหน้าเว็บใหม่อีกครั้ง');
+    return;
+  }
+  const ext=(file.name.match(/\.[^.]+$/)||[''])[0].toLowerCase();
+  if(!['.xlsx','.xls'].includes(ext)){
+    showAppMessage('error','ชนิดไฟล์ไม่รองรับ','กรุณาเลือกไฟล์ .xlsx หรือ .xls เท่านั้น');return;
+  }
+  if(file.size<=0||file.size>MAX_FILE_BYTES){
+    showAppMessage('error','ขนาดไฟล์ไม่เหมาะสม',file.size>MAX_FILE_BYTES?'รองรับไฟล์ไม่เกิน 50 MB เพื่อป้องกันเบราว์เซอร์ค้าง':'ไฟล์นี้ไม่มีข้อมูล');return;
+  }
+  setLoading(true,'กำลังอ่านไฟล์ '+file.name+'…');
+  try{
+    await nextFrame();
+    const buffer=await file.arrayBuffer();
+    const bytes=new Uint8Array(buffer);
+    if(!validSpreadsheetSignature(bytes,ext)) throw new Error('โครงสร้างไฟล์ไม่ตรงกับนามสกุล '+ext);
+    WB=XLSX.read(bytes,{type:'array',cellDates:false,cellHTML:false,bookVBA:false,bookDeps:false,bookFiles:false,WTF:false});
+    if(!WB.SheetNames||!WB.SheetNames.length) throw new Error('ไม่พบชีทในไฟล์');
+    FILE_INFO={name:file.name,size:file.size,lastModified:file.lastModified,loadedAt:new Date(),sha256:await sha256Hex(buffer)};
+    populateSheetSelectors(file.name);
+    showAppMessage('success','อ่านไฟล์สำเร็จ','ระบบเลือกชีทที่น่าจะตรงกับเดือนนี้ให้แล้ว กรุณาตรวจชื่อชีทก่อนเริ่มตรวจ');
+  }catch(err){
+    WB=null;FILE_INFO=null;
+    showAppMessage('error','อ่านไฟล์ไม่ได้',err&&err.message?err.message:'ไฟล์อาจเสียหายหรือไม่ใช่ไฟล์ Excel ที่รองรับ');
+  }finally{setLoading(false);}
+}
+
+const MONTH_RE = /(ม\.?ค|ก\.?พ|มี\.?ค|เม\.?ย|พ\.?ค|มิ\.?ย|ก\.?ค|ส\.?ค|ก\.?ย|ต\.?ค|พ\.?ย|ธ\.?ค)\.?\s*\.?\s*(\d{2})/;
+function populateSheetSelectors(fname){
+  const names = WB.SheetNames;
+  let monthCands = names.filter(n=>(MONTH_RE.test(n)||/\d{1,2}[.\-\/]\d{2}\s*$/.test(n)) && !/detail/i.test(n) && !/สรุปทำจ่าย|เวลา|time|สแกน|ปัญหา|รายชื่อ|เทียบ/i.test(n));
+  if(!monthCands.length) monthCands=names.filter(n=>!/detail|เวลา|time|สแกน|ปัญหา|รายชื่อ|เทียบ/i.test(n));
+  const detailCands = names.filter(n=>/detail|รายละเอียด/i.test(n));
+  const timeCands = names.filter(n=>/^time|เวลา|สแกน/i.test(n));
+  const fill=(id,cands,allowNone)=>{
+    const sel=document.getElementById(id); sel.innerHTML='';
+    const rest=names.filter(n=>!cands.includes(n)).sort((a,b)=>sheetHiddenState(a)-sheetHiddenState(b));
+    const opts=[...new Set([...cands,...rest])];
+    if(allowNone&&!cands.length) opts.unshift('(ไม่ใช้)'); else if(allowNone) opts.push('(ไม่ใช้)');
+    opts.forEach(n=>{
+      const o=document.createElement('option');o.value=n;
+      const hidden=n!=='(ไม่ใช้)'?sheetHiddenState(n):0;
+      o.textContent=n+(hidden?' (ชีทซ่อน)':'');sel.appendChild(o);
+    });
+  };
+  fill('selMonth',monthCands,false);
+  fill('selDetail',detailCands,true);
+  fill('selTime',pickBestTime(timeCands,monthCands[0]),true);
+  document.getElementById('sheetSel').classList.remove('hidden');
+  document.getElementById('rulePanel').classList.remove('hidden');
+  dz.querySelector('.big').textContent = '✅ โหลดไฟล์แล้ว: '+fname;
+  dz.querySelector('.small').textContent = 'ตรวจสอบชีทที่เลือกด้านล่าง แล้วกด "เริ่มตรวจสอบ" (เลือกใหม่ได้หากระบบเดาผิด)';
+  const hiddenCount=names.filter(n=>sheetHiddenState(n)).length;
+  const meta=document.getElementById('fileMeta');
+  meta.innerHTML='<span>ขนาด '+esc(formatBytes(FILE_INFO.size))+'</span><span>'+names.length+' ชีท'+(hiddenCount?' • ซ่อน '+hiddenCount:'')+'</span><span>แก้ไขล่าสุด '+esc(new Date(FILE_INFO.lastModified).toLocaleString('th-TH'))+'</span>'+(FILE_INFO.sha256?'<span title="SHA-256 '+esc(FILE_INFO.sha256)+'">Hash '+esc(FILE_INFO.sha256.slice(0,12))+'…</span>':'');
+  meta.classList.remove('hidden');
+}
+function pickBestTime(cands, monthName){
+  if(!monthName) return cands;
+  const m = monthName.match(MONTH_RE);
+  if(!m) return cands;
+  const scored = cands.map(n=>{
+    const ws = WB.Sheets[n]; if(!ws) return {n,score:0};
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,range:{s:{r:0,c:0},e:{r:7,c:45}},raw:false,defval:null});
+    const flat=rows.flat().map(v=>String(v??''));
+    const monthToken=m[1].replace(/\./g,'');
+    const score=flat.filter(v=>v.replace(/\./g,'').includes(monthToken)||v.includes(m[0])).length+(sheetHiddenState(n)?0:1);
+    return {n,score};
+  }).sort((a,b)=>b.score-a.score||sheetHiddenState(a.n)-sheetHiddenState(b.n));
+  return scored.map(s=>s.n);
+}
+
+function resetApp(){
+  RUN_ID++;
+  clearAuditState();MATRIX_CACHE.clear();SHEET_RANGE_CACHE.clear();WB=null;FILE_INFO=null;fileInput.value='';
+  document.getElementById('sheetSel').classList.add('hidden');
+  document.getElementById('rulePanel').classList.add('hidden');
+  document.getElementById('fileMeta').classList.add('hidden');
+  dz.querySelector('.big').textContent='📂 ลากไฟล์ Excel ค่าแรงมาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์';
+  dz.querySelector('.small').textContent='รองรับ .xlsx และ .xls ขนาดไม่เกิน 50 MB • ชีทสรุปเดือน + detail + สแกนนิ้วมือ';
+  dz.focus();
+}
+
+/* ================= ยูทิลิตี้ชีท ================= */
+function sheetMatrix(name){
+  if(!name||!WB||!WB.Sheets[name]) return [];
+  if(!MATRIX_CACHE.has(name)){
+    const ws=WB.Sheets[name];
+    let ref=SHEET_RANGE_CACHE.get(name);
+    if(!ref){
+      let minR=Infinity,minC=Infinity,maxR=-1,maxC=-1;
+      Object.keys(ws).filter(a=>a[0]!=='!').forEach(a=>{
+        const cell=ws[a];if(!cell||(cell.v==null&&cell.f==null)) return;
+        const p=XLSX.utils.decode_cell(a);minR=Math.min(minR,p.r);minC=Math.min(minC,p.c);maxR=Math.max(maxR,p.r);maxC=Math.max(maxC,p.c);
+      });
+      ref=maxR>=0?XLSX.utils.encode_range({s:{r:0,c:0},e:{r:maxR,c:maxC}}):(ws['!ref']||'A1');
+      SHEET_RANGE_CACHE.set(name,ref);
+    }
+    const rr=XLSX.utils.decode_range(ref),cells=(rr.e.r-rr.s.r+1)*(rr.e.c-rr.s.c+1);
+    if(cells>MAX_MATRIX_CELLS) throw new Error('ชีท "'+name+'" มีช่วงข้อมูลกว้างเกินขีดจำกัด ('+cells.toLocaleString()+' เซลล์) กรุณาลบ formatting/merge ที่ลากยาวเกินข้อมูลจริงแล้วบันทึกใหม่');
+    MATRIX_CACHE.set(name,XLSX.utils.sheet_to_json(ws,{header:1,range:ref,raw:true,defval:null}));
+  }
+  return MATRIX_CACHE.get(name);
+}
+function cellF(name, r, c){ // สูตรของเซลล์ (ถ้ามี)
+  const addr = XLSX.utils.encode_cell({r,c});
+  const cell = WB.Sheets[name][addr];
+  return cell && cell.f ? cell.f : null;
+}
+function isNum(v){ return typeof v==='number' && isFinite(v); }
+function num(v){ return isNum(v)?v:0; }
+function serialToDate(s){ return new Date(Date.UTC(1899,11,30)+Math.round(s)*86400000); }
+function colLetter(c){ return XLSX.utils.encode_col(c); }
+function scanFormulaErrors(sheetNames){
+  const errors=[];
+  [...new Set(sheetNames)].filter(n=>n&&n!=='(ไม่ใช้)'&&WB.Sheets[n]).forEach(name=>{
+    const ws=WB.Sheets[name];
+    Object.keys(ws).filter(a=>a[0]!=='!').forEach(addr=>{
+      const cell=ws[addr];
+      const shown=String((cell&&(cell.w??cell.v))??'');
+      if(cell&&(cell.t==='e'||/^#(?:REF!|DIV\/0!|VALUE!|NAME\?|N\/A|NUM!|NULL!)/i.test(shown))){
+        errors.push({sheet:name,addr,error:shown||'Formula error',formula:cell.f||''});
+      }
+    });
+  });
+  return errors;
+}
+function findFormulaGaps(S){
+  const gaps=[];
+  const cols=[...S.pairs.flatMap(p=>[p.qty,p.val]),...(S.totalCol!=null?[S.totalCol]:[])];
+  [...new Set(cols)].forEach(c=>{
+    const formulaCount=S.dayRows.filter(r=>!!cellF(S.name,r,c)).length;
+    if(formulaCount<Math.max(3,S.dayRows.length*0.55)) return;
+    S.dayRows.forEach((r,i)=>{
+      const cell=WB.Sheets[S.name][XLSX.utils.encode_cell({r,c})];
+      if(cell&&!cell.f&&cell.v!=null&&cell.v!=='') gaps.push({sheet:S.name,addr:XLSX.utils.encode_cell({r,c}),date:S.dates[i],col:colLetter(c),value:cell.v});
+    });
+  });
+  return gaps;
+}
+function findDuplicateFormulaRefs(S){
+  const flags=[];
+  S.dayRows.forEach((r,i)=>{
+    for(let c=0;c<S.ncol;c++){
+      const f=cellF(S.name,r,c);if(!f) continue;
+      const refs=(f.match(/(?:'[^']+'!|[A-Za-z0-9_.ก-๙ ]+!)?\$?[A-Z]{1,3}\$?\d+/g)||[]).map(x=>x.replace(/\$/g,'').trim().toUpperCase());
+      const repeated=[...new Set(refs.filter((x,j)=>refs.indexOf(x)!==j))];
+      if(repeated.length) flags.push({sheet:S.name,addr:XLSX.utils.encode_cell({r,c}),date:S.dates[i],refs:repeated,formula:f});
+    }
+  });
+  return flags;
+}
+
+/* ============================================================
+   เอนจิ้นวิเคราะห์
+   ============================================================ */
+function headerTextFactory(name, M, firstDay){
+  const merges = (WB.Sheets[name]['!merges']||[]);
+  return function(c){
+    const out=[];
+    for(let r=0;r<firstDay;r++){
+      let v = M[r] ? M[r][c] : null;
+      if(v==null){
+        const m = merges.find(m=>r>=m.s.r&&r<=m.e.r&&c>=m.s.c&&c<=m.e.c);
+        if(m && M[m.s.r]) v = M[m.s.r][m.s.c];
+      }
+      if(typeof v==='string' && v.trim() && !out.includes(v.trim())) out.push(v.trim());
+      if(typeof v==='number' && v>=100) out.push(String(v));
+    }
+    return out;
+  };
+}
+
+const TH_MONTHS=['ม.ค','ก.พ','มี.ค','เม.ย','พ.ค','มิ.ย','ก.ค','ส.ค','ก.ย','ต.ค','พ.ย','ธ.ค'];
+function monthFromSheetName(name){
+  // แบบไทย: "มิ.ย.69" หรือ "มิย 69"
+  for(let i=0;i<12;i++){
+    const t=TH_MONTHS[i].replace(/\./g,'');
+    if(name.replace(/\./g,'').includes(t)){
+      const y=name.match(/(\d{2})\s*$/);
+      return {mm:i, yyCE:y?beToCE(+y[1]):null};
+    }
+  }
+  // แบบตัวเลข: "1-30.06.69", "06-69", "6.69"
+  const m=name.match(/(\d{1,2})[.\-\/](\d{2})\s*$/);
+  if(m&&+m[1]>=1&&+m[1]<=12) return {mm:+m[1]-1, yyCE:beToCE(+m[2])};
+  return null;
+}
+function beToCE(yy2){ return yy2>=50 ? yy2+2500-543 : yy2+2000; } // 69 → พ.ศ.2569 → ค.ศ.2026
+
+function detectDayRows(M, sheetName){
+  const hint=monthFromSheetName(sheetName);
+  const cands=[];
+  for(let c=0;c<4;c++){
+    const serial=[], dayint=[], text=[];
+    for(let r=0;r<M.length;r++){
+      const v=M[r]?M[r][c]:null;
+      if(isNum(v)&&v>20000&&v<80000){const dt=serialToDate(v);serial.push({r,d:dt.getUTCDate(),s:v,ym:dt.getUTCFullYear()+'-'+dt.getUTCMonth()});}
+      else if(isNum(v)&&Number.isInteger(v)&&v>=1&&v<=31) dayint.push({r,d:v});
+      else if(typeof v==='string'){
+        const t=v.trim();
+        const m=t.match(/^(\d{1,2})(?:[\s\/\-.]|$)/);
+        if(m&&t.length<=22&&+m[1]>=1&&+m[1]<=31) text.push({r,d:+m[1]});
+      }
+    }
+    // dayint/text ต้องเรียงขึ้นเป็นส่วนใหญ่และมีวันไม่ซ้ำมากพอ (กันจับคอลัมน์จำนวน)
+    const seqOK=arr=>{
+      if(arr.length<10) return false;
+      const ds=arr.map(x=>x.d);
+      let asc=0; for(let i=1;i<ds.length;i++) if(ds[i]>=ds[i-1]) asc++;
+      return new Set(ds).size>=Math.min(15,arr.length) && asc>=ds.length*0.85;
+    };
+    const serialOK=serial.length>=5&&(()=>{
+      const groups={};serial.forEach(x=>groups[x.ym]=(groups[x.ym]||0)+1);
+      const main=Object.keys(groups).sort((a,b)=>groups[b]-groups[a])[0];
+      const mainRows=serial.filter(x=>x.ym===main);
+      const ds=mainRows.map(x=>x.d);let asc=0;
+      for(let i=1;i<ds.length;i++) if(ds[i]>=ds[i-1]) asc++;
+      return mainRows.length>=Math.max(5,serial.length*0.7)&&new Set(ds).size>=Math.min(5,ds.length)&&asc>=Math.max(0,(ds.length-1)*0.8);
+    })();
+    if(serialOK) cands.push({c,mode:'serial',rows:serial,score:serial.length+100});
+    if(seqOK(dayint)) cands.push({c,mode:'dayint',rows:dayint,score:dayint.length+50});
+    if(seqOK(text)) cands.push({c,mode:'text',rows:text,score:text.length});
+  }
+  if(!cands.length) return null;
+  cands.sort((a,b)=>b.score-a.score||a.c-b.c);
+  const best=cands[0];
+  // ตัดแถวท้ายที่วันย้อนกลับ (เช่นแถวสรุป) — เก็บช่วงต่อเนื่องหลักไว้
+  const dayRows=best.rows.map(x=>x.r);
+  let dates;
+  if(best.mode==='serial') dates=best.rows.map(x=>serialToDate(x.s));
+  else{
+    const mm=hint?hint.mm:0, yy=hint&&hint.yyCE?hint.yyCE:new Date().getFullYear();
+    dates=best.rows.map(x=>new Date(Date.UTC(yy,mm,x.d)));
+  }
+  return {dayRows,dates,dateCol:best.c,mode:best.mode,hint};
+}
+
+function analyzeMonthSheet(name){
+  const M = sheetMatrix(name);
+  const det = detectDayRows(M, name);
+  if(!det) throw new Error('ไม่พบแถวข้อมูลรายวันในชีท "'+name+'" — คอลัมน์แรกๆ ต้องเป็นวันที่ (รูปแบบวันที่ Excel, เลขวัน 1-31 หรือข้อความวันที่) หากไฟล์นี้โครงสร้างต่างจากไฟล์ทำจ่ายปกติ ส่งไฟล์ให้ผู้พัฒนาปรับโปรแกรมเพิ่มได้');
+  const {dayRows,dates,mode:dateMode}=det;
+  const firstDay=dayRows[0];
+  const ncol=Math.max(...dayRows.map(r=>M[r]?M[r].length:0));
+  const V=(r,c)=>num(M[r]?M[r][c]:0);
+
+  // แถวอัตรา
+  let rateRowIdx=null,bestCnt=0;
+  for(let r=0;r<firstDay;r++){
+    const cnt=(M[r]||[]).filter(v=>isNum(v)&&v>0&&v<100).length;
+    if(cnt>bestCnt){bestCnt=cnt;rateRowIdx=r;}
+  }
+
+  // ---------- ตรวจจับคู่ (qty,value) ----------
+  const pairs={}; // qtyCol -> {qty,val,rate,src}
+  const taken=new Set();
+  const add=(qc,rate,src)=>{
+    if(taken.has(qc)||taken.has(qc+1)) return false;
+    pairs[qc]={qty:qc,val:qc+1,rate,src}; taken.add(qc); taken.add(qc+1); return true;
+  };
+  // Pass 1: อัตรากะตาม rule profile — ใช้เสียงข้างมาก เพื่อให้ช่องผิด 1 จุดยังถูกจับเป็น error ได้
+  for(let c=1;c<ncol-1;c++){
+    const s=dayRows.filter(r=>V(r,c)>0&&V(r,c+1)>0).map(r=>[V(r,c),V(r,c+1)]);
+    if(!s.length) continue;
+    const h8=s.filter(([q,v])=>Math.abs(v-q*ACTIVE_RULES.rate8)<0.02).length;
+    const h12=s.filter(([q,v])=>Math.abs(v-q*ACTIVE_RULES.rate12)<0.02).length;
+    if(h8>=Math.max(1,Math.ceil(s.length*0.75))) add(c,ACTIVE_RULES.rate8,'guar');
+    else if(h12>=Math.max(1,Math.ceil(s.length*0.75))) add(c,ACTIVE_RULES.rate12,'guar');
+  }
+  // Pass 2: อัตราส่วนคงที่ >=2 วัน — ใช้ median/majority เพื่อไม่กลบ outlier
+  for(let c=1;c<ncol-1;c++){
+    if(taken.has(c)||taken.has(c+1)) continue;
+    const ratios=dayRows.filter(r=>V(r,c)>0&&V(r,c+1)>0).map(r=>V(r,c+1)/V(r,c));
+    if(ratios.length>=2){
+      const sorted=[...ratios].sort((a,b)=>a-b),median=sorted[Math.floor(sorted.length/2)];
+      const hits=ratios.filter(x=>median>0&&Math.abs(x-median)/median<0.002).length;
+      if(median>0&&median<5000&&hits>=Math.max(2,Math.ceil(ratios.length*0.75))) add(c,Math.round(median*10000)/10000,'ratio');
+    }
+  }
+  // Pass 3: จากแถวอัตรา (อัตราอยู่คอลัมน์มูลค่า → qty=c-1)
+  if(rateRowIdx!=null){
+    (M[rateRowIdx]||[]).forEach((v,c)=>{
+      if(isNum(v)&&v>0&&v<100&&c>=2&&!taken.has(c)&&!taken.has(c-1)){
+        const ok=dayRows.filter(r=>V(r,c-1)>0).every(r=>Math.abs(V(r,c)-V(r,c-1)*v)<0.02);
+        if(ok) add(c-1,v,'raterow');
+      }
+    });
+  }
+  // Pass 5: คู่ประกันข้างเคียงที่เป็นศูนย์ทั้งเดือน (หมวดหยุดงาน)
+  Object.values({...pairs}).forEach(p=>{
+    const is8=Math.abs(p.rate-ACTIVE_RULES.rate8)<0.01,is12=Math.abs(p.rate-ACTIVE_RULES.rate12)<0.01;
+    if(!is8&&!is12) return;
+    const partner = is12 ? p.qty-2 : p.qty+2;
+    const pr = is12 ? ACTIVE_RULES.rate8 : ACTIVE_RULES.rate12;
+    if(partner>=1&&partner+1<ncol&&!taken.has(partner)&&!taken.has(partner+1)){
+      const allZero=dayRows.every(r=>V(r,partner)===0&&V(r,partner+1)===0);
+      if(allZero) add(partner,pr,'zero');
+    }
+  });
+  // ---------- คอลัมน์ยอดรวม ----------
+  const sumPairs=r=>Object.values(pairs).reduce((a,p)=>a+V(r,p.val),0);
+  let totalCol=null,bestHits=0;
+  for(let c=1;c<ncol;c++){
+    if(taken.has(c)) continue;
+    const hits=dayRows.filter(r=>isNum(M[r][c])&&Math.abs(V(r,c)-sumPairs(r))<0.05).length;
+    if(hits>bestHits){bestHits=hits;totalCol=c;}
+  }
+  if(totalCol==null||bestHits<dayRows.length*0.6) totalCol=null;
+  // Pass 4: ไล่ส่วนต่าง — คู่ที่มีข้อมูลน้อยวัน (เช่น CNC)
+  if(totalCol!=null){
+    let changed=true;
+    while(changed){
+      changed=false;
+      const resDays=dayRows.filter(r=>Math.abs(V(r,totalCol)-sumPairs(r))>0.05);
+      if(!resDays.length) break;
+      for(let c=1;c<ncol-1&&!changed;c++){
+        if(taken.has(c)||taken.has(c+1)||c===totalCol||c+1===totalCol) continue;
+        const active=dayRows.filter(r=>V(r,c+1)!==0);
+        if(!active.length||!active.every(r=>resDays.includes(r))) continue;
+        const fixes=resDays.every(r=>{
+          const res=V(r,totalCol)-sumPairs(r);
+          const v=V(r,c+1);
+          return v===0||Math.abs(v-res)<0.05||v<res+0.05;
+        });
+        const exact=active.some(r=>Math.abs(V(r,c+1)-(V(r,totalCol)-sumPairs(r)))<0.05);
+        if(fixes&&exact){
+          const q=active.map(r=>V(r,c)).find(x=>x>0);
+          const rate=q?Math.round(V(active[0],c+1)/V(active[0],c)*10000)/10000:null;
+          add(c,rate,'residual'); changed=true;
+        }
+      }
+    }
+  }
+  const plist=Object.values(pairs).sort((a,b)=>a.qty-b.qty);
+
+  // ---------- ชื่อหมวดจากหัวตาราง ----------
+  const H=headerTextFactory(name,M,rateRowIdx!=null?rateRowIdx:firstDay);
+  plist.forEach(p=>{
+    const chain=H(p.qty).concat(H(p.val));
+    p.header=chain.join(' / ')||('คอลัมน์ '+colLetter(p.qty));
+    p.section=(H(p.qty)[0]||H(p.val)[0]||('คอลัมน์ '+colLetter(p.qty))).replace(/\s+/g,' ');
+    p.kind=Math.abs(p.rate-ACTIVE_RULES.rate8)<0.01?'guar8':(Math.abs(p.rate-ACTIVE_RULES.rate12)<0.01?'guar12':'unit');
+  });
+
+  // ---------- แถวรวมท้ายตาราง ----------
+  let totalsRow=null;
+  if(totalCol!=null){
+    for(let r=dayRows[dayRows.length-1]+1;r<Math.min(M.length,dayRows[dayRows.length-1]+6);r++){
+      if(M[r]&&isNum(M[r][totalCol])){totalsRow=r;break;}
+    }
+  }
+  const summaryTotals=[];
+  if(totalCol!=null){
+    for(let r=dayRows[dayRows.length-1]+1;r<Math.min(M.length,dayRows[dayRows.length-1]+12);r++){
+      const v=M[r]?M[r][totalCol]:null;
+      if(isNum(v)&&Math.abs(v)>0.01) summaryTotals.push({row:r,addr:XLSX.utils.encode_cell({r,c:totalCol}),value:v,formula:cellF(name,r,totalCol)});
+    }
+  }
+  const officialCoord=XLSX.utils.decode_cell(ACTIVE_RULES.officialTotalCell);
+  const officialValue=M[officialCoord.r]?M[officialCoord.r][officialCoord.c]:null;
+  const officialTotal={addr:ACTIVE_RULES.officialTotalCell,row:officialCoord.r,col:officialCoord.c,
+    value:isNum(officialValue)?officialValue:null,formula:cellF(name,officialCoord.r,officialCoord.c)};
+
+  // ---------- คอลัมน์นับคน ----------
+  const g8=plist.filter(p=>p.kind==='guar8'),g12=plist.filter(p=>p.kind==='guar12');
+  const tallies=[];
+  for(let c=1;c<ncol;c++){
+    if(taken.has(c)||c===totalCol) continue;
+    if(!dayRows.some(r=>V(r,c)!==0)) continue;
+    const m8=dayRows.filter(r=>Math.abs(V(r,c)-g8.reduce((a,p)=>a+V(r,p.qty),0))<0.001).length;
+    const m12=dayRows.filter(r=>Math.abs(V(r,c)-g12.reduce((a,p)=>a+V(r,p.qty),0))<0.001).length;
+    if(m8>=dayRows.length*0.5) tallies.push({col:c,shift:'8 ชม.',pairs:g8,match:m8});
+    else if(m12>=dayRows.length*0.5) tallies.push({col:c,shift:'12 ชม.',pairs:g12,match:m12});
+    else tallies.push({col:c,shift:null,match:0});
+  }
+  return {name,M,dayRows,dates,firstDay,ncol,V,rateRowIdx,pairs:plist,totalCol,totalsRow,summaryTotals,officialTotal,tallies,H,dateMode};
+}
+
+/* ---------- ตรวจสอบหลัก ---------- */
+function runChecks(S){
+  const {M,dayRows,dates,V,pairs,totalCol,totalsRow}=S;
+  const R={mathErr:[],fracFlags:[],dailyErr:[],totalsErr:[],dateWarn:[],tallyErr:[],formulaErrors:[],formulaGaps:[],duplicateFormulaRefs:[],reconciliationWarn:[],reconciliationInfo:[],calcWarning:null};
+  const thDate=d=>d.getUTCDate()+' '+['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][d.getUTCMonth()];
+  // 1) การคูณอัตรา
+  dayRows.forEach((r,i)=>pairs.forEach(p=>{
+    if(p.rate==null) return;
+    const q=V(r,p.qty),v=V(r,p.val);
+    if(Math.abs(v-q*p.rate)>0.02) R.mathErr.push({date:thDate(dates[i]),section:p.section,q,v,exp:q*p.rate,col:colLetter(p.val)});
+  }));
+  // 2) จำนวนกะต้องเป็นขั้นละ 0.5 (เฉพาะประกัน) — 0.5 กะเป็นค่าที่อนุญาต
+  dayRows.forEach((r,i)=>pairs.filter(p=>p.kind!=='unit').forEach(p=>{
+    const q=V(r,p.qty);
+    const step=ACTIVE_RULES.shiftIncrement||0.5;
+    if(q!==0&&Math.abs(q/step-Math.round(q/step))>0.0001)
+      R.fracFlags.push({date:thDate(dates[i]),day:dates[i].getUTCDate(),section:p.section,shift:Math.abs(p.rate-ACTIVE_RULES.rate8)<0.01?'8 ชม.':'12 ชม.',people:q,val:V(r,p.val)});
+  }));
+  // 3) ยอดรวมรายวัน
+  if(totalCol!=null) dayRows.forEach((r,i)=>{
+    const exp=pairs.reduce((a,p)=>a+V(r,p.val),0),v=V(r,totalCol);
+    if(Math.abs(v-exp)>0.05) R.dailyErr.push({date:thDate(dates[i]),v,exp,diff:v-exp});
+  });
+  // 4) แถวรวมท้ายตาราง
+  if(totalsRow!=null){
+    const cols=[...pairs.map(p=>p.val),...pairs.map(p=>p.qty),totalCol];
+    cols.forEach(c=>{
+      const t=M[totalsRow]?M[totalsRow][c]:null;
+      if(!isNum(t)) return;
+      const s=dayRows.reduce((a,r)=>a+V(r,c),0);
+      if(Math.abs(t-s)>0.05) R.totalsErr.push({col:colLetter(c),t,s,diff:t-s});
+    });
+  }
+  // 5) วันที่
+  const months={}; dates.forEach(d=>{const k=d.getUTCFullYear()+'-'+d.getUTCMonth();months[k]=(months[k]||0)+1;});
+  const mainKey=Object.keys(months).sort((a,b)=>months[b]-months[a])[0];
+  const [yy,mm]=mainKey.split('-').map(Number);
+  if(yy<2000&&S.dateMode==='serial') R.dateWarn.push('ปีของวันที่ถูกคีย์เป็น ค.ศ. '+yy+' (Excel ตีความปี พ.ศ. 2 หลักเป็น ค.ศ.) — ยอดเงินไม่กระทบ แต่ควรแก้การคีย์');
+  const inMonth=new Set(dates.filter(d=>d.getUTCFullYear()===yy&&d.getUTCMonth()===mm).map(d=>d.getUTCDate()));
+  const dim=new Date(Date.UTC(yy,mm+1,0)).getUTCDate();
+  const missing=[]; for(let d=1;d<=dim;d++) if(!inMonth.has(d)) missing.push(d);
+  if(missing.length) R.dateWarn.push('เดือนหลักขาดวันที่: '+missing.join(', '));
+  const outside=dates.filter(d=>!(d.getUTCFullYear()===yy&&d.getUTCMonth()===mm));
+  outside.forEach(d=>{
+    const r=dayRows[dates.indexOf(d)];
+    const hasVal=totalCol!=null&&V(r,totalCol)!==0;
+    R.dateWarn.push('พบแถววันที่นอกเดือนหลัก ('+thDate(d)+')'+(hasVal?' และมียอดเงิน '+fmt(V(r,totalCol))+' บาท — เสี่ยงนับซ้ำข้ามงวด!':' (ยอดเป็นศูนย์ ยังไม่กระทบ แต่ควรลบออก)'));
+  });
+  // 6) คอลัมน์นับคน
+  S.tallies.filter(t=>t.shift).forEach(t=>{
+    dayRows.forEach((r,i)=>{
+      const exp=t.pairs.reduce((a,p)=>a+V(r,p.qty),0),v=V(r,t.col);
+      if(Math.abs(v-exp)>0.001) R.tallyErr.push({date:thDate(dates[i]),shift:t.shift,v,exp,col:colLetter(t.col)});
+    });
+  });
+  R.monthLabel=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'][mm]+' '+(yy<2000?yy+600:yy+543);
+  R.mainMonth={yy,mm};
+  R.formulaGaps=findFormulaGaps(S);
+  R.duplicateFormulaRefs=findDuplicateFormulaRefs(S);
+  const dailyGrand=totalCol==null?null:dayRows.reduce((a,r)=>a+V(r,totalCol),0);
+  const official=S.officialTotal;
+  if(!official||!isNum(official.value)) R.reconciliationWarn.push('ไม่พบยอดทางการที่ '+ACTIVE_RULES.officialTotalCell+' ตามโครงสร้างไฟล์ที่ยืนยันไว้');
+  else if(dailyGrand==null||Math.abs(official.value-dailyGrand)>0.05) R.reconciliationWarn.push('ยอดทางการ '+official.addr+' = '+fmt(official.value)+' ไม่ตรงกับผลรวมรายวัน '+fmt(dailyGrand)+' บาท — ต้องแก้ไฟล์ก่อนอนุมัติ');
+  R.reconciliationInfo=S.summaryTotals.filter(x=>x.addr!==ACTIVE_RULES.officialTotalCell);
+  const calcPr=WB&&WB.Workbook&&WB.Workbook.CalcPr;
+  if(calcPr&&(calcPr.fullCalcOnLoad||calcPr.forceFullCalc||String(calcPr.calcMode||'').toLowerCase()==='manual')) R.calcWarning='ไฟล์ตั้งให้ Excel คำนวณสูตรใหม่เมื่อเปิด ระบบนี้อ่านค่าที่บันทึกล่าสุดและไม่สามารถคำนวณสูตร Excel ใหม่ได้ กรุณาเปิดไฟล์ใน Excel กดคำนวณและบันทึกก่อนใช้อนุมัติยอด';
+  return R;
+}
+
+</script>
+<script>
+
+/* ============================================================
+   ตรวจกะซ้ำจากชีท detail + เทียบสแกนนิ้วมือ
+   ============================================================ */
+function parseDetailRefs(S, detailName){
+  S._detailRefCache=S._detailRefCache||{};
+  if(Object.prototype.hasOwnProperty.call(S._detailRefCache,detailName)) return S._detailRefCache[detailName];
+  // อ่านสูตรคอลัมน์จำนวนคน (ประกัน) ของแต่ละวัน → ช่วงเซลล์ในชีท detail
+  const refRe=/(?:'([^']+)'|([^\s'!+\-*\/(),=]+))!\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?/g;
+  const map={}; let any=false;
+  S.dayRows.forEach((r,i)=>{
+    const day=S.dates[i].getUTCDate(); const key=S.dates[i].getUTCFullYear()+'-'+S.dates[i].getUTCMonth()+'-'+day;
+    map[key]=[];
+    S.pairs.filter(p=>p.kind!=='unit').forEach(p=>{
+      const f=cellF(S.name,r,p.qty);
+      if(!f) return;
+      let m; refRe.lastIndex=0;
+      while((m=refRe.exec(f))!==null){
+        const sh=(m[1]||m[2]||'').trim();
+        if(sh && sh!==detailName && !detailName.includes(sh) && !sh.includes(detailName)) continue;
+        const c1=XLSX.utils.decode_col(m[3]), r1=+m[4]-1;
+        const r2=m[6]?+m[6]-1:r1, c2=m[5]?XLSX.utils.decode_col(m[5]):c1;
+        map[key].push({col:c1,r1,r2:Math.max(r1,r2),section:p.section,rate:p.rate,shift:Math.abs(p.rate-ACTIVE_RULES.rate8)<0.01?'8 ชม.':'12 ชม.'});
+        any=true;
+        if(c2!==c1) map[key].push({col:c2,r1,r2:Math.max(r1,r2),section:p.section,rate:p.rate,shift:Math.abs(p.rate-ACTIVE_RULES.rate8)<0.01?'8 ชม.':'12 ชม.'});
+      }
+    });
+  });
+  return (S._detailRefCache[detailName]=any?map:null);
+}
+
+function detectCodeCol(D){
+  let best=0,bestCnt=0;
+  for(let c=0;c<6;c++){
+    let cnt=0;
+    for(let r=0;r<Math.min(D.length,200);r++){
+      const v=D[r]?D[r][c]:null;
+      if((isNum(v)&&v>9999)||(typeof v==='string'&&/^\d{5,}$/.test(v.trim()))) cnt++;
+    }
+    if(cnt>bestCnt){bestCnt=cnt;best=c;}
+  }
+  return best;
+}
+
+function checkDuplicates(S, detailName){
+  const refMap=parseDetailRefs(S, detailName);
+  if(!refMap) return {available:false, flags:[], missFlags:[], workers:0};
+  const D=sheetMatrix(detailName);
+  const codeCol=detectCodeCol(D), nameCol=codeCol+1;
+  const flags=[], missFlags=[]; const workerSet=new Set();
+  Object.entries(refMap).forEach(([key,refs])=>{
+    const per={};
+    refs.forEach(ref=>{
+      for(let r=ref.r1;r<=ref.r2;r++){
+        const row=D[r]; if(!row) continue;
+        const v=row[ref.col];
+        if(isNum(v)&&v>0){
+          const code=String(row[codeCol]??'').trim();
+          if(!/^\d{4,}$/.test(code)) continue;
+          workerSet.add(code);
+          (per[code]=per[code]||{name:String(row[nameCol]??''),items:[]}).items.push({section:ref.section,shift:ref.shift,rate:ref.rate,mark:v,cell:ref.col+':'+r});
+        }
+      }
+    });
+    // ตรวจจ่ายขาด: พนักงานมีมาร์กในคอลัมน์หลักของกะ แต่ไม่มีสูตรใดนับ
+    [ACTIVE_RULES.rate8,ACTIVE_RULES.rate12].forEach(rate=>{
+      const rr=refs.filter(x=>x.rate===rate);
+      if(!rr.length) return;
+      const cc={}; rr.forEach(x=>cc[x.col]=(cc[x.col]||0)+1);
+      const mainCol=+Object.entries(cc).sort((a,b)=>b[1]-a[1])[0][0];
+      const covered=new Set();
+      rr.filter(x=>x.col===mainCol).forEach(x=>{for(let r=x.r1;r<=x.r2;r++)covered.add(r);});
+      for(let r=0;r<D.length;r++){
+        const row=D[r]; if(!row) continue;
+        const code=String(row[codeCol]??'').trim();
+        if(!/^\d{4,}$/.test(code)) continue;
+        const v=row[mainCol];
+        if(isNum(v)&&v>0&&!covered.has(r))
+          missFlags.push({key,code,name:String(row[nameCol]??''),shift:Math.abs(rate-ACTIVE_RULES.rate8)<0.01?'8 ชม.':'12 ชม.',mark:v,val:v*rate,row:r+1,reviewOnly:true});
+      }
+    });
+    // สรุปรายคน + แยกสาเหตุ
+    Object.entries(per).forEach(([code,info])=>{
+      const total=info.items.reduce((a,x)=>a+x.mark,0);
+      const paid=info.items.reduce((a,x)=>a+x.mark*x.rate,0);
+      const step=ACTIVE_RULES.shiftIncrement||0.5;
+      const invalidIncrement=info.items.some(x=>Math.abs(x.mark/step-Math.round(x.mark/step))>0.0001);
+      const uniqCells=new Set(info.items.map(x=>x.cell)).size;
+      const overlap=uniqCells<info.items.length;
+      if(total>1.0005){
+        const entitled=Math.max(...info.items.map(x=>x.rate));
+        flags.push({key,code,name:info.name,items:info.items,total,paid,excess:Math.max(0,paid-entitled),type:'dup',
+          reason:overlap?'สูตรไฟล์รวมช่วงทับซ้อน (นับซ้ำอัตโนมัติ)':'บันทึกจ่ายมากกว่า 1 ตำแหน่ง'});
+      } else if(invalidIncrement){
+        flags.push({key,code,name:info.name,items:info.items,total,paid,excess:0,type:'frac',reason:'จำนวนกะไม่เป็นขั้นละ '+step});
+      }
+    });
+  });
+  return {available:true, flags, missFlags, workers:workerSet.size};
+}
+
+function parseTimeSheet(timeName, mainMonth){
+  if(!timeName||timeName==='(ไม่ใช้)'||!WB.Sheets[timeName]) return null;
+  const T=sheetMatrix(timeName);
+  if(!T.length) return null;
+  const monthAliases=TH_MONTHS.map(x=>x.replace(/\./g,''));
+  const headerDay=v=>{
+    if(v==null) return null;
+    if(isNum(v)&&v>20000&&v<80000){const dt=serialToDate(v);return !mainMonth||dt.getUTCMonth()===mainMonth.mm?dt.getUTCDate():null;}
+    const s=String(v).trim(),m=s.match(/^(\d{1,2})(?:\s|[.\-/]|$)/);if(!m) return null;
+    const day=+m[1];if(day<1||day>31) return null;
+    const normalized=s.replace(/\./g,'');
+    const explicitMonth=monthAliases.findIndex(x=>normalized.includes(x));
+    if(mainMonth&&explicitMonth>=0&&explicitMonth!==mainMonth.mm) return null;
+    return day;
+  };
+  let headerRow=-1,dayCols={},best=0;
+  for(let r=0;r<Math.min(15,T.length);r++){
+    const found={};(T[r]||[]).forEach((v,c)=>{const d=headerDay(v);if(d!=null&&!(d in found)) found[d]=c;});
+    if(Object.keys(found).length>best){best=Object.keys(found).length;dayCols=found;headerRow=r;}
+  }
+  if(Object.keys(dayCols).length<5) return null;
+  const scans={}; let cur=null;
+  const toTime=v=>{
+    if(v==null) return null;
+    if(isNum(v)&&v>0&&v<2){const t=v%1*24;const h=Math.floor(t),mi=Math.round((t-h)*60);return String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0');}
+    const m=String(v).match(/(\d{1,2}:\d{2})(?::\d{2})?/);
+    return m?m[1]:null;
+  };
+  for(let r=headerRow+1;r<T.length;r++){
+    const row=T[r]; if(!row) continue;
+    const c0=row[0];
+    if((isNum(c0)&&c0>999)||(typeof c0==='string'&&/^\d{4,}$/.test(String(c0).trim()))){
+      cur=String(c0).trim(); scans[cur]=scans[cur]||{};
+    }
+    if(!cur) continue;
+    Object.entries(dayCols).forEach(([d,c])=>{
+      const t=toTime(row[c]);
+      if(t) (scans[cur][d]=scans[cur][d]||[]).push(t);
+    });
+  }
+  Object.values(scans).forEach(days=>Object.keys(days).forEach(d=>days[d]=[...new Set(days[d])].sort()));
+  return scans;
+}
+
+function compareEmployeeCoverage(detailName,scans){
+  if(!detailName||detailName==='(ไม่ใช้)'||!WB.Sheets[detailName]||!scans) return null;
+  const D=sheetMatrix(detailName),codeCol=detectCodeCol(D),detailIds=new Set();
+  D.forEach(row=>{const code=String((row||[])[codeCol]??'').trim();if(/^\d{4,}$/.test(code)) detailIds.add(code);});
+  const scanIds=new Set(Object.keys(scans).filter(code=>/^\d{4,}$/.test(code)));
+  const detailOnly=[...detailIds].filter(x=>!scanIds.has(x));
+  const scanOnly=[...scanIds].filter(x=>!detailIds.has(x));
+  const near=[];
+  detailOnly.forEach(a=>scanOnly.forEach(b=>{if(a.length===b.length&&a.slice(-6)===b.slice(-6)) near.push({detail:a,time:b});}));
+  return {detailCount:detailIds.size,scanCount:scanIds.size,matched:[...detailIds].filter(x=>scanIds.has(x)).length,detailOnly,scanOnly,near};
+}
+
+function attachScanVerdicts(dup, scans){
+  dup.flags.forEach(f=>{
+    f.scans=null; f.verdict='ไม่มีข้อมูลสแกนให้เทียบ'; f.confirmed=false;
+    if(f.type==='dup'&&f.reason&&f.reason.includes('สูตร')){
+      f.confirmed=true;
+      f.verdict='พิสูจน์จากสูตร: เซลล์เดียวกันถูกนับซ้ำ 2 สูตร — ยืนยันจ่ายเกิน (ต้องแก้สูตรในไฟล์)';
+      return;
+    }
+    if(!scans) return;
+    const day=+f.key.split('-')[2];
+    const s=scans[f.code]?scans[f.code][day]:null;
+    if(!s||!s.length){f.verdict='ไม่พบสแกนนิ้วในวันนั้น — รอยืนยัน';return;}
+    f.scans=s;
+    const mins=s.map(t=>{const [h,m]=t.split(':').map(Number);return h*60+m;});
+    const span=(Math.max(...mins)-Math.min(...mins))/60;
+    if(f.type==='dup'){
+      if(s.length>=2&&span<=15){f.verdict='สแกน '+s[0]+'–'+s[s.length-1]+' (ช่วง '+span.toFixed(1)+' ชม.) = ทำงาน 1 กะ → ยืนยันจ่ายเกิน';f.confirmed=true;}
+      else if(s.length>=2){f.verdict='สแกน '+s.join(', ')+' (ช่วง '+span.toFixed(1)+' ชม.) — ตรวจเพิ่มเติม';}
+      else{f.verdict='มีสแกนครั้งเดียว '+s[0]+' — รอยืนยัน';}
+    }else{
+      f.verdict=s.length>=2?('สแกน '+s[0]+'–'+s[s.length-1]+' (ช่วง '+span.toFixed(1)+' ชม.) — ทำงานไม่เต็มกะจริง ตรวจเกณฑ์คิดสัดส่วน'):('สแกนครั้งเดียว '+s[0]+' — ตรวจเกณฑ์คิดสัดส่วน');
+    }
+  });
+}
+
+/* ============================================================
+   รวมยอดสำหรับแดชบอร์ด
+   ============================================================ */
+function aggregate(S){
+  const {dayRows,dates,V,pairs,totalCol}=S;
+  const daily=dayRows.map((r,i)=>{
+    const guar=pairs.filter(p=>p.kind!=='unit').reduce((a,p)=>a+V(r,p.val),0);
+    const unit=pairs.filter(p=>p.kind==='unit').reduce((a,p)=>a+V(r,p.val),0);
+    return {day:dates[i].getUTCDate(),date:dates[i],guar,unit,
+      total:totalCol!=null?V(r,totalCol):guar+unit,
+      p8:pairs.filter(p=>p.kind==='guar8').reduce((a,p)=>a+V(r,p.qty),0),
+      p12:pairs.filter(p=>p.kind==='guar12').reduce((a,p)=>a+V(r,p.qty),0)};
+  });
+  const bySection={};
+  pairs.filter(p=>p.kind!=='unit').forEach(p=>{
+    const k=p.section;
+    bySection[k]=bySection[k]||{p8:0,p12:0,val:0};
+    const sq=dayRows.reduce((a,r)=>a+V(r,p.qty),0), sv=dayRows.reduce((a,r)=>a+V(r,p.val),0);
+    if(p.kind==='guar8') bySection[k].p8+=sq; else bySection[k].p12+=sq;
+    bySection[k].val+=sv;
+  });
+  const unitRows=pairs.filter(p=>p.kind==='unit').map(p=>({
+    section:p.section,rate:p.rate,
+    qty:dayRows.reduce((a,r)=>a+V(r,p.qty),0),
+    val:dayRows.reduce((a,r)=>a+V(r,p.val),0)}));
+  const grand=daily.reduce((a,d)=>a+d.total,0);
+  return {daily,bySection,unitRows,grand,
+    guarTotal:daily.reduce((a,d)=>a+d.guar,0),
+    unitTotal:daily.reduce((a,d)=>a+d.unit,0),
+    p8:daily.reduce((a,d)=>a+d.p8,0),p12:daily.reduce((a,d)=>a+d.p12,0)};
+}
+
+/* ============================================================
+   รันการตรวจสอบทั้งหมด
+   ============================================================ */
+async function runAudit(){
+  if(!WB){showAppMessage('error','ยังไม่มีไฟล์','กรุณาเลือกไฟล์ Excel ก่อนเริ่มตรวจ');return;}
+  const mName=document.getElementById('selMonth').value;
+  const dName=document.getElementById('selDetail').value;
+  const tName=document.getElementById('selTime').value;
+  if(!mName||mName==='(ไม่ใช้)'||!WB.Sheets[mName]){showAppMessage('error','ไม่ได้เลือกชีทสรุปรายเดือน','เลือกชีทที่มีข้อมูลรายวัน แล้วลองอีกครั้ง');return;}
+  try{ACTIVE_RULES=readRulesFromUI();}catch(err){showAppMessage('error','กฎตรวจสอบไม่ถูกต้อง',err.message);return;}
+  const runId=++RUN_ID,start=performance.now();
+  clearAuditState(true);hideAppMessage();
+  const controls=['selMonth','selDetail','selTime','btnRun','btnReset','ruleRate8','ruleRate12','ruleDayStart','ruleNightStart','ruleGrace'].map(id=>document.getElementById(id));
+  controls.forEach(el=>el.disabled=true);
+  setLoading(true,'ขั้นที่ 1/4 กำลังอ่านโครงสร้างชีทสรุป…');
+  try{
+    await nextFrame();
+    const S=analyzeMonthSheet(mName);
+    if(runId!==RUN_ID) return;
+    setLoading(true,'ขั้นที่ 2/4 กำลังตรวจสูตรและยอดรวม…');await nextFrame();
+    const R=runChecks(S);
+    R.formulaErrors=scanFormulaErrors([mName,dName]);
+    const AGG=aggregate(S);
+    setLoading(true,'ขั้นที่ 3/4 กำลังตรวจรายชื่อและรายการซ้ำ…');await nextFrame();
+    let dup={available:false,flags:[],missFlags:[],workers:0};
+    if(dName&&dName!=='(ไม่ใช้)'&&WB.Sheets[dName]) dup=checkDuplicates(S,dName);
+    setLoading(true,'ขั้นที่ 4/4 กำลังเทียบสแกนนิ้วมือและจัดทำรายงาน…');await nextFrame();
+    const scans=parseTimeSheet(tName,R.mainMonth);
+    R.idCoverage=compareEmployeeCoverage(dName,scans);
+    attachScanVerdicts(dup,scans);
+    const exitCheck=(dName&&dName!=='(ไม่ใช้)'&&WB.Sheets[dName])?checkExitTimes(S,dName,scans):{available:false,reason:'ไม่ได้เลือกชีท detail',results:[],early:[],ontime:[],late:[],topOffenders:[],noScan:0,noExit:0,ambiguous:0,total:0};
+    if(runId!==RUN_ID) return;
+    AUDIT={S,R,AGG,dup,scans,exitCheck,mName,dName,tName,rules:{...ACTIVE_RULES},source:{...FILE_INFO},auditedAt:new Date(),appVersion:APP_VERSION,runTimeMs:performance.now()-start};
+    render(AUDIT);
+    ['btnExport','btnWord','btnPrint'].forEach(id=>document.getElementById(id).classList.remove('hidden'));
+    showAppMessage(R.formulaErrors.length?'warn':'success',R.formulaErrors.length?'ตรวจเสร็จ แต่พบสูตร Excel ผิดพลาด':'ตรวจสอบเสร็จแล้ว',R.formulaErrors.length?'ห้ามใช้ยอดเพื่ออนุมัติจนกว่าจะแก้สูตรและตรวจซ้ำ':'เลื่อนลงเพื่อดูผล รายงานที่ดาวน์โหลดจะอ้างอิงผลตรวจชุดนี้');
+  }catch(err){
+    AUDIT=null;
+    document.getElementById('results').innerHTML='<div class="alertbanner bad">⛔ ตรวจไม่สำเร็จ: '+esc(err&&err.message?err.message:'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ')+'</div>';
+    showAppMessage('error','ตรวจสอบไม่สำเร็จ',err&&err.message?err.message:'กรุณาตรวจชื่อชีทและรูปแบบไฟล์');
+    console.error(err);
+  }finally{
+    if(runId===RUN_ID){controls.forEach(el=>el.disabled=false);setLoading(false);}
+  }
+}
+
+
+
+/* ============================================================
+   ตรวจเวลาออกงาน (เทียบกะที่จ่ายเงินจริง vs สแกนนิ้วมือ)
+   ============================================================ */
+function getShiftAssignments(S, detailName){
+  const refMap=parseDetailRefs(S, detailName);
+  if(!refMap) return null;
+  const D=sheetMatrix(detailName);
+  const codeCol=detectCodeCol(D), nameCol=codeCol+1;
+  const assign={}, codename={};
+  Object.entries(refMap).forEach(([key,refs])=>{
+    ['8 ชม.','12 ชม.'].forEach(shiftLabel=>{
+      const rr=refs.filter(x=>x.shift===shiftLabel);
+      if(!rr.length) return;
+      const cc={}; rr.forEach(x=>cc[x.col]=(cc[x.col]||0)+1);
+      const mainCol=+Object.entries(cc).sort((a,b)=>b[1]-a[1])[0][0];
+      const covered=new Set();
+      rr.filter(x=>x.col===mainCol).forEach(x=>{for(let r=x.r1;r<=x.r2;r++)covered.add(r);});
+      covered.forEach(r=>{
+        const row=D[r]; if(!row) return;
+        const code=String(row[codeCol]??'').trim();
+        if(!/^\d{4,}$/.test(code)) return;
+        const v=row[mainCol];
+        if(!(isNum(v)&&v>0)) return;
+        codename[code]=String(row[nameCol]??'');
+        assign[key]=assign[key]||{};
+        (assign[key][code]=assign[key][code]||[]).push(shiftLabel==='8 ชม.'?'8':'12');
+      });
+    });
+  });
+  return {assign, codename};
+}
+
+function checkExitTimes(S, detailName, scans){
+  if(!scans) return {available:false, reason:'ไม่ได้เลือกชีทสแกนนิ้วมือ หรืออ่านชีทไม่สำเร็จ'};
+  const ga=getShiftAssignments(S, detailName);
+  if(!ga) return {available:false, reason:'อ่านสูตรเชื่อมชีท detail ไม่สำเร็จ'};
+  const {assign, codename}=ga;
+  const EXPECT={day8:(ACTIVE_RULES.dayStart+8*60)%1440,day12:(ACTIVE_RULES.dayStart+12*60)%1440,night8:(ACTIVE_RULES.nightStart+8*60)%1440,night12:(ACTIVE_RULES.nightStart+12*60)%1440};
+  const GRACE=ACTIVE_RULES.grace;
+  const toMin=t=>{const m=t.split(':');return (+m[0])*60+(+m[1]);};
+  const clockDistance=(a,b)=>{const d=Math.abs(a-b);return Math.min(d,1440-d);};
+  const results=[]; let noScan=0, noExit=0, ambiguous=0;
+  Object.entries(assign).forEach(([key,people])=>{
+    const day=+key.split('-')[2];
+    Object.entries(people).forEach(([code,shifts])=>{
+      const sToday=((scans[code]&&scans[code][day])||[]).map(toMin).sort((a,b)=>a-b);
+      if(!sToday.length){noScan++;return;}
+      [...new Set(shifts)].forEach(shift=>{
+        const candidates=[];
+        const dayEntries=sToday.filter(t=>clockDistance(t,ACTIVE_RULES.dayStart)<=4*60);
+        if(dayEntries.length){
+          const entry=dayEntries.sort((a,b)=>clockDistance(a,ACTIVE_RULES.dayStart)-clockDistance(b,ACTIVE_RULES.dayStart))[0];
+          const exits=sToday.filter(t=>t>entry+3*60);
+          if(exits.length){const exp=EXPECT['day'+shift],exit=exits.sort((a,b)=>clockDistance(a,exp)-clockDistance(b,exp))[0];candidates.push({entryType:'day',entry,exit,expected:exp,score:clockDistance(entry,ACTIVE_RULES.dayStart)+clockDistance(exit,exp)});}
+        }
+        const nightEntries=sToday.filter(t=>clockDistance(t,ACTIVE_RULES.nightStart)<=4*60);
+        if(nightEntries.length){
+          const entry=nightEntries.sort((a,b)=>clockDistance(a,ACTIVE_RULES.nightStart)-clockDistance(b,ACTIVE_RULES.nightStart))[0];
+          const sNext=((scans[code]&&scans[code][day+1])||[]).map(toMin).filter(t=>t<12*60);
+          if(sNext.length){const exp=EXPECT['night'+shift],exit=sNext.sort((a,b)=>clockDistance(a,exp)-clockDistance(b,exp))[0];candidates.push({entryType:'night',entry,exit,expected:exp,score:clockDistance(entry,ACTIVE_RULES.nightStart)+clockDistance(exit,exp)});}
+        }
+        if(!candidates.length){noExit++;return;}
+        candidates.sort((a,b)=>a.score-b.score);
+        if(candidates.length>1&&Math.abs(candidates[0].score-candidates[1].score)<=10){ambiguous++;return;}
+        const pick=candidates[0];
+        results.push({key,code,name:codename[code]||'',day,shift,...pick,diff:pick.exit-pick.expected,
+          anomEntry:clockDistance(pick.entry,pick.entryType==='day'?ACTIVE_RULES.dayStart:ACTIVE_RULES.nightStart)>90});
+      });
+    });
+  });
+  const early=results.filter(r=>r.diff<-GRACE);
+  const ontime=results.filter(r=>Math.abs(r.diff)<=GRACE);
+  const late=results.filter(r=>r.diff>GRACE);
+  const anomalous=early.filter(r=>r.anomEntry);
+  const byPerson={};
+  early.forEach(r=>{
+    const k=r.code; byPerson[k]=byPerson[k]||{code:r.code,name:r.name,count:0,totalMin:0};
+    byPerson[k].count++; byPerson[k].totalMin += -r.diff;
+  });
+  const topOffenders=Object.values(byPerson).sort((a,b)=>b.count-a.count).slice(0,15);
+  return {available:results.length>0, reason:results.length?'':'ไม่มีคู่สแกนเข้า–ออกที่จับคู่ได้อย่างมั่นใจ',results,early,ontime,late,anomalous,topOffenders,noScan,noExit,ambiguous,
+    total:results.length};
+}
+
+
+/* ============================================================
+   สร้างรายงานเชิงบทความ (บทสรุปผู้บริหาร + ยอดเสนอปรับ + ข้อเสนอแนะ)
+   ============================================================ */
+function buildNarrative(A){
+  const {S,R,AGG,dup,exitCheck}=A;
+  const dupFlags=dup.flags.filter(f=>f.type==='dup');
+  const missFlags=dup.missFlags||[];
+  const confirmedFlags=dupFlags.filter(f=>f.confirmed),pendingFlags=dupFlags.filter(f=>!f.confirmed);
+  const confirmedExcess=confirmedFlags.reduce((a,f)=>a+f.excess,0);
+  const pendingExcess=pendingFlags.reduce((a,f)=>a+f.excess,0);
+  const excess=confirmedExcess+pendingExcess;
+  const unmappedPotential=missFlags.reduce((a,f)=>a+f.val,0);
+  const officialCell=(S.officialTotal&&S.officialTotal.addr)||A.rules.officialTotalCell||'CX36';
+  const baseTotal=(S.officialTotal&&isNum(S.officialTotal.value))?S.officialTotal.value:AGG.grand;
+  const proposed=baseTotal-confirmedExcess;
+  const ifPendingConfirmed=proposed-pendingExcess;
+  const keyDup=dupFlags.filter(f=>!f.reason.includes('สูตร'));
+  const formulaDup=dupFlags.filter(f=>f.reason.includes('สูตร'));
+  const confirmedCnt=confirmedFlags.length,pendingCnt=pendingFlags.length;
+  const blockingCount=R.formulaErrors.length+R.mathErr.length+R.dailyErr.length+R.totalsErr.length+R.reconciliationWarn.length+(R.calcWarning?1:0);
+  const idMismatch=R.idCoverage?(R.idCoverage.near.length+R.idCoverage.detailOnly.filter(x=>!R.idCoverage.near.some(n=>n.detail===x)).length+R.idCoverage.scanOnly.filter(x=>!R.idCoverage.near.some(n=>n.time===x)).length):0;
+  const incompleteCount=(!dup.available?1:0)+(!A.scans?1:0)+(!exitCheck.available?1:0)+R.formulaGaps.length+R.duplicateFormulaRefs.length+missFlags.length+idMismatch;
+  const issueCount=blockingCount+dupFlags.length+incompleteCount;
+  const status=blockingCount?'blocked':(issueCount?'review':'pass');
+  const guarPct=AGG.grand?(AGG.guarTotal/AGG.grand*100):0;
+  const unitPct=AGG.grand?(AGG.unitTotal/AGG.grand*100):0;
+
+  let exec = `ยอดทางการของค่าแรงผู้รับเหมาเดือน${R.monthLabel} อ้างอิงเซลล์ ${officialCell} เท่ากับ ${fmt(baseTotal)} บาท (ผลรวมรายวัน ${fmt(AGG.grand)} บาท) `+
+    `แบ่งเป็นค่าแรงประกันรายวัน ${fmt(AGG.guarTotal)} บาท (${guarPct.toFixed(1)}%) และค่าแรงตามชิ้นงาน ${fmt(AGG.unitTotal)} บาท (${unitPct.toFixed(1)}%) `+
+    `คน-วันรวม ${fmt(AGG.p8+AGG.p12,(AGG.p8+AGG.p12)%1?3:0)} กะ (8 ชม. ${fmt(AGG.p8,3)} / 12 ชม. ${fmt(AGG.p12,3)}) `+
+    (dup.available?`และพบรหัสแรงงานที่เชื่อมโยงได้ ${dup.workers} คน. `:'แต่การตรวจระดับรายบุคคลยังไม่ครบถ้วน. ');
+  if(confirmedCnt) exec+=`พบรายการจ่ายเกินที่มีหลักฐานยืนยัน ${confirmedCnt} กรณี รวม ${fmt(confirmedExcess)} บาท ทำให้ยอดหลังปรับเฉพาะรายการยืนยันเท่ากับ ${fmt(proposed)} บาท. `;
+  else exec+=`ยังไม่มีรายการหักที่ยืนยันแล้ว ยอดหลังปรับเฉพาะรายการยืนยันจึงเท่ากับ ${fmt(proposed)} บาท. `;
+  if(pendingCnt) exec+=`มีรายการรอชี้แจง ${pendingCnt} กรณี รวม ${fmt(pendingExcess)} บาท ซึ่งยังไม่ถูกหัก; หากยืนยันทั้งหมด ยอดจะเป็น ${fmt(ifPendingConfirmed)} บาท. `;
+  if(missFlags.length) exec+=`พบเครื่องหมายการทำงานนอกช่วงสูตร ${missFlags.length} รายการ มูลค่าทางทฤษฎี ${fmt(unmappedPotential)} บาท แต่ยังไม่ถือเป็นยอดจ่ายขาดและไม่นำไปบวกยอดจนกว่าจะตรวจ mapping กับต้นฉบับ. `;
+  if(status==='blocked') exec+=`ผลชุดนี้ถูกจัดเป็น “หยุดตรวจสอบ/ห้ามใช้อนุมัติ” เนื่องจากพบข้อผิดพลาดสูตร การคำนวณ หรือยอดกระทบที่ยังไม่ลงตัว.`;
+  else if(status==='review') exec+=`ผลชุดนี้อยู่ในสถานะ “ต้องทบทวน” เพราะมีรายการรอชี้แจงหรือขอบเขตตรวจไม่ครบ จึงไม่ควรใช้เป็นการอนุมัติอัตโนมัติ.`;
+  else exec+=`การตรวจอัตโนมัติที่รองรับผ่านทั้งหมด แต่ยังควรให้ผู้มีอำนาจตรวจเอกสารต้นฉบับก่อนอนุมัติเงินจริง.`;
+  if(keyDup.length||formulaDup.length){
+    exec += ` สาเหตุของรายการจ่ายเกินแบ่งเป็น 2 กลุ่ม: `+
+      (keyDup.length?`(1) คีย์บันทึกจ่าย 2 กะในวันเดียวกัน ${keyDup.length} กรณี — ตรวจสอบได้จากเวลาสแกนนิ้วโดยตรง`:'')+
+      (keyDup.length&&formulaDup.length?' และ ':'')+
+      (formulaDup.length?`(2) สูตร SUM ในชีทสรุปคลุมช่วงแถวทับซ้อนกันเอง ${formulaDup.length} กรณี — พิสูจน์ได้จากสูตรโดยตรง ต้องแก้ไขสูตรในไฟล์ต้นแบบเพื่อป้องกันไม่ให้เกิดซ้ำในเดือนถัดไป`:'')+
+      `.`;
+  }
+  if(exitCheck&&exitCheck.available&&exitCheck.early.length){
+    const pct=(exitCheck.early.length/exitCheck.total*100).toFixed(1);
+    exec += ` นอกจากนี้ การตรวจเวลาออกงานเทียบกับกะที่จ่ายเงินจริงพบว่ามีการออกก่อนเวลา (เกิน ${A.rules.grace} นาที) ${exitCheck.early.length} คน-วัน-กะ จาก ${exitCheck.total} รายการที่ตรวจได้ (${pct}%)`+
+      (exitCheck.topOffenders.length?` โดยพนักงานที่ออกก่อนเวลาเป็นประจำมากที่สุดคือ ${exitCheck.topOffenders[0].name} (${exitCheck.topOffenders[0].count} วัน)`:'')+
+      ` ควรแจ้งหัวหน้างานกำกับดูแลเพิ่มเติม.`;
+  }
+
+  // ---------- ข้อเสนอแนะ (templated ตามประเภทปัญหาที่พบจริง) ----------
+  const recs=[];
+  if(pendingCnt) recs.push(`แจ้งผู้รับเหมาให้ชี้แจงหลักฐานรายการรอตรวจสอบ ${pendingCnt} กรณี (มูลค่ารวม ${fmt(dupFlags.filter(f=>!f.confirmed).reduce((a,f)=>a+f.excess,0))} บาท) ภายใน 7 วัน`);
+  if(formulaDup.length) recs.push(`แก้ไขสูตร SUM ในชีทสรุปที่คลุมช่วงแถวทับซ้อนกัน ${formulaDup.length} จุด ก่อนใช้ไฟล์เดือนถัดไป`);
+  if(R.formulaErrors.length) recs.push(`แก้ Excel formula error ${R.formulaErrors.length} จุด แล้วเปิดไฟล์ใน Excel ให้คำนวณใหม่และบันทึก ก่อนนำมาตรวจซ้ำ`);
+  if(R.formulaGaps.length) recs.push(`ทบทวนเซลล์ที่สูตรถูกแทนด้วยค่าคงที่ ${R.formulaGaps.length} จุด โดยเทียบผลรวมจากชีท detail และบันทึกเหตุผลของ override`);
+  if(R.duplicateFormulaRefs.length) recs.push(`ตรวจสูตรที่อ้างเซลล์เดิมซ้ำ ${R.duplicateFormulaRefs.length} จุด เพราะอาจทำให้ยอดหรือจำนวนคนถูกนับซ้ำ`);
+  if(missFlags.length) recs.push(`ตรวจ mapping ของเครื่องหมายการทำงานนอกช่วงสูตร ${missFlags.length} รายการกับไฟล์ต้นฉบับ ห้ามบวกเป็นยอดจ่ายขาดโดยอัตโนมัติ`);
+  if(R.reconciliationWarn.length) recs.push(`แก้ยอดทางการ ${officialCell} ให้ตรงกับผลรวมรายวันก่อนอนุมัติ โดยยึด ${officialCell} เป็น control total ตามนโยบาย`);
+  if(R.calcWarning) recs.push('เปิดไฟล์ใน Microsoft Excel ให้คำนวณสูตรทั้งหมดและบันทึก ก่อนตรวจซ้ำ เพราะโปรแกรมอ่านค่า cache ล่าสุดและไม่ได้คำนวณสูตร Excel เอง');
+  if(idMismatch) recs.push(`แก้รหัสพนักงานที่ไม่ตรงกันระหว่าง detail กับ Time ${idMismatch} รายการ โดยยึด employee ID เป็นหลักและตรวจชื่อประกอบ`);
+  if(R.dateWarn.some(w=>w.includes('1969')||w.includes('ค.ศ.'))) recs.push('แก้การคีย์ปีจาก ค.ศ. เป็นรูปแบบ พ.ศ. ให้ถูกต้อง');
+  if(R.tallyErr.length) recs.push('ตรวจสอบสูตรคอลัมน์นับจำนวนคนที่บวกซ้ำบางหมวด (ไม่กระทบยอดเงิน แต่ทำให้ตัวเลขคนไม่ตรง)');
+  if(exitCheck&&exitCheck.available&&exitCheck.early.length) recs.push(`กำกับดูแลพนักงานที่ออกก่อนเวลาเป็นประจำ โดยเฉพาะ Top ${Math.min(5,exitCheck.topOffenders.length)} รายที่ระบุไว้ในตารางเวลาออกงาน`);
+  recs.push('ตรวจไฟล์ด้วยโปรแกรมนี้ก่อนอนุมัติจ่ายทุกเดือน เพื่อจับความคลาดเคลื่อนได้ตั้งแต่ต้น');
+
+  return {exec,recs,status,baseTotal,officialCell,proposed,ifPendingConfirmed,excess,confirmedExcess,pendingExcess,unmappedPotential,keyDup,formulaDup,confirmedCnt,pendingCnt,blockingCount,incompleteCount,issueCount};
+}
+
+/* ============================================================
+   แสดงผล
+   ============================================================ */
+let CHARTS=[];
+function render(A){
+  const {S,R,AGG,dup}=A;
+  CHARTS.forEach(c=>c.destroy()); CHARTS=[];
+  const dupFlags=dup.flags.filter(f=>f.type==='dup');
+  const fracFlags=dup.flags.filter(f=>f.type==='frac');
+  const excessConfirmed=dupFlags.filter(f=>f.confirmed).reduce((a,f)=>a+f.excess,0);
+  const excessPending=dupFlags.filter(f=>!f.confirmed).reduce((a,f)=>a+f.excess,0);
+  const excessTotal=excessConfirmed+excessPending;
+  const thDay=k=>{const p=k.split('-');return p[2]+' '+['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][+p[1]];};
+  const NAR=buildNarrative(A);
+  A.narrative=NAR;
+  const idCov=R.idCoverage;
+
+  const checks=[
+    {t:'โครงสร้างไฟล์',ok:S.totalCol!=null&&S.pairs.length>0,warn:false,d:'พบคู่คอลัมน์จ่ายเงิน '+S.pairs.length+' คู่ (ประกัน '+S.pairs.filter(p=>p.kind!=='unit').length+' / ตามชิ้นงาน '+S.pairs.filter(p=>p.kind==='unit').length+')'+(S.totalCol!=null?' คอลัมน์ยอดรวม = '+colLetter(S.totalCol):' • ไม่พบคอลัมน์ยอดรวม')},
+    {t:'Excel formula errors',ok:!R.formulaErrors.length,warn:false,d:R.formulaErrors.length?'พบ '+R.formulaErrors.length+' จุด — ต้องแก้และตรวจใหม่':'ไม่พบ #REF!, #DIV/0!, #VALUE! หรือ error ที่รองรับ'},
+    {t:'ความสดของค่าจากสูตร',ok:!R.calcWarning,warn:false,d:R.calcWarning||'ไม่พบสัญญาณบังคับคำนวณใหม่/โหมดคำนวณด้วยมือ'},
+    {t:'สูตรถูกแทนด้วยค่าคงที่',ok:!R.formulaGaps.length,warn:R.formulaGaps.length>0,d:R.formulaGaps.length?'พบ '+R.formulaGaps.length+' จุด — เป็น control exception ไม่สรุปจ่ายขาดอัตโนมัติ':'รูปแบบสูตรต่อเนื่องในคอลัมน์หลัก'},
+    {t:'สูตรอ้างเซลล์ซ้ำ',ok:!R.duplicateFormulaRefs.length,warn:R.duplicateFormulaRefs.length>0,d:R.duplicateFormulaRefs.length?'พบ '+R.duplicateFormulaRefs.length+' สูตรที่อ้างเซลล์เดิมซ้ำ':'ไม่พบการอ้างอิงซ้ำในสูตรรายวัน'},
+    {t:'การคูณอัตรา (มูลค่า = จำนวน × อัตรา)',ok:!R.mathErr.length,d:R.mathErr.length?('พบไม่ตรง '+R.mathErr.length+' ช่อง'):'ถูกต้องทุกช่องทุกวัน'},
+    {t:'ยอดรวมรายวัน',ok:!R.dailyErr.length,d:R.dailyErr.length?('ไม่ตรง '+R.dailyErr.length+' วัน'):'ตรงกับผลบวกทุกหมวดครบ '+S.dayRows.length+' วัน'},
+    {t:'แถวรวมท้ายตาราง',ok:S.totalsRow!=null&&!R.totalsErr.length,warn:S.totalsRow==null,d:S.totalsRow==null?'ไม่พบแถวรวม':(R.totalsErr.length?('ไม่ตรง '+R.totalsErr.length+' คอลัมน์'):'ตรงกับผลบวกรายวันทุกคอลัมน์')},
+    {t:'ยอดทางการ ('+NAR.officialCell+')',ok:!R.reconciliationWarn.length,warn:false,d:R.reconciliationWarn.length?R.reconciliationWarn.join(' • '):(NAR.officialCell+' = '+fmt(NAR.baseTotal)+' บาท ตรงกับผลรวมรายวัน • ยอดอื่นเป็นข้อมูลประกอบ')},
+    {t:'จำนวนกะเป็นขั้นละ '+A.rules.shiftIncrement,ok:!R.fracFlags.length,warn:R.fracFlags.length>0,d:R.fracFlags.length?('พบจำนวนกะที่ไม่เป็นขั้นละ '+A.rules.shiftIncrement+' จำนวน '+R.fracFlags.length+' รายการ'):'รองรับ 0.5, 1.0, 1.5 กะ และไม่พบค่าผิดขั้น'},
+    {t:'พนักงานถูกนับซ้ำหลายกะ/วัน',ok:dup.available&&!dupFlags.length,warn:!dup.available,d:!dup.available?'ตรวจไม่ได้ (ไม่พบสูตรเชื่อมชีท detail)':(dupFlags.length?('พบ '+dupFlags.length+' กรณี (คีย์ซ้ำ '+dupFlags.filter(f=>!f.reason.includes('สูตร')).length+' / สูตรทับซ้อน '+dupFlags.filter(f=>f.reason.includes('สูตร')).length+') — ประเมินจ่ายเกิน '+fmt(excessTotal)+' บาท'):'ไม่พบการนับซ้ำ ('+dup.workers+' คน)')},
+    {t:'เครื่องหมายการทำงานนอกช่วงสูตร',ok:dup.available&&!(dup.missFlags||[]).length,warn:!dup.available||!!(dup.missFlags||[]).length,d:!dup.available?'ตรวจไม่ได้':((dup.missFlags||[]).length?('พบ '+dup.missFlags.length+' รายการ — ต้องตรวจ mapping; ยังไม่ถือเป็นจ่ายขาดและไม่ปรับยอด'):'ไม่พบรายการนอกช่วงสูตรที่รองรับ')},
+    {t:'เทียบสแกนนิ้วมือ',ok:!!A.scans&&!dupFlags.filter(f=>!f.confirmed&&f.scans).length,warn:!A.scans,d:!A.scans?'ไม่พบ/ไม่ได้เลือกชีทสแกน':(dupFlags.length?('ยืนยันจ่ายเกินแล้ว '+dupFlags.filter(f=>f.confirmed).length+' จาก '+dupFlags.length+' กรณี'):'พร้อมใช้เทียบเมื่อพบรายการผิดปกติ')},
+    {t:'ความครอบคลุมรหัสพนักงาน',ok:!!idCov&&!idCov.detailOnly.length&&!idCov.scanOnly.length,warn:!idCov||!!(idCov.detailOnly.length||idCov.scanOnly.length),d:!idCov?'ตรวจไม่ได้':('จับคู่ได้ '+idCov.matched+'/'+idCov.detailCount+' รหัสใน detail'+(idCov.detailOnly.length?' • ไม่มีใน Time '+idCov.detailOnly.length:'')+(idCov.scanOnly.length?' • มีเฉพาะ Time '+idCov.scanOnly.length:'')+(idCov.near.length?' • พบเลขท้ายเหมือนแต่ prefix ต่าง '+idCov.near.length:''))},
+    {t:'ความต่อเนื่องของวันที่',ok:!R.dateWarn.length,warn:R.dateWarn.length>0,d:R.dateWarn.length?R.dateWarn.join(' • '):'วันที่ครบถ้วนอยู่ในเดือนเดียวกัน'},
+    {t:'คอลัมน์นับจำนวนคน',ok:!R.tallyErr.length,warn:R.tallyErr.length>0,d:R.tallyErr.length?('ไม่ตรงกับผลบวกรายหมวด '+R.tallyErr.length+' วัน (มักเกิดจากสูตรบวกซ้ำ — ไม่กระทบยอดเงิน)'):'ตรงกับผลบวกรายหมวด'},
+    {t:'เวลาออกงาน (เทียบกะที่จ่ายเงินจริง)',ok:A.exitCheck.available&&!A.exitCheck.early.length,warn:!A.exitCheck.available||!!A.exitCheck.early.length,d:!A.exitCheck.available?(A.exitCheck.reason||'ตรวจไม่ได้'):(A.exitCheck.early.length?('ออกก่อนเวลา '+A.exitCheck.early.length+' คน-วัน-กะ จาก '+A.exitCheck.total+' รายการที่จับคู่ได้ ('+(A.exitCheck.early.length/A.exitCheck.total*100).toFixed(1)+'%) • คลุมเครือ '+(A.exitCheck.ambiguous||0)):'ไม่พบการออกก่อนเวลาใน '+A.exitCheck.total+' รายการที่จับคู่ได้')}
+  ];
+
+  let h='';
+  const banner=NAR.status==='blocked'?{cls:'bad',txt:'⛔ ห้ามใช้ผลนี้อนุมัติ — พบข้อผิดพลาดสำคัญ '+NAR.blockingCount+' กลุ่ม'}:(NAR.status==='review'?{cls:'warn',txt:'⚠ ต้องทบทวนก่อนอนุมัติ — พบประเด็นหรือขอบเขตตรวจไม่ครบ '+NAR.issueCount+' รายการ'}:{cls:'ok',txt:'✅ การตรวจอัตโนมัติที่รองรับผ่านทั้งหมด'});
+  h+='<div class="alertbanner '+banner.cls+'">'+banner.txt+' | เดือน'+esc(R.monthLabel)+' ยอดทางการ '+esc(NAR.officialCell)+' = '+fmt(NAR.baseTotal)+' บาท</div>';
+  h+='<div class="audit-meta"><span>📄 '+esc(A.source.name)+'</span><span>🧾 '+esc(A.mName)+' / '+esc(A.dName)+' / '+esc(A.tName)+'</span><span>📐 กฎ '+fmt(A.rules.rate8)+' / '+fmt(A.rules.rate12)+' บาท • '+fmtClock(A.rules.dayStart)+' / '+fmtClock(A.rules.nightStart)+' • กะทีละ '+fmt(A.rules.shiftIncrement,1)+'</span><span>🎯 ยอดทางการ '+esc(NAR.officialCell)+'</span><span>🕒 ตรวจ '+esc(A.auditedAt.toLocaleString('th-TH'))+'</span><span>⚙ Audit '+esc(A.appVersion)+' • '+fmt(A.runTimeMs/1000,1)+' วินาที</span></div>';
+
+  h+='<div class="kpis">';
+  h+=kpi('ยอดทางการ '+NAR.officialCell+' (บาท)',fmt(NAR.baseTotal),'ผลรวมรายวัน '+fmt(AGG.grand)+' บาท','');
+  h+=kpi('หักที่ยืนยันแล้ว (บาท)',fmt(NAR.confirmedExcess),NAR.confirmedCnt+' กรณี','red');
+  h+=kpi('ยอดหลังปรับรายการยืนยัน (บาท)',fmt(NAR.proposed),'ยังไม่หักรายการรอชี้แจง','green');
+  h+=kpi('มูลค่ารอชี้แจง (บาท)',fmt(NAR.pendingExcess),NAR.pendingCnt+' กรณี • ยังไม่ปรับยอด','amber');
+  h+=kpi('คน-วันรวม (กะ)',fmt(AGG.p8+AGG.p12,AGG.p8+AGG.p12===Math.round(AGG.p8+AGG.p12)?0:3),'8 ชม. '+fmt(AGG.p8,3)+' • 12 ชม. '+fmt(AGG.p12,3),'green');
+  h+='</div>';
+
+  h+='<div class="card"><h2>📋 บทสรุปผู้บริหาร</h2><p style="font-size:17px;line-height:1.7;text-align:justify">'+esc(NAR.exec)+'</p></div>';
+
+  h+='<div class="card"><h2>💰 สรุปการปรับยอดแบบมีสถานะ</h2><table><tr><th>รายการ</th><th>จำนวนเงิน (บาท)</th><th>การนำไปใช้</th></tr>';
+  h+='<tr><td>ยอดทางการจาก '+esc(NAR.officialCell)+'</td><td class="num">'+fmt(NAR.baseTotal)+'</td><td>ฐานตามนโยบายที่ยืนยันแล้ว</td></tr>';
+  h+='<tr><td>ผลรวมรายวันจากรายละเอียด</td><td class="num">'+fmt(AGG.grand)+'</td><td>'+(Math.abs(NAR.baseTotal-AGG.grand)<=0.05?'ตรงกับยอดทางการ':'ไม่ตรง — ต้องหยุดตรวจ')+'</td></tr>';
+  h+='<tr><td>หัก: รายการจ่ายเกินที่ยืนยันแล้ว</td><td class="num" style="color:var(--red)">−'+fmt(NAR.confirmedExcess)+'</td><td>'+NAR.confirmedCnt+' กรณี</td></tr>';
+  h+='<tr class="totalrow"><td>ยอดหลังปรับเฉพาะรายการยืนยัน</td><td class="num">'+fmt(NAR.proposed)+'</td><td>ยังไม่ใช่การอนุมัติอัตโนมัติ</td></tr>';
+  h+='<tr><td>มูลค่ารอชี้แจง (ยังไม่หัก)</td><td class="num" style="color:var(--amber)">'+fmt(NAR.pendingExcess)+'</td><td>'+NAR.pendingCnt+' กรณี</td></tr>';
+  h+='<tr><td>ยอดกรณีรายการรอชี้แจงยืนยันทั้งหมด</td><td class="num">'+fmt(NAR.ifPendingConfirmed)+'</td><td>สถานการณ์จำลอง</td></tr>';
+  h+='<tr><td>มูลค่าทางทฤษฎีของเครื่องหมายนอกช่วงสูตร</td><td class="num">'+fmt(NAR.unmappedPotential)+'</td><td>ข้อมูลประกอบเท่านั้น • ไม่บวกยอด</td></tr></table>';
+  h+='<div class="note">ฐานยอดใช้ '+esc(NAR.officialCell)+' ตามนโยบายที่ยืนยันแล้ว ตัวเลขข้างต้นใช้โมเดลเดียวกับไฟล์ Excel/Word ที่ดาวน์โหลด รายการรอชี้แจงและเครื่องหมายนอกช่วงสูตรจะไม่เปลี่ยนยอดจนกว่าจะมีหลักฐานยืนยัน</div></div>';
+
+  h+='<div class="card"><h2>ผลการตรวจสอบ ('+checks.filter(c=>c.ok).length+'/'+checks.length+' ผ่าน)</h2><div class="checks">';
+  checks.forEach(c=>{
+    const cls=c.warn?'warn':(c.ok?'pass':'fail'), ic=c.warn?'⚠️':(c.ok?'✅':'❌');
+    h+='<div class="chk '+cls+'"><div class="ic">'+ic+'</div><div><div class="t">'+esc(c.t)+'</div><div class="d">'+esc(c.d)+'</div></div></div>';
+  });
+  h+='</div></div>';
+
+  if(R.calcWarning) h+='<div class="alertbanner bad">⛔ '+esc(R.calcWarning)+'</div>';
+  if(R.formulaErrors.length){
+    h+='<div class="card"><h2>❌ Excel formula errors ('+R.formulaErrors.length+' จุด)</h2><table><tr><th>ชีท</th><th>เซลล์</th><th>Error</th><th>สูตรเดิม</th></tr>';
+    R.formulaErrors.slice(0,100).forEach(e=>h+='<tr><td>'+esc(e.sheet)+'</td><td class="ctr">'+esc(e.addr)+'</td><td class="ctr"><span class="tag red">'+esc(e.error)+'</span></td><td>'+esc(e.formula||'—')+'</td></tr>');
+    h+='</table><div class="note">ต้องแก้ใน Excel ให้ครบ เปิดคำนวณสูตรใหม่ และบันทึกก่อนตรวจซ้ำ โปรแกรมจะไม่แทน error เป็นศูนย์</div></div>';
+  }
+  if(R.formulaGaps.length){
+    h+='<div class="card"><h2>⚠️ สูตรถูกแทนด้วยค่าคงที่ ('+R.formulaGaps.length+' จุด)</h2><table><tr><th>ชีท</th><th>เซลล์</th><th>ค่าในไฟล์</th><th>สถานะ</th></tr>';
+    R.formulaGaps.forEach(e=>h+='<tr><td>'+esc(e.sheet)+'</td><td class="ctr">'+esc(e.addr)+'</td><td class="num">'+fmt(e.value,3)+'</td><td><span class="tag amber">ต้องเทียบ detail</span></td></tr>');
+    h+='</table><div class="note">ค่าคงที่อาจเป็น override ที่ตั้งใจหรืออาจพิมพ์ทับสูตร ระบบจึงไม่สรุปเป็นจ่ายขาด/จ่ายเกินโดยอัตโนมัติ</div></div>';
+  }
+  if(R.duplicateFormulaRefs.length){
+    h+='<div class="card"><h2>⚠️ สูตรอ้างเซลล์เดิมซ้ำ ('+R.duplicateFormulaRefs.length+' จุด)</h2><table><tr><th>เซลล์</th><th>รายการอ้างซ้ำ</th><th>สูตร</th></tr>';
+    R.duplicateFormulaRefs.slice(0,80).forEach(e=>h+='<tr><td class="ctr">'+esc(e.addr)+'</td><td>'+esc(e.refs.join(', '))+'</td><td>'+esc(e.formula)+'</td></tr>');
+    h+='</table>'+(R.duplicateFormulaRefs.length>80?'<div class="note">แสดง 80 รายการแรก</div>':'')+'</div>';
+  }
+  if(S.summaryTotals.length||R.reconciliationWarn.length){
+    h+='<div class="card"><h2>'+(R.reconciliationWarn.length?'❌':'✅')+' ยอดทางการตามนโยบาย: '+esc(NAR.officialCell)+'</h2><table><tr><th>เซลล์</th><th>จำนวนเงิน (บาท)</th><th>สถานะ</th><th>สูตร</th></tr>';
+    S.summaryTotals.forEach(x=>h+='<tr'+(x.addr===NAR.officialCell?' class="totalrow"':'')+'><td class="ctr">'+esc(x.addr)+'</td><td class="num">'+fmt(x.value)+'</td><td>'+(x.addr===NAR.officialCell?'<span class="tag green">ยอดทางการ</span>':'<span class="tag amber">ข้อมูลประกอบ</span>')+'</td><td>'+esc(x.formula||'ค่าคงที่')+'</td></tr>');
+    h+='</table><div class="note">'+(R.reconciliationWarn.length?esc(R.reconciliationWarn.join(' • ')):'ยึด '+esc(NAR.officialCell)+' เป็นยอดทางการ ส่วน CX38 และ CX39 แสดงเพื่ออธิบายการปรับ/ส่วนต่างเท่านั้นและไม่เปลี่ยนฐานยอดอัตโนมัติ')+'</div></div>';
+  }
+  if(idCov&&(idCov.detailOnly.length||idCov.scanOnly.length)){
+    h+='<div class="card"><h2>⚠️ รหัสพนักงานระหว่าง detail กับ Time ไม่ตรงกัน</h2>';
+    if(idCov.near.length){h+='<table><tr><th>รหัสใน detail</th><th>รหัสใน Time</th><th>ข้อสังเกต</th></tr>';idCov.near.forEach(x=>h+='<tr><td class="ctr">'+esc(x.detail)+'</td><td class="ctr">'+esc(x.time)+'</td><td>เลขท้ายตรงกัน อาจพิมพ์ prefix ผิด</td></tr>');h+='</table>';}
+    h+='<div class="note">มีเฉพาะ detail: '+esc(idCov.detailOnly.join(', ')||'—')+' | มีเฉพาะ Time: '+esc(idCov.scanOnly.join(', ')||'—')+' — ระบบจะไม่จับคู่ด้วยชื่ออัตโนมัติเพราะเสี่ยงจับผิดคน</div></div>';
+  }
+
+  if(dupFlags.length){
+    h+='<div class="card"><h2>🚨 รายการนับซ้ำหลายกะในวันเดียวกัน ('+dupFlags.length+' กรณี)</h2><table><tr><th>วันที่</th><th>รหัส</th><th>ชื่อ</th><th>รายการที่บันทึกจ่าย</th><th>สาเหตุ</th><th>จ่ายจริง (บาท)</th><th>ผลเทียบสแกนนิ้วมือ</th><th>ประเมินจ่ายเกิน (บาท)</th></tr>';
+    let sum=0;
+    dupFlags.forEach(f=>{
+      sum+=f.excess;
+      const items=f.items.map(x=>esc(x.section)+' '+x.shift+(x.mark!==1?(' × '+fmt(x.mark,3)):'')).join(' + ');
+      h+='<tr><td class="ctr">'+thDay(f.key)+'</td><td class="ctr">'+esc(f.code)+'</td><td>'+esc(f.name)+'</td><td>'+items+'</td><td>'+(f.reason.includes('สูตร')?'<span class="tag amber">สูตรทับซ้อน</span>':'<span class="tag red">คีย์ซ้ำ</span>')+'</td><td class="num">'+fmt(f.paid)+'</td><td>'+(f.confirmed?'<span class="tag red">ยืนยันจ่ายเกิน</span> ':'<span class="tag amber">รอยืนยัน</span> ')+esc(f.verdict)+'</td><td class="num" style="color:var(--red);font-weight:700">'+fmt(f.excess)+'</td></tr>';
+    });
+    h+='<tr class="totalrow"><td colspan="7">รวมมูลค่าประเมินจ่ายเกิน</td><td class="num" style="color:var(--red)">'+fmt(sum)+'</td></tr></table>';
+    h+='<div class="note">เกณฑ์: 1 คนควรรับค่าแรงประกันได้ไม่เกิน 1 กะ/วัน — ประเมินจ่ายเกิน = ยอดที่จ่าย − ค่าแรง 1 กะ (กะสูงสุดที่บันทึก) ให้ผู้รับเหมาชี้แจงก่อนอนุมัติจ่าย | "สูตรทับซ้อน" = สูตร SUM ในชีทสรุปคลุมช่วงแถวซ้อนกับหมวดอื่น ต้องแก้สูตรในไฟล์</div></div>';
+  }
+
+  if((dup.missFlags||[]).length){
+    h+='<div class="card"><h2>🔎 เครื่องหมายการทำงานนอกช่วงสูตรที่ trace ได้ ('+dup.missFlags.length+' รายการ)</h2><table><tr><th>วันที่</th><th>รหัส</th><th>ชื่อ</th><th>กะ</th><th>จำนวนกะ</th><th>มูลค่าทางทฤษฎี (บาท)</th><th>แถวในชีท detail</th></tr>';
+    dup.missFlags.forEach(f=>{h+='<tr><td class="ctr">'+thDay(f.key)+'</td><td class="ctr">'+esc(f.code)+'</td><td>'+esc(f.name)+'</td><td class="ctr">'+f.shift+'</td><td class="num">'+fmt(f.mark,3)+'</td><td class="num">'+fmt(f.val)+'</td><td class="ctr">'+f.row+'</td></tr>';});
+    h+='<tr class="totalrow"><td colspan="5">รวมเพื่อใช้ตรวจสอบเท่านั้น</td><td class="num">'+fmt(dup.missFlags.reduce((a,f)=>a+f.val,0))+'</td><td></td></tr></table>';
+    h+='<div class="note">รายการนี้อาจเกิดจากสูตรถูกแทนด้วยค่าคงที่, การแบ่งหน่วยงาน หรือ mapping ที่โปรแกรมยังไม่รองรับ จึงไม่ถือว่าเป็น “จ่ายขาด” และไม่นำมาบวกยอดโดยอัตโนมัติ ต้องเทียบ delta กับไฟล์ต้นฉบับก่อน</div></div>';
+  }
+
+  if(fracFlags.length||R.fracFlags.length){
+    const rows=fracFlags.length?fracFlags:[];
+    h+='<div class="card"><h2>⚠️ จำนวนกะไม่เป็นขั้นละ '+fmt(A.rules.shiftIncrement,1)+'</h2>';
+    if(rows.length){
+      h+='<table><tr><th>วันที่</th><th>รหัส</th><th>ชื่อ</th><th>รายการ</th><th>จำนวนเงิน (บาท)</th><th>ผลเทียบสแกนนิ้วมือ</th></tr>';
+      rows.forEach(f=>{
+        const items=f.items.map(x=>esc(x.section)+' '+x.shift+' × '+fmt(x.mark,3)+' กะ').join(' + ');
+        h+='<tr><td class="ctr">'+thDay(f.key)+'</td><td class="ctr">'+esc(f.code)+'</td><td>'+esc(f.name)+'</td><td>'+items+'</td><td class="num">'+fmt(f.paid)+'</td><td>'+esc(f.verdict)+'</td></tr>';
+      });
+      h+='</table>';
+    } else {
+      h+='<table><tr><th>วันที่</th><th>หมวด</th><th>กะ</th><th>จำนวนกะ</th><th>มูลค่า (บาท)</th></tr>';
+      R.fracFlags.forEach(f=>{h+='<tr><td class="ctr">'+esc(f.date)+'</td><td>'+esc(f.section)+'</td><td class="ctr">'+f.shift+'</td><td class="num">'+fmt(f.people,3)+'</td><td class="num">'+fmt(f.val)+'</td></tr>';});
+      h+='</table>';
+    }
+    h+='<div class="note">อนุญาต 0.5 กะตามนโยบาย ค่าที่แสดงในตารางนี้เป็นค่าที่ไม่ลงขั้น 0.5 เช่น 0.25 หรือ 0.75 จึงต้องทบทวน</div></div>';
+  }
+
+  if(R.mathErr.length){
+    h+='<div class="card"><h2>❌ ช่องที่มูลค่าไม่ตรงกับ จำนวน × อัตรา ('+R.mathErr.length+')</h2><table><tr><th>วันที่</th><th>หมวด</th><th>คอลัมน์</th><th>จำนวน</th><th>มูลค่าในไฟล์</th><th>มูลค่าที่ควรเป็น</th><th>ผลต่าง</th></tr>';
+    R.mathErr.slice(0,60).forEach(e=>{h+='<tr><td class="ctr">'+esc(e.date)+'</td><td>'+esc(e.section)+'</td><td class="ctr">'+e.col+'</td><td class="num">'+fmt(e.q,3)+'</td><td class="num">'+fmt(e.v)+'</td><td class="num">'+fmt(e.exp)+'</td><td class="num" style="color:var(--red)">'+fmt(e.v-e.exp)+'</td></tr>';});
+    h+='</table>'+(R.mathErr.length>60?'<div class="note">แสดง 60 รายการแรก</div>':'')+'</div>';
+  }
+  if(R.dailyErr.length){
+    h+='<div class="card"><h2>❌ วันที่ยอดรวมไม่ตรงผลบวก ('+R.dailyErr.length+')</h2><table><tr><th>วันที่</th><th>ยอดรวมในไฟล์</th><th>ผลบวกที่คำนวณ</th><th>ผลต่าง</th></tr>';
+    R.dailyErr.forEach(e=>{h+='<tr><td class="ctr">'+esc(e.date)+'</td><td class="num">'+fmt(e.v)+'</td><td class="num">'+fmt(e.exp)+'</td><td class="num" style="color:var(--red)">'+fmt(e.diff)+'</td></tr>';});
+    h+='</table><div class="note">อาจมีคอลัมน์จ่ายเงินที่ระบบตรวจจับไม่พบ — ตรวจสอบตาราง "โครงสร้างที่ตรวจพบ" ด้านล่าง</div></div>';
+  }
+  if(R.totalsErr.length){
+    h+='<div class="card"><h2>❌ แถวรวมท้ายตารางไม่ตรงผลบวกรายวัน ('+R.totalsErr.length+' คอลัมน์)</h2><table><tr><th>คอลัมน์</th><th>ค่าในแถวรวม</th><th>ผลบวกรายวัน</th><th>ผลต่าง</th></tr>';
+    R.totalsErr.forEach(e=>{h+='<tr><td class="ctr">'+e.col+'</td><td class="num">'+fmt(e.t)+'</td><td class="num">'+fmt(e.s)+'</td><td class="num" style="color:var(--red)">'+fmt(e.diff)+'</td></tr>';});
+    h+='</table></div>';
+  }
+  if(R.tallyErr.length){
+    h+='<div class="card"><h2>⚠️ คอลัมน์นับจำนวนคนไม่ตรงผลบวกรายหมวด ('+R.tallyErr.length+' วัน — ไม่กระทบยอดเงิน)</h2><table><tr><th>วันที่</th><th>กะ</th><th>ค่าในไฟล์</th><th>ค่าที่ถูกต้อง</th><th>ต่าง</th></tr>';
+    R.tallyErr.slice(0,40).forEach(e=>{h+='<tr><td class="ctr">'+esc(e.date)+'</td><td class="ctr">'+e.shift+'</td><td class="num">'+fmt(e.v,3)+'</td><td class="num">'+fmt(e.exp,3)+'</td><td class="num">'+fmt(e.v-e.exp,3)+'</td></tr>';});
+    h+='</table><div class="note">มักเกิดจากสูตรนับคนบวกบางหมวดซ้ำ — ควรแก้สูตรในไฟล์ต้นฉบับ</div></div>';
+  }
+
+  if(A.exitCheck.available && A.exitCheck.early.length){
+    const ec=A.exitCheck;
+    const fmtT=m=>{m=((m%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');};
+    const pct=(ec.early.length/ec.total*100).toFixed(1);
+    h+='<div class="card"><h2>🕒 เวลาออกงาน — เทียบกะที่จ่ายเงินจริง ('+ec.early.length+' คน-วัน-กะ ออกก่อนเวลา จาก '+ec.total+' รายการ, '+pct+'%)</h2>';
+    h+='<div class="kpis" style="margin-bottom:14px">';
+    h+=kpi('ออกก่อนเวลา (เกิน '+A.rules.grace+' นาที)',fmt0(ec.early.length),pct+'% ของรายการที่ตรวจได้','red');
+    h+=kpi('ออกตรงเวลา (±'+A.rules.grace+' นาที)',fmt0(ec.ontime.length),(ec.ontime.length/ec.total*100).toFixed(1)+'%','green');
+    h+=kpi('ออกหลังเวลา',fmt0(ec.late.length),(ec.late.length/ec.total*100).toFixed(1)+'%','');
+    h+=kpi('จับคู่เวลาไม่ได้/คลุมเครือ',fmt0(ec.noScan+ec.noExit+(ec.ambiguous||0)),ec.noScan+' ไม่มีสแกน + '+ec.noExit+' ไม่มีคู่เข้า–ออก + '+(ec.ambiguous||0)+' คลุมเครือ','amber');
+    h+='</div>';
+    h+='<h3 style="font-size:16px;color:var(--navy);margin-bottom:6px">พนักงานที่ออกก่อนเวลาบ่อยที่สุด (Top 15)</h3><table><tr><th>รหัส</th><th>ชื่อ</th><th>จำนวนวัน</th><th>เฉลี่ยออกก่อน (นาที)</th><th>รวม (นาที)</th></tr>';
+    ec.topOffenders.forEach(o=>{h+='<tr><td class="ctr">'+esc(o.code)+'</td><td>'+esc(o.name)+'</td><td class="num">'+o.count+'</td><td class="num">'+(o.totalMin/o.count).toFixed(0)+'</td><td class="num">'+o.totalMin+'</td></tr>';});
+    h+='</table>';
+    h+='<details style="margin-top:10px"><summary>รายการทั้งหมด ('+ec.early.length+' รายการ — คลิกเพื่อดู)</summary><table style="margin-top:8px"><tr><th>วันที่</th><th>รหัส</th><th>ชื่อ</th><th>กะ</th><th>เข้า</th><th>ออกจริง</th><th>ควรออก</th><th>ออกก่อน (นาที)</th></tr>';
+    ec.early.slice().sort((a,b)=>a.day-b.day||a.diff-b.diff).forEach(e=>{
+      h+='<tr><td class="ctr">'+e.day+' '+esc(R.monthLabel.split(' ')[0].slice(0,3))+'</td><td class="ctr">'+esc(e.code)+'</td><td>'+esc(e.name)+'</td><td class="ctr">'+e.shift+' ชม.('+(e.entryType==='day'?'กลางวัน':'กลางคืน')+')</td><td class="ctr">'+fmtT(e.entry)+'</td><td class="ctr">'+fmtT(e.exit)+'</td><td class="ctr">'+fmtT(e.expected)+'</td><td class="num" style="color:var(--red);font-weight:700">'+(-e.diff)+(e.anomEntry?' ⚠':'')+'</td></tr>';
+    });
+    h+='</table></details>';
+    if(ec.anomalous.length) h+='<div class="note">⚠ '+ec.anomalous.length+' รายการมีเวลาเข้าเบี่ยงจากรอบมาตรฐานเกิน 90 นาที ตัวเลขออกก่อนเวลาอาจไม่แม่นยำ ควรตรวจสอบกะพิเศษ</div>';
+    h+='<div class="note">เกณฑ์จากกฎที่เลือก: กะกลางวันเข้า ~'+fmtClock(A.rules.dayStart)+' (8 ชม.→'+fmtClock(A.rules.dayStart+8*60)+' / 12 ชม.→'+fmtClock(A.rules.dayStart+12*60)+') กะกลางคืนเข้า ~'+fmtClock(A.rules.nightStart)+' (8 ชม.→'+fmtClock(A.rules.nightStart+8*60)+' / 12 ชม.→'+fmtClock(A.rules.nightStart+12*60)+') ผ่อนผัน ±'+A.rules.grace+' นาที • ตัดกรณีจับคู่สแกนไม่ได้หรือคลุมเครือ '+(ec.noScan+ec.noExit+(ec.ambiguous||0))+' รายการออกจากสถิติ</div></div>';
+  }
+
+  h+='<div class="charts"><div class="chartbox"><h3>ค่าแรงรวมรายวัน (บาท)</h3><canvas id="chDaily" height="110"></canvas></div>';
+  h+='<div class="chartbox"><h3>โครงสร้างค่าใช้จ่าย</h3><canvas id="chStruct" height="220"></canvas></div></div>';
+  h+='<div class="chartbox" style="margin-top:18px"><h3>ค่าแรงประกันรายหน่วยงาน (บาท)</h3><canvas id="chDept" height="130"></canvas></div>';
+
+  const secArr=Object.entries(AGG.bySection).sort((a,b)=>b[1].val-a[1].val);
+  h+='<div class="two" style="margin-top:18px">';
+  h+='<div class="card"><h2>ค่าแรงประกันรายหมวด</h2><table><tr><th>หน่วยงาน</th><th>คน-วัน 8 ชม.</th><th>คน-วัน 12 ชม.</th><th>รวม (บาท)</th></tr>';
+  secArr.forEach(([k,v])=>{h+='<tr><td>'+esc(k)+'</td><td class="num">'+fmt(v.p8,v.p8===Math.round(v.p8)?0:3)+'</td><td class="num">'+fmt(v.p12,v.p12===Math.round(v.p12)?0:3)+'</td><td class="num">'+fmt(v.val)+'</td></tr>';});
+  h+='<tr class="totalrow"><td>รวม</td><td class="num">'+fmt(AGG.p8,3)+'</td><td class="num">'+fmt(AGG.p12,3)+'</td><td class="num">'+fmt(AGG.guarTotal)+'</td></tr></table></div>';
+  h+='<div class="card"><h2>ค่าแรงตามชิ้นงาน (Unit Rate)</h2><table><tr><th>รายการ</th><th>ปริมาณ</th><th>อัตรา</th><th>รวม (บาท)</th></tr>';
+  AGG.unitRows.filter(u=>u.qty>0||u.val>0).forEach(u=>{h+='<tr><td>'+esc(u.section)+'</td><td class="num">'+fmt0(u.qty)+'</td><td class="ctr">'+(u.rate!=null?fmt(u.rate,2):'-')+'</td><td class="num">'+fmt(u.val)+'</td></tr>';});
+  h+='<tr class="totalrow"><td>รวม</td><td></td><td></td><td class="num">'+fmt(AGG.unitTotal)+'</td></tr></table></div></div>';
+
+  if(NAR.recs.length){
+    h+='<div class="card"><h2>✅ ข้อเสนอแนะ</h2><ol style="font-size:16px;line-height:1.9;padding-left:22px">';
+    NAR.recs.forEach(r=>h+='<li>'+esc(r)+'</li>');
+    h+='</ol></div>';
+  }
+
+  h+='<div class="card"><details><summary>ตารางรายวัน + โครงสร้างคอลัมน์ที่ตรวจพบ (คลิกเพื่อดู)</summary>';
+  h+='<table><tr><th>วันที่</th><th>ค่าแรงประกัน</th><th>ตามชิ้นงาน</th><th>รวม (บาท)</th><th>คน 8 ชม.</th><th>คน 12 ชม.</th></tr>';
+  AGG.daily.forEach(d=>{h+='<tr><td class="ctr">'+d.day+'</td><td class="num">'+fmt(d.guar)+'</td><td class="num">'+fmt(d.unit)+'</td><td class="num">'+fmt(d.total)+'</td><td class="num">'+fmt(d.p8,3)+'</td><td class="num">'+fmt(d.p12,3)+'</td></tr>';});
+  h+='<tr class="totalrow"><td>รวม</td><td class="num">'+fmt(AGG.guarTotal)+'</td><td class="num">'+fmt(AGG.unitTotal)+'</td><td class="num">'+fmt(AGG.grand)+'</td><td class="num">'+fmt(AGG.p8,3)+'</td><td class="num">'+fmt(AGG.p12,3)+'</td></tr></table>';
+  h+='<h2 style="margin-top:14px">โครงสร้างคอลัมน์ที่ตรวจพบ ('+S.pairs.length+' คู่)</h2><table><tr><th>คอลัมน์จำนวน</th><th>คอลัมน์มูลค่า</th><th>อัตรา</th><th>ประเภท</th><th>หัวตาราง</th></tr>';
+  S.pairs.forEach(p=>{h+='<tr><td class="ctr">'+colLetter(p.qty)+'</td><td class="ctr">'+colLetter(p.val)+'</td><td class="num">'+(p.rate!=null?fmt(p.rate,p.rate<10?2:0):'?')+'</td><td class="ctr">'+(p.kind==='unit'?'ตามชิ้นงาน':'ประกัน '+(p.kind==='guar8'?'8':'12')+' ชม.')+'</td><td>'+esc(p.header)+'</td></tr>';});
+  h+='</table></details></div>';
+
+  document.getElementById('results').innerHTML=h;
+  enhanceResultTables();
+  drawCharts(A,secArr);
+  document.getElementById('results').focus({preventScroll:true});
+  window.scrollTo({top:document.getElementById('results').offsetTop-10,behavior:'smooth'});
+}
+function kpi(l,v,s,cls){return '<div class="kpi '+cls+'"><div class="lbl">'+l+'</div><div class="val">'+v+'</div><div class="sub">'+s+'</div></div>';}
+
+function enhanceResultTables(){
+  document.querySelectorAll('#results table').forEach(table=>{
+    if(table.parentElement&&table.parentElement.classList.contains('table-scroll')) return;
+    const wrap=document.createElement('div');wrap.className='table-scroll';
+    table.parentNode.insertBefore(wrap,table);wrap.appendChild(table);
+  });
+}
+
+function drawCharts(A,secArr){
+  if(typeof Chart==='undefined'){
+    document.querySelectorAll('.chartbox').forEach(box=>box.insertAdjacentHTML('beforeend','<div class="note">กราฟไม่พร้อมใช้งาน แต่ผลตรวจและตารางยังสมบูรณ์</div>'));
+    return;
+  }
+  const {AGG}=A;
+  const base={plugins:{legend:{display:false}},font:{family:'inherit'}};
+  try{
+    CHARTS.push(new Chart(document.getElementById('chDaily'),{type:'line',
+      data:{labels:AGG.daily.map(d=>d.day),datasets:[{data:AGG.daily.map(d=>d.total),borderColor:'#b31b1b',backgroundColor:'rgba(179,27,27,.08)',fill:true,tension:.3,pointRadius:3}]},
+      options:{...base,scales:{y:{ticks:{callback:v=>v.toLocaleString()}}}}}));
+    CHARTS.push(new Chart(document.getElementById('chStruct'),{type:'doughnut',
+      data:{labels:['ค่าแรงประกันรายวัน','ค่าแรงตามชิ้นงาน'],datasets:[{data:[AGG.guarTotal,AGG.unitTotal],backgroundColor:['#2368a2','#8a6500']}]},
+      options:{plugins:{legend:{position:'bottom'}}}}));
+    CHARTS.push(new Chart(document.getElementById('chDept'),{type:'bar',
+      data:{labels:secArr.map(s=>s[0]),datasets:[{data:secArr.map(s=>s[1].val),backgroundColor:'#2368a2'}]},
+      options:{...base,indexAxis:'y',scales:{x:{ticks:{callback:v=>v.toLocaleString()}}}}}));
+  }catch(err){
+    console.warn('Chart rendering skipped',err);
+    CHARTS.forEach(c=>{try{c.destroy();}catch(_){}});CHARTS=[];
+    document.querySelectorAll('.chartbox').forEach(box=>box.insertAdjacentHTML('beforeend','<div class="note">สร้างกราฟไม่สำเร็จ แต่ผลตรวจและตารางยังใช้งานได้</div>'));
+  }
+}
+
+
+/* ============================================================
+   ดาวน์โหลดรายงานเป็น Word (.doc) — ใช้ HTML/MIME (Word เปิดได้ตรง ไม่ต้องพึ่งไลบรารีภายนอก)
+   ============================================================ */
+function exportWordReport(){
+  if(!AUDIT || !AUDIT.narrative) return;
+  const {R}=AUDIT;
+  const resultsHtml = document.getElementById('results').innerHTML
+    .replace(/<canvas[\s\S]*?<\/canvas>/g,'')          // ตัดกราฟ (canvas ใช้ไม่ได้ใน Word)
+    .replace(/<details/g,'<div').replace(/<\/details>/g,'</div>')
+    .replace(/<summary/g,'<div style="font-weight:700;color:#1F3B5C;padding:6px 0"').replace(/<\/summary>/g,'</div>');
+  const style = `
+    body{font-family:'TH Sarabun New',Tahoma,sans-serif;font-size:16pt;color:#1a2430}
+    h1{font-size:24pt;color:#1F3B5C;text-align:center;margin-bottom:2px}
+    h2{font-size:18pt;color:#1F3B5C;border-bottom:2px solid #2E75B6;padding-bottom:4px;margin-top:22px}
+    table{border-collapse:collapse;width:100%;font-size:13pt;margin-top:6px}
+    th{background:#2E75B6;color:#fff;padding:5px 8px;text-align:center}
+    td{border:1px solid #C8D3DE;padding:4px 8px}
+    .totalrow td{background:#DCE6F0;font-weight:700}
+    .tag{font-weight:700} .tag.red{color:#B31B1B} .tag.green{color:#1E6B2E} .tag.amber{color:#8A6D00}
+    .kpis,.charts{display:none}.two{display:block}
+    .table-scroll{overflow:visible}
+    .alertbanner{font-size:15pt;font-weight:700;padding:10px;margin-bottom:14px}
+    .note{font-size:11pt;color:#667788;font-style:italic}
+  `;
+  const head = `<h1>รายงานตรวจสอบค่าแรงผู้รับเหมา</h1>
+    <p style="text-align:center;color:#667788">ประจำเดือน${esc(R.monthLabel)} | สถานะ ${esc(AUDIT.narrative.status.toUpperCase())} | Audit ${esc(AUDIT.appVersion)}<br>ไฟล์ ${esc(AUDIT.source.name)} | ชีท "${esc(AUDIT.mName)}" / "${esc(AUDIT.dName)}" / "${esc(AUDIT.tName)}" | ตรวจ ${esc(AUDIT.auditedAt.toLocaleString('th-TH'))}<br>ยอดทางการ: ${esc(AUDIT.narrative.officialCell)} = ${fmt(AUDIT.narrative.baseTotal)} บาท • กฎ: 8 ชม. ${fmt(AUDIT.rules.rate8)} บาท / 12 ชม. ${fmt(AUDIT.rules.rate12)} บาท • กะทีละ ${fmt(AUDIT.rules.shiftIncrement,1)} • รอบ ${fmtClock(AUDIT.rules.dayStart)} / ${fmtClock(AUDIT.rules.nightStart)} • ผ่อนผัน ${AUDIT.rules.grace} นาที</p><hr>`;
+  const preHtml = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>"+
+    "<head><meta charset='utf-8'><title>รายงาน</title><style>"+style+"</style></head><body>";
+  const postHtml = "</body></html>";
+  const full = preHtml + head + resultsHtml + postHtml;
+  const blob = new Blob(['\ufeff', full], {type:'application/msword'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'รายงานตรวจสอบค่าแรงผู้รับเหมา_'+R.monthLabel.replace(/\s/g,'_')+'.doc';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+  showAppMessage('ok','สร้างรายงาน Word แล้ว','รายงานใช้ตัวเลขและสถานะเดียวกับผลตรวจบนหน้าจอ');
+}
+
+function printReport(){
+  if(!AUDIT){showAppMessage('warn','ยังไม่มีผลตรวจ','กรุณารันการตรวจสอบก่อนพิมพ์');return;}
+  window.print();
+}
+
+/* ============================================================
+   ดาวน์โหลดผลตรวจเป็น Excel
+   ============================================================ */
+function appendReportSheet(wb,name,rows,widths,autoFilter=false){
+  const safeRows=rows.map(row=>row.map(v=>typeof v==='string'?safeCellText(v):v));
+  const ws=XLSX.utils.aoa_to_sheet(safeRows);
+  ws['!cols']=(widths||[]).map(w=>({wch:w}));
+  ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2',activePane:'bottomLeft',state:'frozen'};
+  if(autoFilter&&safeRows.length>1){
+    const maxCols=Math.max(...safeRows.map(r=>r.length));
+    ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:safeRows.length-1,c:maxCols-1}})};
+  }
+  Object.keys(ws).filter(a=>a[0]!=='!'&&ws[a].t==='n').forEach(a=>ws[a].z=Number.isInteger(ws[a].v)?'#,##0':'#,##0.00');
+  XLSX.utils.book_append_sheet(wb,ws,name);
+}
+
+function exportReport(){
+  if(!AUDIT) return;
+  const {AGG,R,dup,narrative:NAR}=AUDIT;
+  try{
+    const wb=XLSX.utils.book_new();
+    wb.Props={Title:'ผลตรวจค่าแรงผู้รับเหมา '+R.monthLabel,Subject:'AAF contractor payroll audit',Author:'AAF Audit '+AUDIT.appVersion,CreatedDate:AUDIT.auditedAt};
+    const dupFlags=dup.flags.filter(f=>f.type==='dup'),fracFlags=dup.flags.filter(f=>f.type==='frac');
+    const s1=[['ผลตรวจสอบค่าแรงผู้รับเหมา — '+R.monthLabel],
+      ['สถานะ',NAR.status==='blocked'?'ห้ามใช้อนุมัติ':(NAR.status==='review'?'ต้องทบทวน':'ผ่านการตรวจอัตโนมัติ')],
+      ['ไฟล์ต้นทาง',AUDIT.source.name],['SHA-256',AUDIT.source.sha256||'ไม่พร้อมใช้งาน'],['ขนาดไฟล์ (bytes)',AUDIT.source.size],
+      ['ชีทสรุป',AUDIT.mName],['ชีท detail',AUDIT.dName],['ชีท Time',AUDIT.tName],['เวลาตรวจ',AUDIT.auditedAt.toLocaleString('th-TH')],['เวอร์ชันโปรแกรม',AUDIT.appVersion],[],
+      ['กฎอัตรา 8 ชม. (บาท)',AUDIT.rules.rate8],['กฎอัตรา 12 ชม. (บาท)',AUDIT.rules.rate12],['กะกลางวัน / กลางคืน',fmtClock(AUDIT.rules.dayStart)+' / '+fmtClock(AUDIT.rules.nightStart)],['ผ่อนผันเวลา (นาที)',AUDIT.rules.grace],['จำนวนกะที่อนุญาต','ขั้นละ '+AUDIT.rules.shiftIncrement+' กะ'],[],
+      ['ยอดทางการ ('+NAR.officialCell+')',NAR.baseTotal],['ผลรวมรายวันจากรายละเอียด (บาท)',AGG.grand],['ค่าแรงประกันรายวัน',AGG.guarTotal],['ค่าแรงตามชิ้นงาน',AGG.unitTotal],
+      ['หักที่ยืนยันแล้ว (บาท)',NAR.confirmedExcess],['ยอดหลังปรับเฉพาะรายการยืนยัน (บาท)',NAR.proposed],
+      ['มูลค่ารอชี้แจง—ยังไม่หัก (บาท)',NAR.pendingExcess],['ยอดกรณี pending ยืนยันทั้งหมด (บาท)',NAR.ifPendingConfirmed],
+      ['มูลค่าทฤษฎีนอกช่วงสูตร—ไม่บวกยอด (บาท)',NAR.unmappedPotential],[],
+      ['Excel formula errors',R.formulaErrors.length],['สูตรถูกแทนค่าคงที่',R.formulaGaps.length],['สูตรอ้างเซลล์ซ้ำ',R.duplicateFormulaRefs.length],['ยอดทางการไม่ตรงผลรวม',R.reconciliationWarn.length],
+      ['รายการคูณอัตราผิด',R.mathErr.length],['ยอดรวมรายวันผิด',R.dailyErr.length],['แถวรวมผิด',R.totalsErr.length],['รายการซ้ำ',dupFlags.length]];
+    appendReportSheet(wb,'สรุปผลตรวจ',s1,[46,28]);
+
+    const s2=[['วันที่','ค่าแรงประกัน','ตามชิ้นงาน','รวม','คน 8 ชม.','คน 12 ชม.']];
+    AGG.daily.forEach(d=>s2.push([d.day,d.guar,d.unit,d.total,d.p8,d.p12]));
+    s2.push(['รวม',AGG.guarTotal,AGG.unitTotal,AGG.grand,AGG.p8,AGG.p12]);
+    appendReportSheet(wb,'รายวัน',s2,[12,18,18,18,14,14],true);
+
+    const s3=[['หน่วยงาน','คน-วัน 8 ชม.','คน-วัน 12 ชม.','รวม (บาท)']];
+    Object.entries(AGG.bySection).sort((a,b)=>b[1].val-a[1].val).forEach(([k,v])=>s3.push([k,v.p8,v.p12,v.val]));
+    appendReportSheet(wb,'รายหมวด',s3,[38,16,16,18],true);
+
+    const s4=[['ระดับ','ประเภท','วันที่/เซลล์','รหัส','ชื่อ','รายละเอียด','จำนวนเงิน','สถานะ/หลักฐาน']];
+    dupFlags.forEach(f=>s4.push([f.confirmed?'ยืนยันแล้ว':'รอชี้แจง',f.reason,f.key,f.code,f.name,f.items.map(x=>x.section+' '+x.shift+' ×'+x.mark).join(' + '),f.excess,f.verdict]));
+    (dup.missFlags||[]).forEach(f=>s4.push(['ทบทวน','เครื่องหมายนอกช่วงสูตร',f.key,f.code,f.name,f.shift+' ×'+f.mark+' / detail row '+f.row,f.val,'ไม่ใช่ adjustment อัตโนมัติ']));
+    fracFlags.forEach(f=>s4.push(['ทบทวน','จำนวนกะไม่เป็นขั้นละ '+AUDIT.rules.shiftIncrement,f.key,f.code,f.name,f.items.map(x=>x.section+' '+x.shift+' ×'+x.mark).join(' + '),f.paid,f.verdict]));
+    R.mathErr.forEach(e=>s4.push(['ผิดพลาด','คูณอัตราไม่ตรง',e.date,'','',e.section+' คอลัมน์ '+e.col,e.v-e.exp,'ค่าในไฟล์ '+e.v+' / ควรเป็น '+e.exp]));
+    R.dateWarn.forEach(w=>s4.push(['ทบทวน','วันที่/โครงสร้าง','','','',w,'','']));
+    R.reconciliationWarn.forEach(w=>s4.push(['หยุด','ยอดกระทบไม่ตรง','','','',w,'','']));
+    appendReportSheet(wb,'รายการผิดปกติ',s4,[14,28,18,16,28,70,18,70],true);
+
+    const sf=[['ระดับ','ชีท','เซลล์','ค่า/อ้างอิง','สูตร/หมายเหตุ']];
+    R.formulaErrors.forEach(e=>sf.push(['ERROR',e.sheet,e.addr,e.error,e.formula]));
+    R.formulaGaps.forEach(e=>sf.push(['REVIEW',e.sheet,e.addr,e.value,'สูตรถูกแทนด้วยค่าคงที่']));
+    R.duplicateFormulaRefs.forEach(e=>sf.push(['REVIEW',e.sheet,e.addr,e.refs.join(', '),e.formula]));
+    AUDIT.S.summaryTotals.forEach(x=>sf.push([x.addr===NAR.officialCell?'OFFICIAL':'CONTROL',AUDIT.S.name,x.addr,x.value,x.formula||'ค่าคงที่']));
+    appendReportSheet(wb,'ตรวจสูตรและ Control',sf,[14,28,14,28,100],true);
+
+    if(R.idCoverage){
+      const si=[['ประเภท','รหัส detail','รหัส Time','หมายเหตุ']];
+      R.idCoverage.near.forEach(x=>si.push(['prefix น่าสงสัย',x.detail,x.time,'เลขท้าย 6 หลักตรงกัน']));
+      R.idCoverage.detailOnly.filter(x=>!R.idCoverage.near.some(n=>n.detail===x)).forEach(x=>si.push(['มีเฉพาะ detail',x,'','']));
+      R.idCoverage.scanOnly.filter(x=>!R.idCoverage.near.some(n=>n.time===x)).forEach(x=>si.push(['มีเฉพาะ Time','',x,'']));
+      appendReportSheet(wb,'เทียบรหัสพนักงาน',si,[22,18,18,42],true);
+    }
+
+    if(AUDIT.exitCheck&&AUDIT.exitCheck.available&&AUDIT.exitCheck.early.length){
+      const ec=AUDIT.exitCheck,h=m=>{m=((m%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');};
+      const s5=[['วันที่','รหัส','ชื่อ','กะ','ประเภท','เข้า','ออกจริง','ควรออก','ออกก่อน (นาที)','หมายเหตุ']];
+      ec.early.slice().sort((a,b)=>a.day-b.day||a.diff-b.diff).forEach(e=>s5.push([e.day,e.code,e.name,e.shift+' ชม.',e.entryType==='day'?'กลางวัน':'กลางคืน',h(e.entry),h(e.exit),h(e.expected),-e.diff,e.anomEntry?'เวลาเข้าเบี่ยงจากรอบมาตรฐานเกิน 90 นาที':'']));
+      appendReportSheet(wb,'ออกก่อนเวลา',s5,[10,16,28,10,12,10,10,10,16,44],true);
+      const s6=[['รหัส','ชื่อ','จำนวนวัน','เฉลี่ยออกก่อน (นาที)','รวม (นาที)']];
+      ec.topOffenders.forEach(o=>s6.push([o.code,o.name,o.count,+(o.totalMin/o.count).toFixed(0),o.totalMin]));
+      appendReportSheet(wb,'ออกก่อนเวลา-Top15',s6,[16,28,12,22,16],true);
+    }
+    XLSX.writeFile(wb,'ผลตรวจค่าแรงผู้รับเหมา_'+R.monthLabel.replace(/\s/g,'_')+'_Audit_'+AUDIT.appVersion+'.xlsx',{compression:true});
+    showAppMessage('success','สร้างไฟล์ Excel แล้ว','ยอดทุกสถานะในไฟล์ตรงกับรายงานบนหน้าจอ');
+  }catch(err){showAppMessage('error','สร้างไฟล์ Excel ไม่สำเร็จ',err&&err.message?err.message:'กรุณาลองใหม่');console.error(err);}
+}
+
+</script>
+</body>
+</html>

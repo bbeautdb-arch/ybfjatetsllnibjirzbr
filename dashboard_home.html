@@ -3,41 +3,73 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site https://kabin-close.bbeautybbsoraai.chatgpt.site; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>AAF Company Portal — หน้าหลัก</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
+  body { min-height: 100vh; color: #f3f4f6; background: #111827; }
+  .portal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; border-bottom: 1px solid #374151; background: #1f2937; }
+  .portal-brand, .portal-user-actions, .portal-card-row, .portal-card-title { display: flex; align-items: center; }
+  .portal-brand { gap: 12px; }.portal-logo { font-size: 24px; }
+  .portal-brand h1 { margin: 0; color: #fff; font-size: 16px; }.portal-brand p { margin: 3px 0 0; color: #9ca3af; font-size: 12px; }
+  .portal-user-actions { gap: 12px; }.role-badge, .card-badge { display: inline-flex; border-radius: 999px; font-weight: 700; }
+  .role-badge { padding: 5px 12px; border: 1px solid transparent; font-size: 12px; }
+  .badge-admin { color: #fbbf24; border-color: rgba(245,158,11,.3); background: rgba(120,53,15,.4); }
+  .badge-production, .badge-grade { color: #2dd4bf; border-color: rgba(20,184,166,.3); background: rgba(19,78,74,.4); }
+  .badge-hr { color: #22d3ee; border-color: rgba(6,182,212,.3); background: rgba(22,78,99,.4); }
+  .badge-maintenance { color: #fb923c; border-color: rgba(249,115,22,.3); background: rgba(124,45,18,.4); }
+  .badge-accounting { color: #86efac; border-color: rgba(34,197,94,.3); background: rgba(20,83,45,.4); }
+  .badge-sales { color: #60a5fa; border-color: rgba(59,130,246,.3); background: rgba(30,58,138,.4); }
+  .logout-button { padding: 7px 12px; border: 1px solid #4b5563; border-radius: 8px; color: #9ca3af; background: transparent; cursor: pointer; font-size: 12px; }.logout-button:hover { color: #f87171; border-color: rgba(239,68,68,.5); }
+  .portal-main { width: min(672px, 100%); margin: 0 auto; padding: 40px 24px; }.portal-main>p { margin: 0 0 24px; color: #6b7280; font-size: 14px; }
+  .pages { display: grid; gap: 16px; }.portal-card { display: block; padding: 20px; border: 1px solid #374151; border-radius: 12px; color: inherit; background: #1f2937; text-decoration: none; transition: border-color .18s, transform .18s; }.portal-card:hover { transform: translateY(-1px); }
+  .portal-card-row { gap: 16px; }.card-icon { flex: 0 0 auto; font-size: 30px; }.card-copy { flex: 1; min-width: 0; }.portal-card-title { gap: 8px; }.portal-card-title p { margin: 0; color: #fff; font-weight: 700; }.card-copy>p { margin: 4px 0 0; color: #9ca3af; font-size: 14px; }.card-badge { padding: 2px 8px; color: #9ca3af; background: #374151; font-size: 11px; }.card-arrow { flex: 0 0 auto; color: #4b5563; font-size: 20px; }
+  .card-orange { border-color: rgba(249,115,22,.3); }.card-orange:hover { border-color: rgba(251,146,60,.65); }.card-orange:hover .portal-card-title p,.card-orange:hover .card-arrow { color: #fb923c; }
+  .card-amber { border-color: rgba(245,158,11,.3); }.card-amber:hover { border-color: rgba(251,191,36,.65); }.card-amber:hover .portal-card-title p,.card-amber:hover .card-arrow { color: #fbbf24; }
+  .card-green { border-color: rgba(34,197,94,.3); }.card-green:hover { border-color: rgba(74,222,128,.65); }.card-green:hover .portal-card-title p,.card-green:hover .card-arrow { color: #4ade80; }
+  .card-emerald { border-color: rgba(16,185,129,.3); }.card-emerald:hover { border-color: rgba(52,211,153,.65); }.card-emerald:hover .portal-card-title p,.card-emerald:hover .card-arrow { color: #34d399; }
+  .card-teal { border-color: rgba(20,184,166,.3); }.card-teal:hover { border-color: rgba(45,212,191,.65); }.card-teal:hover .portal-card-title p,.card-teal:hover .card-arrow { color: #2dd4bf; }
+  .card-cyan { border-color: rgba(6,182,212,.3); }.card-cyan:hover { border-color: rgba(34,211,238,.65); }.card-cyan:hover .portal-card-title p,.card-cyan:hover .card-arrow { color: #22d3ee; }
+  .card-purple { border-color: rgba(168,85,247,.3); }.card-purple:hover { border-color: rgba(192,132,252,.65); }.card-purple:hover .portal-card-title p,.card-purple:hover .card-arrow { color: #c084fc; }
+  .card-blue { border-color: rgba(59,130,246,.3); }.card-blue:hover { border-color: rgba(96,165,250,.65); }.card-blue:hover .portal-card-title p,.card-blue:hover .card-arrow { color: #60a5fa; }
+  .card-red { border-color: rgba(239,68,68,.3); }.card-red:hover { border-color: rgba(248,113,113,.65); }.card-red:hover .portal-card-title p,.card-red:hover .card-arrow { color: #f87171; }
+  .sales-note { margin-top: 24px; padding: 16px; border: 1px solid rgba(245,158,11,.2); border-radius: 12px; background: rgba(120,53,15,.2); }.sales-note p { margin: 0; color: rgba(253,230,138,.65); font-size: 12px; }.sales-note p:first-child { margin-bottom: 4px; color: #fbbf24; font-weight: 700; }.hidden { display: none; }
+  @media (max-width: 560px) { .portal-header { align-items: flex-start; padding: 14px 16px; }.portal-user-actions { gap: 7px; }.role-badge { max-width: 110px; text-align: center; }.portal-main { padding: 28px 16px; }.portal-card { padding: 16px; }.card-badge { display: none; }.card-copy>p { font-size: 12px; } }
+</style>
 </head>
-<body class="bg-gray-900 min-h-screen">
+<body>
 
-<div class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
-  <div class="flex items-center gap-3">
-    <span class="text-2xl">🪵</span>
+<header class="portal-header">
+  <div class="portal-brand">
+    <span class="portal-logo">🪵</span>
     <div>
-      <h1 class="text-white font-bold text-base">AAF Company Portal</h1>
-      <p id="welcome-text" class="text-gray-400 text-xs"></p>
+      <h1>AAF Company Portal</h1>
+      <p id="welcome-text"></p>
     </div>
   </div>
-  <div class="flex items-center gap-3">
-    <span id="role-badge" class="text-xs px-3 py-1 rounded-full font-semibold"></span>
-    <button onclick="doLogout()"
-      class="text-xs text-gray-500 hover:text-red-400 border border-gray-600 hover:border-red-500/50 rounded-lg px-3 py-1.5 transition">
-      ออกจากระบบ
-    </button>
+  <div class="portal-user-actions">
+    <span id="role-badge" class="role-badge"></span>
+    <button onclick="doLogout()" class="logout-button">ออกจากระบบ</button>
   </div>
-</div>
+</header>
 
-<div class="max-w-2xl mx-auto px-6 py-10">
-  <p class="text-gray-500 text-sm mb-6">เลือกหน้าที่ต้องการ</p>
-  <div id="pages-container" class="grid grid-cols-1 gap-4"></div>
-  <div id="sales-note" class="hidden mt-6 bg-amber-900/20 border border-amber-500/20 rounded-xl p-4">
-    <p class="text-amber-400 text-xs font-semibold mb-1">📌 หมายเหตุ</p>
-    <p class="text-amber-200/60 text-xs">ข้อมูลที่แสดงจะ filter เฉพาะของคุณอัตโนมัติ</p>
+<main class="portal-main">
+  <p>เลือกหน้าที่ต้องการ</p>
+  <div id="pages-container" class="pages"></div>
+  <div id="sales-note" class="sales-note hidden">
+    <p>📌 หมายเหตุ</p>
+    <p>ข้อมูลที่แสดงจะ filter เฉพาะของคุณอัตโนมัติ</p>
   </div>
-</div>
+</main>
 
 <script>
 const PAGES = {
   admin: [
-    { href: 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/', icon: '🛠️', title: 'งานช่าง PM / CM และแจ้งซ่อม',
+    { href: 'accounting_dashboard.html', icon: '📒', title: 'แผนบัญชี',
+      desc: 'ระบบปิดตู้ขาย · ตรวจค่าแรงผู้รับเหมา',
+      color: 'green', badge: 'Admin · บัญชี' },
+    { href: 'maintenance_dashboard.html', icon: '🛠️', title: 'งานช่าง PM / CM และแจ้งซ่อม',
       desc: 'ทะเบียนเครื่องจักร · แจ้งซ่อมและ Warning · แผน PM · ใบงาน CM · แนบรูปยืนยัน',
       color: 'orange', badge: 'ทีมช่าง · ฝ่ายผลิต' },
     { href: 'production_plan.html', icon: '🏭', title: 'แผนผลิตประจำวัน',
@@ -66,7 +98,7 @@ const PAGES = {
       color: 'red', badge: 'Admin เท่านั้น' },
   ],
   production: [
-    { href: 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/', icon: '🛠️', title: 'งานช่าง PM / CM และแจ้งซ่อม',
+    { href: 'maintenance_dashboard.html', icon: '🛠️', title: 'งานช่าง PM / CM และแจ้งซ่อม',
       desc: 'แจ้งซ่อม · บันทึก Warning · ดูสถานะเครื่องจักร · ติดตามงานซ่อม',
       color: 'orange', badge: 'ฝ่ายผลิต · ทีมช่าง' },
     { href: 'production_plan.html', icon: '🏭', title: 'แผนผลิตประจำวัน',
@@ -87,9 +119,14 @@ const PAGES = {
       color: 'cyan', badge: 'ฝ่าย HR' },
   ],
   maintenance: [
-    { href: 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/', icon: '🛠️', title: 'งานช่าง PM / CM และแจ้งซ่อม',
+    { href: 'maintenance_dashboard.html', icon: '🛠️', title: 'งานช่าง PM / CM และแจ้งซ่อม',
       desc: 'ทะเบียนเครื่องจักร · Warning · แผน PM · ใบงาน CM · แนบรูปยืนยัน',
       color: 'orange', badge: 'ทีมช่าง' },
+  ],
+  accounting: [
+    { href: 'accounting_dashboard.html', icon: '📒', title: 'แผนบัญชี',
+      desc: 'ระบบปิดตู้ขาย · ตรวจค่าแรงผู้รับเหมา',
+      color: 'green', badge: 'ฝ่ายบัญชี' },
   ],
   sales: [
     { href: 'history_database.html', icon: '📊', title: 'ฐานข้อมูลประวัติการขาย',
@@ -102,18 +139,6 @@ const PAGES = {
       desc: 'ตรวจสอบสต๊อกคงเหลือ · Aging · ฟรีสต๊อก · มูลค่าสต๊อก',
       color: 'emerald', badge: 'อัปเดตทุกวัน' },
   ],
-};
-
-const COLORS = {
-  orange: { border: 'border-orange-500/30', hover: 'hover:border-orange-400/60', arrow: 'group-hover:text-orange-400' },
-  amber:  { border: 'border-amber-500/30',  hover: 'hover:border-amber-400/60',  arrow: 'group-hover:text-amber-400' },
-  green:  { border: 'border-green-500/30',  hover: 'hover:border-green-400/60',  arrow: 'group-hover:text-green-400' },
-  emerald:{ border: 'border-emerald-500/30',hover: 'hover:border-emerald-400/60',arrow: 'group-hover:text-emerald-400' },
-  teal:   { border: 'border-teal-500/30',   hover: 'hover:border-teal-400/60',   arrow: 'group-hover:text-teal-400' },
-  cyan:   { border: 'border-cyan-500/30',   hover: 'hover:border-cyan-400/60',   arrow: 'group-hover:text-cyan-400' },
-  purple: { border: 'border-purple-500/30', hover: 'hover:border-purple-400/60', arrow: 'group-hover:text-purple-400' },
-  blue:   { border: 'border-blue-500/30',   hover: 'hover:border-blue-400/60',   arrow: 'group-hover:text-blue-400' },
-  red:    { border: 'border-red-500/30',    hover: 'hover:border-red-400/60',    arrow: 'group-hover:text-red-400' },
 };
 
 const sess = sessionStorage.getItem('aaf_user');
@@ -130,22 +155,25 @@ document.getElementById('welcome-text').textContent = `สวัสดี, ${use
 const badge = document.getElementById('role-badge');
 if(user.role === 'admin') {
   badge.textContent = '👑 ผู้บริหาร';
-  badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-amber-900/40 text-amber-400 border border-amber-500/30';
+  badge.className = 'role-badge badge-admin';
 } else if(user.role === 'production') {
   badge.textContent = '🏭 หัวหน้ากะผลิต';
-  badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-teal-900/40 text-teal-400 border border-teal-500/30';
+  badge.className = 'role-badge badge-production';
 } else if(user.role === 'grade_admin') {
   badge.textContent = '📝 ผู้ลงข้อมูลเกรด';
-  badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-teal-900/40 text-teal-400 border border-teal-500/30';
+  badge.className = 'role-badge badge-grade';
 } else if(user.role === 'hr') {
   badge.textContent = '👥 ฝ่าย HR';
-  badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-cyan-900/40 text-cyan-400 border border-cyan-500/30';
+  badge.className = 'role-badge badge-hr';
 } else if(user.role === 'maintenance') {
   badge.textContent = '🛠️ ทีมช่าง';
-  badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-orange-900/40 text-orange-400 border border-orange-500/30';
+  badge.className = 'role-badge badge-maintenance';
+} else if(user.role === 'accounting') {
+  badge.textContent = '🧾 ฝ่ายบัญชี';
+  badge.className = 'role-badge badge-accounting';
 } else {
   badge.textContent = `🏷 เซลส์`;
-  badge.className = 'text-xs px-3 py-1 rounded-full font-semibold bg-blue-900/40 text-blue-400 border border-blue-500/30';
+  badge.className = 'role-badge badge-sales';
   document.getElementById('sales-note').classList.remove('hidden');
 }
 
@@ -155,18 +183,17 @@ else sessionStorage.removeItem('aaf_filter_salesman');
 const pages = PAGES[user.role];
 const container = document.getElementById('pages-container');
 container.innerHTML = pages.map(p => {
-  const c = COLORS[p.color];
-  return `<a href="${p.href}" class="block bg-gray-800 border ${c.border} ${c.hover} rounded-xl p-5 transition group">
-    <div class="flex items-center gap-4">
-      <div class="text-3xl">${p.icon}</div>
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2">
-          <p class="text-white font-semibold ${c.arrow} transition">${p.title}</p>
-          ${p.badge ? `<span class="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full">${p.badge}</span>` : ''}
+  return `<a href="${p.href}" class="portal-card card-${p.color}">
+    <div class="portal-card-row">
+      <div class="card-icon">${p.icon}</div>
+      <div class="card-copy">
+        <div class="portal-card-title">
+          <p>${p.title}</p>
+          ${p.badge ? `<span class="card-badge">${p.badge}</span>` : ''}
         </div>
-        <p class="text-gray-400 text-sm mt-0.5">${p.desc}</p>
+        <p>${p.desc}</p>
       </div>
-      <div class="text-gray-600 ${c.arrow} transition text-xl flex-shrink-0">→</div>
+      <div class="card-arrow">→</div>
     </div>
   </a>`;
 }).join('');
@@ -175,8 +202,10 @@ function doLogout() {
   if(!confirm('ออกจากระบบ?')) return;
   sessionStorage.clear();
   const portalLogin = 'https://bbeautdb-arch.github.io/AAF-System/login.html';
-  const gradeLogout = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(portalLogin);
-  window.location.href = 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(gradeLogout);
+  const closingLogout = 'https://kabin-close.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(portalLogin);
+  const gradeLogout = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(closingLogout);
+  const hrLogout = 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(gradeLogout);
+  window.location.href = 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(hrLogout);
 }
 </script>
 </body>

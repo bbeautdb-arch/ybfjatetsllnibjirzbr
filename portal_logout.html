@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<title>AAF Company Portal — ออกจากระบบ</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
+  body { min-height: 100vh; display: grid; place-items: center; padding: 24px; color: #f3f4f6; background: #111827; }
+  main { width: min(440px, 100%); padding: 28px; border: 1px solid #374151; border-radius: 18px; background: #1f2937; text-align: center; }
+  h1 { margin: 0 0 8px; font-size: 21px; } p { margin: 0; color: #9ca3af; line-height: 1.6; }
+</style>
+</head>
+<body>
+  <main>
+    <h1>กำลังออกจากระบบ</h1>
+    <p>กำลังล้างสิทธิ์จากทุกระบบและกลับหน้าเข้าสู่ระบบ…</p>
+  </main>
+<script>
+sessionStorage.clear();
+const portalLogin = 'https://bbeautdb-arch.github.io/AAF-System/login.html';
+const closingLogout = 'https://kabin-close.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(portalLogin);
+const gradeLogout = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(closingLogout);
+const hrLogout = 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(gradeLogout);
+window.location.replace(hrLogout);
+</script>
+</body>
+</html>

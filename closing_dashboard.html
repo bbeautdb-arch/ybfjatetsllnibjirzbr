@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://kabin-close.bbeautybbsoraai.chatgpt.site https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<title>AAF — ระบบปิดตู้ขาย</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
+  body { min-height: 100vh; display: grid; place-items: center; background: #111a16; color: #edf7f0; }
+  .launch-card { width: min(520px, calc(100% - 40px)); padding: 32px; border: 1px solid rgba(74,222,128,.3); border-radius: 20px; background: #1c2922; box-shadow: 0 24px 64px rgba(0,0,0,.3); text-align: center; }
+  .launch-card span { display: block; margin-bottom: 12px; font-size: 44px; }
+  .launch-card h1 { margin: 0 0 8px; font-size: 24px; }
+  .launch-card p { margin: 0; color: #a8b9ae; line-height: 1.65; }
+  .launch-card a { display: inline-block; margin-top: 20px; color: #86efac; font-weight: 700; text-decoration: none; }
+</style>
+</head>
+<body>
+  <main class="launch-card">
+    <span aria-hidden="true">🧾</span>
+    <h1>ระบบปิดตู้ขาย</h1>
+    <p id="launch-status">กำลังตรวจสิทธิ์และเปิดระบบปิดตู้…</p>
+    <a href="accounting_dashboard.html">กลับแผนบัญชี</a>
+  </main>
+
+<script>
+const CLOSING_SITE_BASE_URL = 'https://kabin-close.bbeautybbsoraai.chatgpt.site/';
+const GRADE_SITE_BASE_URL = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/';
+
+let session = null;
+try { session = JSON.parse(sessionStorage.getItem('aaf_user') || 'null'); } catch (error) { session = null; }
+launchClosingDashboard();
+
+async function launchClosingDashboard() {
+  if (!session) { window.location.replace('login.html'); return; }
+  if (!['admin', 'accounting'].includes(session.role)) { window.location.replace('dashboard_home.html'); return; }
+  const bridgeSessionToken = session.bridgeSessionToken || session.gradeBridgeSessionToken;
+  if (!bridgeSessionToken || (session.role === 'accounting' && session.authSource !== 'closing')) {
+    sessionStorage.removeItem('aaf_user');
+    window.location.replace('login.html?reason=closing-auth-required');
+    return;
+  }
+
+  const ownClosingSession = session.role === 'accounting';
+  const launchBase = ownClosingSession ? CLOSING_SITE_BASE_URL : GRADE_SITE_BASE_URL;
+  const launchPath = ownClosingSession ? 'api/aaf/launch' : 'api/aaf/closing-launch';
+  try {
+    const response = await fetch(`${launchBase}${launchPath}`, {
+      method: 'POST', mode: 'cors', cache: 'no-store',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({ bridgeSessionToken }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok || !result.handoffUrl) throw new Error('launch_failed');
+    window.location.replace(result.handoffUrl);
+  } catch (error) {
+    document.getElementById('launch-status').textContent = 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่';
+    sessionStorage.removeItem('aaf_user');
+    setTimeout(() => window.location.replace('login.html?reason=closing-session-expired'), 700);
+  }
+}
+</script>
+</body>
+</html>

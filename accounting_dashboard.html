@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<title>AAF — แผนบัญชี</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
+  body { min-height: 100vh; color: #f3f4f6; background: #111827; }
+  .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; border-bottom: 1px solid #374151; background: #1f2937; }
+  .brand, .actions, .card-row, .card-title { display: flex; align-items: center; }
+  .brand { gap: 12px; }
+  .brand-icon { font-size: 26px; }
+  .brand h1 { margin: 0; color: #fff; font-size: 17px; }
+  .brand p { margin: 3px 0 0; color: #9ca3af; font-size: 12px; }
+  .actions { gap: 10px; }
+  .role-badge { padding: 5px 12px; border: 1px solid rgba(34,197,94,.3); border-radius: 999px; color: #86efac; background: rgba(20,83,45,.4); font-size: 12px; font-weight: 700; }
+  .back { padding: 7px 11px; border: 1px solid #4b5563; border-radius: 8px; color: #cbd5e1; text-decoration: none; font-size: 12px; }
+  .back:hover { color: #fff; border-color: #64748b; }
+  main { width: min(760px, 100%); margin: 0 auto; padding: 42px 24px; }
+  .eyebrow { margin: 0 0 8px; color: #4ade80; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  main h2 { margin: 0; color: #fff; font-size: clamp(24px, 5vw, 34px); }
+  .lead { margin: 10px 0 28px; color: #9ca3af; line-height: 1.65; }
+  .pages { display: grid; gap: 16px; }
+  .card { display: block; padding: 22px; border: 1px solid rgba(34,197,94,.3); border-radius: 14px; color: inherit; background: #1f2937; text-decoration: none; transition: transform .18s, border-color .18s, background .18s; }
+  .card:hover { transform: translateY(-2px); border-color: rgba(74,222,128,.75); background: #223029; }
+  .card-row { gap: 16px; }
+  .card-icon { flex: 0 0 auto; width: 46px; font-size: 32px; text-align: center; }
+  .card-copy { flex: 1; min-width: 0; }
+  .card-title { gap: 8px; }
+  .card-title strong { color: #fff; font-size: 17px; }
+  .card-badge { padding: 2px 8px; border-radius: 999px; color: #86efac; background: rgba(20,83,45,.55); font-size: 11px; font-weight: 700; }
+  .card-copy p { margin: 6px 0 0; color: #9ca3af; font-size: 14px; line-height: 1.55; }
+  .arrow { flex: 0 0 auto; color: #4b5563; font-size: 22px; }
+  .card:hover .arrow, .card:hover .card-title strong { color: #4ade80; }
+  .privacy { margin-top: 22px; padding: 14px 16px; border: 1px solid rgba(59,130,246,.22); border-radius: 12px; color: #94a3b8; background: rgba(30,58,138,.15); font-size: 12px; line-height: 1.6; }
+  @media (max-width: 600px) {
+    .header { align-items: flex-start; padding: 14px 16px; }
+    .actions { flex-direction: column; align-items: flex-end; gap: 6px; }
+    main { padding: 30px 16px; }
+    .card { padding: 18px 16px; }
+    .card-row { gap: 12px; }
+    .card-badge { display: none; }
+    .card-copy p { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand">
+    <span class="brand-icon" aria-hidden="true">📒</span>
+    <div>
+      <h1>แผนบัญชี</h1>
+      <p id="welcome-text">AAF Company Portal</p>
+    </div>
+  </div>
+  <div class="actions">
+    <span id="accounting-role" class="role-badge">ฝ่ายบัญชี</span>
+    <a class="back" href="dashboard_home.html">← หน้าหลัก</a>
+  </div>
+</header>
+
+<main>
+  <p class="eyebrow">Accounting workspace</p>
+  <h2>เครื่องมือฝ่ายบัญชี</h2>
+  <p class="lead">รวมงานปิดตู้ขายและการตรวจสอบค่าแรงผู้รับเหมาไว้ในพื้นที่เดียวกัน</p>
+
+  <div class="pages">
+    <a class="card" href="closing_dashboard.html">
+      <div class="card-row">
+        <div class="card-icon" aria-hidden="true">🧾</div>
+        <div class="card-copy">
+          <div class="card-title"><strong>ระบบปิดตู้ขาย</strong><span class="card-badge">Admin · บัญชี</span></div>
+          <p>Invoice · ค่าใช้จ่ายปิดตู้ · ต้นทุน · กำไร และรายงานปิดงวด</p>
+        </div>
+        <div class="arrow" aria-hidden="true">→</div>
+      </div>
+    </a>
+
+    <a class="card" href="contractor_payroll_audit.html">
+      <div class="card-row">
+        <div class="card-icon" aria-hidden="true">🧮</div>
+        <div class="card-copy">
+          <div class="card-title"><strong>ตรวจค่าแรงผู้รับเหมา</strong><span class="card-badge">Admin · บัญชี</span></div>
+          <p>โยนไฟล์ Excel เพื่อตรวจสูตร ยอดทางการ CX36 กะซ้ำ เวลาออกงาน และส่งออกรายงาน</p>
+        </div>
+        <div class="arrow" aria-hidden="true">→</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="privacy">🔒 โปรแกรมตรวจค่าแรงประมวลผลไฟล์ Excel ภายในเบราว์เซอร์ ข้อมูลค่าแรงไม่ถูกส่งขึ้น GitHub หรือเซิร์ฟเวอร์ของบริษัท</div>
+</main>
+
+<script>
+const rawSession = sessionStorage.getItem('aaf_user');
+let currentUser = null;
+try { currentUser = rawSession ? JSON.parse(rawSession) : null; } catch (error) { currentUser = null; }
+if (!currentUser || !['admin', 'accounting'].includes(currentUser.role)) {
+  window.location.replace(rawSession ? 'dashboard_home.html' : 'login.html');
+} else {
+  document.getElementById('welcome-text').textContent = `สวัสดี, ${currentUser.name} · AAF Company Portal`;
+  document.getElementById('accounting-role').textContent = currentUser.role === 'admin' ? 'ผู้บริหาร' : 'ฝ่ายบัญชี';
+}
+</script>
+</body>
+</html>

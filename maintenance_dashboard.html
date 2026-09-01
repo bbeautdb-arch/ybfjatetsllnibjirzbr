@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<title>AAF — งานช่าง PM / CM</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
+  body { min-height: 100vh; display: grid; place-items: center; background: #14181d; color: #f3f5f7; }
+  .launch-card { width: min(520px, calc(100% - 40px)); padding: 32px; border: 1px solid rgba(249,115,22,.32); border-radius: 20px; background: #20262d; box-shadow: 0 24px 64px rgba(0,0,0,.32); text-align: center; }
+  .launch-card span { display: block; font-size: 44px; margin-bottom: 12px; }
+  .launch-card h1 { margin: 0 0 8px; font-size: 24px; }
+  .launch-card p { margin: 0; color: #aeb7c0; line-height: 1.65; }
+  .launch-card a { display: inline-block; margin-top: 20px; color: #fb923c; font-weight: 700; text-decoration: none; }
+</style>
+</head>
+<body>
+  <main class="launch-card">
+    <span aria-hidden="true">🛠️</span>
+    <h1>งานช่าง PM / CM และแจ้งซ่อม</h1>
+    <p id="launch-status">กำลังตรวจสิทธิ์และเปิดระบบงานช่าง…</p>
+    <a href="dashboard_home.html">กลับหน้าหลัก</a>
+  </main>
+
+<script>
+const MAINTENANCE_SITE_BASE_URL = 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/';
+const GRADE_SITE_BASE_URL = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/';
+
+let session = null;
+try { session = JSON.parse(sessionStorage.getItem('aaf_user') || 'null'); } catch (error) { session = null; }
+launchMaintenanceDashboard();
+
+async function launchMaintenanceDashboard() {
+  if (!session) { window.location.replace('login.html'); return; }
+  if (!['admin', 'production', 'maintenance'].includes(session.role)) { window.location.replace('dashboard_home.html'); return; }
+  const bridgeSessionToken = session.bridgeSessionToken || session.gradeBridgeSessionToken;
+  if (!bridgeSessionToken) {
+    sessionStorage.removeItem('aaf_user');
+    window.location.replace('login.html?reason=maintenance-auth-required');
+    return;
+  }
+
+  const ownMaintenanceSession = session.authSource === 'maintenance';
+  const launchBase = ownMaintenanceSession ? MAINTENANCE_SITE_BASE_URL : GRADE_SITE_BASE_URL;
+  const launchPath = ownMaintenanceSession ? 'api/aaf/launch' : 'api/aaf/maintenance-launch';
+  try {
+    const response = await fetch(`${launchBase}${launchPath}`, {
+      method: 'POST', mode: 'cors', cache: 'no-store',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({ bridgeSessionToken }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok || !result.handoffUrl) throw new Error('launch_failed');
+    window.location.replace(result.handoffUrl);
+  } catch (error) {
+    document.getElementById('launch-status').textContent = 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่';
+    sessionStorage.removeItem('aaf_user');
+    setTimeout(() => window.location.replace('login.html?reason=maintenance-session-expired'), 700);
+  }
+}
+</script>
+</body>
+</html>
