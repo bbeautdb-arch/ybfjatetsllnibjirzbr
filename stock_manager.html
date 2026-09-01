@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock AAF - ระบบจัดการสต๊อก</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="stock_snapshot.js"></script>
+    <style>
+        body { font-family: 'Prompt', sans-serif; background-color: #f1f5f9; }
+        
+        .filter-select {
+            padding: 6px 12px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 6px; 
+            outline: none; background-color: white; color: #1e293b; font-family: 'Prompt', sans-serif; font-weight: 500;
+        }
+        .filter-select:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2); }
+
+        ::-webkit-scrollbar { width: 8px; height: 10px; }
+        ::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* สไตล์ตารางโชว์ Raw Data */
+        #raw-table-container table {
+            width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; background-color: white;
+        }
+        #raw-table-container td, #raw-table-container th {
+            border: 1px solid #cbd5e1; padding: 6px 10px; white-space: nowrap; color: #334155;
+        }
+        #raw-table-container tr:nth-child(1) td, 
+        #raw-table-container tr:nth-child(2) td,
+        #raw-table-container tr:nth-child(3) td {
+            background-color: #1e293b; color: #ffffff; font-weight: 700; border-color: #475569;
+        }
+        #raw-table-container tr:hover td { background-color: #f8fafc; }
+        
+        /* 🟢 สไตล์ช่องแก้ไขแมนนวล */
+        td[contenteditable="true"] {
+            background-color: #fefce8 !important; 
+            border: 1px dashed #facc15 !important; 
+            color: #0f172a !important;
+            cursor: text;
+        }
+        td[contenteditable="true"]:focus {
+            background-color: #ffffff !important;
+            outline: 2px solid #3b82f6 !important;
+        }
+
+        /* ช่องกรอกราคา */
+        .price-input {
+            width: 90px; padding: 4px 6px; text-align: center; border: 1px solid #cbd5e1; border-radius: 4px;
+            font-size: 14px; font-weight: 600; color: #0f172a; outline: none; transition: all 0.2s;
+        }
+        .price-input:focus { border-color: #eab308; box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.2); }
+    </style>
+</head>
+<body class="p-4 md:p-6 min-h-screen flex flex-col">
+
+    <div class="max-w-[1500px] mx-auto w-full flex flex-col space-y-6 pb-20">
+        
+        <div class="flex flex-col md:flex-row justify-between items-end border-b border-slate-300 pb-4">
+            <div>
+                <h1 id="main-title" class="text-3xl font-bold text-slate-800 tracking-tight flex items-center">
+                    📦 Stock AAF Update วันที่...
+                </h1>
+                <p class="text-sm mt-1 text-slate-500">
+                    💡 ฐานข้อมูลหลัก: คำนวณตัดสต๊อก, แปลงปริมาตร (2.5 mm.) และประเมินมูลค่า (THB/USD)
+                </p>
+            </div>
+            <div class="mt-4 md:mt-0 flex space-x-3 items-center">
+                <a href="dashboard_home.html" class="bg-violet-600 hover:bg-violet-500 text-white font-bold py-2 px-6 rounded-lg shadow-md transition flex items-center text-sm">
+                    📊 กลับหน้าหลัก
+                </a>
+                <a href="sales_analytics.html" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm transition flex items-center text-sm">
+                    ← ไปหน้า Sales Analytics
+                </a>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-md border border-slate-200 p-5 border-t-4 border-t-indigo-500">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-3 mb-4">
+                <h2 class="text-xl font-bold text-indigo-900 flex items-center">
+                    🔍 สรุปสต๊อกคงเหลือ และมูลค่าสต๊อก
+                </h2>
+                <div class="mt-3 md:mt-0 flex items-center space-x-3">
+                    <button id="btn-sync-price" onclick="syncSalesData()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg shadow-md transition flex items-center text-sm transform hover:-translate-y-0.5">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        ซิงค์ราคา & ตัดยอดจอง
+                    </button>
+
+                    <label class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg shadow-md cursor-pointer transition text-sm flex items-center transform hover:-translate-y-0.5">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        อัปโหลด Excel เพื่อปรับสต๊อก
+                        <input type="file" class="hidden" accept=".xlsx, .xls" onchange="uploadStockExcel(event)">
+                    </label>
+                </div>
+            </div>
+
+            <div id="auto-stock-panel" class="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <div>
+                    <div class="text-sm font-bold text-emerald-900">✉️ อัปเดตจาก FYI-AAF Aging Time Auto Mail</div>
+                    <div id="auto-stock-status" class="mt-0.5 text-xs font-medium text-emerald-700">กำลังตรวจชุดข้อมูลล่าสุด...</div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button id="btn-open-auto-mail-import" onclick="openAutoMailImport()" class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-500">นำเข้าข้อมูลจากเมล</button>
+                    <button id="btn-rollback-stock" onclick="rollbackStockImport()" class="hidden rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-50">ย้อนกลับข้อมูลก่อนหน้า</button>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-3 mb-4 bg-indigo-50/50 p-3 rounded-lg border border-indigo-100 items-center justify-between">
+                <div class="flex flex-wrap gap-3 items-center">
+                    <span class="font-bold text-indigo-800 text-sm mr-1">🔍 ตัวกรอง:</span>
+                    <select id="view-t" class="filter-select border-indigo-400 text-indigo-900 bg-indigo-50 font-bold" onchange="renderStockView()"><option value="">-- หนา (T) ทั้งหมด --</option></select>
+                    <select id="view-grade" class="filter-select" onchange="renderStockView()"><option value="">-- เกรดทั้งหมด --</option></select>
+                    <select id="view-w" class="filter-select" onchange="renderStockView()"><option value="">-- กว้าง (W) --</option></select>
+                    <select id="view-l" class="filter-select" onchange="renderStockView()"><option value="">-- ยาว (L) --</option></select>
+                    <button onclick="clearStockFilters()" class="text-xs font-semibold text-slate-400 hover:text-rose-500 underline transition ml-2">ล้างตัวกรอง</button>
+                </div>
+                
+                <div class="flex items-center bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-300 relative group">
+                    <div class="absolute -top-2.5 -right-2 bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded animate-pulse">LIVE</div>
+                    <span class="text-xs font-bold text-emerald-800 mr-2 flex items-center">
+                        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"></path></svg>
+                        เรทเงิน (1 USD):
+                    </span>
+                    <input type="number" id="global-exchange-rate" step="0.01" class="w-20 px-1 py-1 text-sm font-bold text-emerald-700 bg-white border border-emerald-400 rounded outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200 transition text-center" onchange="updateExchangeRate(this.value)">
+                    <span class="text-xs text-emerald-700 font-bold ml-1.5">THB</span>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto max-h-[500px] border border-slate-200 rounded-lg shadow-inner bg-slate-50 relative w-full">
+                <table class="w-full min-w-[1300px] text-sm text-left text-slate-700 whitespace-nowrap border-collapse">
+                    <thead class="bg-slate-200 text-slate-800 sticky top-0 shadow-sm z-20">
+                        <tr>
+                            <th class="px-4 py-3 font-bold w-12 text-center border-r border-slate-300">ลำดับ</th>
+                            <th class="px-4 py-3 font-bold border-r border-slate-300 min-w-[200px]">สเปกสินค้า (W x L x T)</th>
+                            <th class="px-4 py-3 font-bold text-center w-24 min-w-[80px] border-r border-slate-300">เกรด</th>
+                            <th class="px-4 py-3 font-bold text-right w-32 min-w-[120px] border-r border-slate-300">แผ่นจริง (Physical)</th>
+                            <th class="px-4 py-3 font-bold text-right w-32 min-w-[120px] border-r border-slate-300 text-indigo-700 bg-indigo-100/50">แปลง 2.5 mm.</th>
+                            <th class="px-4 py-3 font-bold text-right w-40 min-w-[160px] border-r border-slate-300 text-amber-800 bg-amber-100/50">ราคา/แผ่น (สกุลเงิน)</th>
+                            <th class="px-4 py-3 font-bold text-right w-36 min-w-[140px] border-r border-slate-300 text-emerald-800 bg-emerald-100/50">มูลค่าสต๊อก (฿)</th>
+                            <th class="px-4 py-3 font-bold text-right w-32 min-w-[120px] border-r border-slate-300 text-sky-800 bg-sky-100/50">ฟรีสต๊อก (Free)</th>
+                            <th class="px-4 py-3 font-bold text-right w-36 min-w-[140px] text-sky-900 bg-sky-200/50">มูลค่าฟรีสต๊อก (฿)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stock-table-body" class="divide-y divide-slate-200 bg-white z-0">
+                        </tbody>
+                    <tfoot id="stock-table-foot" class="bg-slate-100 border-t-2 border-slate-300 sticky bottom-0 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                        </tfoot>
+                </table>
+            </div>
+            
+            <div class="flex justify-between items-center mt-3 pt-3 border-t border-slate-200">
+                <span class="text-xs text-emerald-600 font-semibold bg-emerald-50 px-2 py-1 rounded flex items-center">
+                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                    พร้อมเชื่อมโยงสูตรไปยังหน้าแผนโหลด
+                </span>
+                <div id="stock-count-label" class="text-right text-sm font-bold text-slate-600 flex items-center">
+                    แสดงผล 0 รายการ
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-md border border-slate-200 p-5 border-t-4 border-t-slate-700">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-3 mb-4">
+                <h2 class="text-xl font-bold text-slate-800 flex items-center">
+                    📋 ข้อมูลต้นฉบับ (Raw Full Stock)
+                    <button id="btn-edit-raw" onclick="editRawTable()" class="ml-4 bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold py-1.5 px-3 rounded shadow-sm transition flex items-center">
+                        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        ปรับสต๊อกแมนนวล
+                    </button>
+                </h2>
+                <div class="mt-3 md:mt-0 flex items-center space-x-3 w-full md:w-auto">
+                    <span class="font-bold text-slate-700 text-sm whitespace-nowrap">ค้นหาอิสระ:</span>
+                    <input type="text" id="raw-search-input" onkeyup="searchRawTable()" class="filter-select w-full md:w-64 border-slate-400 focus:border-slate-600" placeholder="พิมพ์ชื่อ, ขนาด หรือตัวเลข เพื่อค้นหา...">
+                </div>
+            </div>
+
+            <div id="raw-table-container" class="overflow-auto border border-slate-200 rounded-lg shadow-inner bg-slate-50 max-h-[500px] relative">
+                <div class="p-8 text-center text-slate-400 font-medium text-base">ยังไม่ได้อัปโหลดไฟล์ Excel สต๊อก</div>
+            </div>
+
+            <div id="raw-edit-controls" class="hidden mt-4 pt-4 border-t border-slate-200 flex justify-between items-center bg-amber-50 p-3 rounded-lg border border-amber-200 shadow-inner">
+                <div class="flex space-x-2">
+                    <button onclick="addRawRow()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold py-2 px-4 rounded shadow-sm transition flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        เพิ่มแถวใหม่
+                    </button>
+                </div>
+                <button onclick="saveRawTable()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold py-2 px-8 rounded-lg shadow-md transition transform hover:-translate-y-0.5 flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    ยืนยันการปรับค่า
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="loading-overlay" class="hidden fixed inset-0 bg-slate-900/50 z-[100000] flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center">
+            <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <p class="mt-4 font-bold text-indigo-700">กำลังประมวลผลข้อมูล...</p>
+        </div>
+    </div>
+
+    <div id="auto-mail-import-modal" class="hidden fixed inset-0 z-[100001] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+        <div class="w-full max-w-3xl rounded-2xl bg-white p-5 shadow-2xl">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800">✉️ นำเข้าชุดข้อมูลจาก Auto Mail</h3>
+                    <p class="mt-1 text-xs text-slate-500">ระบบจะตรวจจำนวนแผ่น, Aging, ยอดรวม และยอดแยกเกรดก่อนเปลี่ยนสต๊อก</p>
+                </div>
+                <button onclick="closeAutoMailImport()" class="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+            </div>
+            <textarea id="auto-mail-json-input" class="mt-4 h-64 w-full rounded-xl border border-slate-300 bg-slate-50 p-3 font-mono text-xs text-slate-700 outline-none focus:border-emerald-500" placeholder="วางข้อมูล JSON ที่อ่านจาก FYI-AAF Auto Mail ที่นี่"></textarea>
+            <div class="mt-4 flex justify-end gap-2">
+                <button onclick="closeAutoMailImport()" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">ยกเลิก</button>
+                <button id="btn-apply-auto-mail-json" onclick="importAutoMailSnapshotFromText()" class="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-500">ตรวจสอบและอัปเดต</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function cleanNum(val) {
+            if (typeof val === 'number') return val;
+            if (!val || val === 'undefined' || val === 'null') return 0;
+            return parseFloat(String(val).replace(/,/g, '')) || 0;
+        }
+
+        function safeJSONParse(raw, fallback) {
+            try { return raw ? JSON.parse(raw) : fallback; }
+            catch (error) { console.warn('ข้อมูลที่บันทึกไว้เสียหาย:', error); return fallback; }
+        }
+
+        function normalizeDimension(value) {
+            const num = parseFloat(String(value ?? '').replace(/,/g, '').trim());
+            return Number.isFinite(num) ? String(num) : '';
+        }
+
+        function makeStockKey(w, l, t, grade) {
+            return `w${normalizeDimension(w)}_l${normalizeDimension(l)}_t${normalizeDimension(t)}_g${String(grade || '').trim().toUpperCase()}`;
+        }
+
+        function getStockImportMeta() {
+            return safeJSONParse(localStorage.getItem('stockImportMeta'), null);
+        }
+
+        function formatThaiReportDate(isoDate) {
+            const date = isoDate ? new Date(`${isoDate}T12:00:00`) : new Date();
+            const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+            return `${date.getDate()} ${thaiMonths[date.getMonth()]} ปี ${date.getFullYear() + 543}`;
+        }
+
+        function setAutoStockStatus(message, tone = 'ok') {
+            const status = document.getElementById('auto-stock-status');
+            const panel = document.getElementById('auto-stock-panel');
+            if (!status || !panel) return;
+            status.textContent = message;
+            const tones = {
+                ok: ['border-emerald-200', 'bg-emerald-50', 'text-emerald-700'],
+                warn: ['border-amber-200', 'bg-amber-50', 'text-amber-700'],
+                error: ['border-rose-200', 'bg-rose-50', 'text-rose-700']
+            };
+            panel.classList.remove('border-emerald-200', 'bg-emerald-50', 'border-amber-200', 'bg-amber-50', 'border-rose-200', 'bg-rose-50');
+            status.classList.remove('text-emerald-700', 'text-amber-700', 'text-rose-700');
+            panel.classList.add(tones[tone][0], tones[tone][1]);
+            status.classList.add(tones[tone][2]);
+        }
+
+        function validateStockSnapshot(snapshot) {
+            if (!snapshot || !Array.isArray(snapshot.rows) || !snapshot.reportDate) throw new Error('ไม่พบชุดข้อมูล Auto Mail ที่สมบูรณ์');
+            if (snapshot.rows.length === 0) throw new Error('ชุดข้อมูล Auto Mail ไม่มีรายการสินค้า');
+
+            const seenKeys = new Set();
+            const gradeTotals = {};
+            let total = 0;
+
+            snapshot.rows.forEach((row, index) => {
+                const key = makeStockKey(row.w, row.l, row.t, row.grade);
+                const qty = cleanNum(row.qty);
+                const aging = cleanNum(row.d90) + cleanNum(row.d180) + cleanNum(row.d270) + cleanNum(row.d360) + cleanNum(row.dOver);
+                if (!normalizeDimension(row.w) || !normalizeDimension(row.l) || !normalizeDimension(row.t) || !row.grade) throw new Error(`มิติหรือเกรดไม่ครบที่รายการ ${index + 1}`);
+                if (!Number.isFinite(qty) || qty < 0) throw new Error(`จำนวนแผ่นไม่ถูกต้องที่รายการ ${index + 1}`);
+                if (qty !== aging) throw new Error(`ยอด Aging ไม่ตรงกับจำนวนแผ่นที่ ${row.sku || index + 1}`);
+                if (seenKeys.has(key)) throw new Error(`พบสเปกซ้ำ: ${key}`);
+                seenKeys.add(key);
+                total += qty;
+                const grade = String(row.grade).toUpperCase();
+                gradeTotals[grade] = (gradeTotals[grade] || 0) + qty;
+            });
+
+            if (Number.isFinite(snapshot.expectedTotal) && total !== snapshot.expectedTotal) throw new Error(`ยอดรวม ${formatCommas(total)} ไม่ตรงกับเมล ${formatCommas(snapshot.expectedTotal)}`);
+            Object.entries(snapshot.expectedGradeTotals || {}).forEach(([grade, expected]) => {
+                if ((gradeTotals[grade] || 0) !== cleanNum(expected)) throw new Error(`ยอดเกรด ${grade} ไม่ตรงกับตารางสรุปในเมล`);
+            });
+            return { total, gradeTotals };
+        }
+
+        function stockRowsToRawHTML(rows) {
+            const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+            const headers = ['รหัสสินค้า', 'สินค้า', 'SIZE', 'Thickness', 'GRADE', 'จำนวนแผ่น', '1-90', '91-180', '181-270', '271-360', 'Over 360'];
+            const body = rows.map(row => `<tr>${[
+                row.sku || '', row.desc || '', row.size || 'Normal', row.t, row.grade, row.qty,
+                row.d90, row.d180, row.d270, row.d360, row.dOver
+            ].map(value => `<td>${escapeHTML(value)}</td>`).join('')}</tr>`).join('');
+            return `<table id="raw-excel-table"><thead><tr>${headers.map(value => `<th>${value}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+        }
+
+        function applyAutoStockSnapshot(options = {}) {
+            const snapshot = window.AAF_STOCK_SNAPSHOT;
+            const force = Boolean(options.force);
+            const silent = Boolean(options.silent);
+
+            try {
+                const validation = validateStockSnapshot(snapshot);
+                const currentMeta = getStockImportMeta();
+                if (!force && currentMeta && currentMeta.reportDate >= snapshot.reportDate && currentStockData.length > 0) {
+                    setAutoStockStatus(`ใช้งานข้อมูลประจำวันที่ ${formatThaiReportDate(currentMeta.reportDate)} แล้ว • ${formatCommas(currentMeta.totalQty || validation.total)} แผ่น`);
+                    return false;
+                }
+
+                const existingByKey = new Map(currentStockData.map(item => [makeStockKey(item.w, item.l, item.t, item.grade), item]));
+                const nextStock = snapshot.rows.map(row => {
+                    const w = normalizeDimension(row.w);
+                    const l = normalizeDimension(row.l);
+                    const t = normalizeDimension(row.t);
+                    const grade = String(row.grade || '').trim().toUpperCase();
+                    const key = makeStockKey(w, l, t, grade);
+                    const existing = existingByKey.get(key);
+                    const priceObj = priceDB[key] || (existing && existing.priceObj) || { price: 0, currency: 'THB' };
+                    const qty = cleanNum(row.qty);
+                    const eq25 = qty * ((cleanNum(w) * cleanNum(l)) / 2976800) * (cleanNum(t) / 2.5);
+                    return {
+                        sku: row.sku || '', desc: row.desc || '', size: row.size || 'Normal', w, l, t, grade, qty, eq25, priceObj,
+                        d90: cleanNum(row.d90), d180: cleanNum(row.d180), d270: cleanNum(row.d270), d360: cleanNum(row.d360), dOver: cleanNum(row.dOver),
+                        committedQty: existing ? cleanNum(existing.committedQty) : 0
+                    };
+                });
+
+                const previousData = localStorage.getItem('fullInventoryData') || '[]';
+                const previousMeta = localStorage.getItem('stockImportMeta') || '';
+                const previousRaw = localStorage.getItem('rawExcelHTML') || '';
+                const nextMeta = {
+                    reportDate: snapshot.reportDate,
+                    importedAt: new Date().toISOString(),
+                    receivedAt: snapshot.source && snapshot.source.receivedAt,
+                    sender: snapshot.source && snapshot.source.sender,
+                    subject: snapshot.source && snapshot.source.subject,
+                    sourceType: snapshot.source && snapshot.source.type,
+                    checksum: snapshot.checksum,
+                    parserVersion: snapshot.parserVersion,
+                    rowCount: nextStock.length,
+                    totalQty: validation.total,
+                    gradeTotals: validation.gradeTotals
+                };
+
+                try {
+                    localStorage.setItem('fullInventoryDataBackup', previousData);
+                    localStorage.setItem('stockImportMetaBackup', previousMeta);
+                    localStorage.setItem('rawExcelHTMLBackup', previousRaw);
+                    localStorage.setItem('fullInventoryData', JSON.stringify(nextStock));
+                    localStorage.setItem('rawExcelHTML', stockRowsToRawHTML(nextStock));
+                    localStorage.setItem('stockImportMeta', JSON.stringify(nextMeta));
+                } catch (storageError) {
+                    localStorage.setItem('fullInventoryData', previousData);
+                    if (previousMeta) localStorage.setItem('stockImportMeta', previousMeta); else localStorage.removeItem('stockImportMeta');
+                    if (previousRaw) localStorage.setItem('rawExcelHTML', previousRaw); else localStorage.removeItem('rawExcelHTML');
+                    throw storageError;
+                }
+
+                currentStockData = nextStock;
+                rawExcelHTML = stockRowsToRawHTML(nextStock);
+                const rawContainer = document.getElementById('raw-table-container');
+                if (rawContainer) rawContainer.innerHTML = rawExcelHTML;
+                const rollbackButton = document.getElementById('btn-rollback-stock');
+                if (rollbackButton) rollbackButton.classList.remove('hidden');
+                updateDateTitle();
+                populateStockDropdowns();
+                renderStockView();
+                setAutoStockStatus(`อัปเดตสำเร็จ • ข้อมูลประจำวันที่ ${formatThaiReportDate(snapshot.reportDate)} • ${nextStock.length} รายการ • ${formatCommas(validation.total)} แผ่น`);
+                if (!silent) alert(`✅ อัปเดตสต๊อกจาก Auto Mail สำเร็จ\nข้อมูลประจำวันที่ ${formatThaiReportDate(snapshot.reportDate)}\nรวม ${formatCommas(validation.total)} แผ่น`);
+                return true;
+            } catch (error) {
+                console.error(error);
+                setAutoStockStatus(`ยังไม่เปลี่ยนสต๊อก: ${error.message}`, 'error');
+                if (!silent) alert(`❌ ไม่สามารถอัปเดตจาก Auto Mail ได้\n${error.message}`);
+                return false;
+            }
+        }
+
+        function openAutoMailImport() {
+            document.getElementById('auto-mail-json-input').value = '';
+            document.getElementById('auto-mail-import-modal').classList.remove('hidden');
+        }
+
+        function closeAutoMailImport() {
+            document.getElementById('auto-mail-import-modal').classList.add('hidden');
+        }
+
+        function importAutoMailSnapshotFromText() {
+            const input = document.getElementById('auto-mail-json-input');
+            try {
+                const snapshot = JSON.parse(input.value.trim());
+                const currentMeta = getStockImportMeta();
+                if (currentMeta && currentMeta.reportDate && snapshot.reportDate <= currentMeta.reportDate) {
+                    throw new Error(`ข้อมูลวันที่ ${snapshot.reportDate || '-'} ไม่ใหม่กว่าชุดที่ใช้อยู่ (${currentMeta.reportDate})`);
+                }
+                window.AAF_STOCK_SNAPSHOT = snapshot;
+                if (applyAutoStockSnapshot({ silent: false })) closeAutoMailImport();
+            } catch (error) {
+                setAutoStockStatus(`ยังไม่เปลี่ยนสต๊อก: ${error.message}`, 'error');
+                alert(`❌ ข้อมูล Auto Mail ไม่ผ่านการตรวจสอบ\n${error.message}`);
+            }
+        }
+
+        function rollbackStockImport() {
+            const backupData = localStorage.getItem('fullInventoryDataBackup');
+            if (!backupData) { alert('ไม่พบข้อมูลก่อนหน้าให้ย้อนกลับ'); return; }
+            if (!confirm('ยืนยันย้อนกลับไปใช้สต๊อกก่อนการอัปเดตล่าสุดหรือไม่?')) return;
+            const backupMeta = localStorage.getItem('stockImportMetaBackup');
+            const backupRaw = localStorage.getItem('rawExcelHTMLBackup');
+            localStorage.setItem('fullInventoryData', backupData);
+            if (backupMeta) localStorage.setItem('stockImportMeta', backupMeta); else localStorage.removeItem('stockImportMeta');
+            if (backupRaw) localStorage.setItem('rawExcelHTML', backupRaw); else localStorage.removeItem('rawExcelHTML');
+            currentStockData = safeJSONParse(backupData, []);
+            rawExcelHTML = backupRaw || '';
+            document.getElementById('raw-table-container').innerHTML = rawExcelHTML || '<div class="p-8 text-center text-slate-400">ไม่มีข้อมูลต้นฉบับ</div>';
+            updateDateTitle(); populateStockDropdowns(); renderStockView();
+            setAutoStockStatus('ย้อนกลับไปใช้ชุดข้อมูลก่อนหน้าแล้ว', 'warn');
+        }
+
+        let currentStockData = safeJSONParse(localStorage.getItem('fullInventoryData'), []);
+        let rawExcelHTML = localStorage.getItem('rawExcelHTML') || '';
+        let priceDB = safeJSONParse(localStorage.getItem('stockPriceDB'), {});
+        let globalExchangeRate = parseFloat(localStorage.getItem('exchangeRate_USD_THB')) || 35.50;
+
+        window.onload = () => {
+            applyAutoStockSnapshot({ silent: true });
+            updateDateTitle();
+            document.getElementById('global-exchange-rate').value = globalExchangeRate.toFixed(2);
+            fetchRealTimeExchangeRate(); 
+            populateStockDropdowns();
+            renderStockView();
+            
+            let rawContainer = document.getElementById('raw-table-container');
+            if (rawExcelHTML && rawContainer) {
+                rawContainer.innerHTML = rawExcelHTML;
+            }
+        };
+
+        function formatCommas(num) {
+            return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        function updateDateTitle() {
+            const meta = getStockImportMeta();
+            const label = formatThaiReportDate(meta && meta.reportDate);
+            document.getElementById('main-title').innerText = `📦 Stock AAF Update ข้อมูลประจำวันที่ ${label}`;
+        }
+
+        async function fetchRealTimeExchangeRate() {
+            try {
+                let response = await fetch('https://open.er-api.com/v6/latest/USD');
+                let data = await response.json();
+                if(data && data.rates && data.rates.THB) {
+                    globalExchangeRate = data.rates.THB;
+                    localStorage.setItem('exchangeRate_USD_THB', globalExchangeRate); 
+                    document.getElementById('global-exchange-rate').value = globalExchangeRate.toFixed(2);
+                    renderStockView(); 
+                }
+            } catch (error) {
+                console.warn("⚠️ ไม่สามารถดึงเรทเงินออนไลน์ได้");
+            }
+        }
+
+        function updateExchangeRate(val) {
+            globalExchangeRate = parseFloat(val) || 35.50;
+            localStorage.setItem('exchangeRate_USD_THB', globalExchangeRate);
+            renderStockView(); 
+        }
+
+        function populateStockDropdowns() {
+            let uniqueT = new Set(); let uniqueW = new Set(); let uniqueL = new Set(); let uniqueGrade = new Set();
+
+            currentStockData.forEach(item => {
+                if(item.t) uniqueT.add(item.t);
+                if(item.w) uniqueW.add(item.w);
+                if(item.l) uniqueL.add(item.l);
+                if(item.grade) uniqueGrade.add(item.grade);
+            });
+
+            const createOptions = (set) => Array.from(set).sort((a,b) => parseFloat(a) - parseFloat(b)).map(x => `<option value="${x}">${x}</option>`).join('');
+            
+            let dt = document.getElementById('view-t'); let oldT = dt.value;
+            dt.innerHTML = '<option value="">-- หนา (T) ทั้งหมด --</option>' + createOptions(uniqueT); dt.value = oldT;
+
+            let dw = document.getElementById('view-w'); let oldW = dw.value;
+            dw.innerHTML = '<option value="">-- กว้าง (W) --</option>' + createOptions(uniqueW); dw.value = oldW;
+
+            let dl = document.getElementById('view-l'); let oldL = dl.value;
+            dl.innerHTML = '<option value="">-- ยาว (L) --</option>' + createOptions(uniqueL); dl.value = oldL;
+
+            let dg = document.getElementById('view-grade'); let oldG = dg.value;
+            let orderedGrades = ['AV', 'AAA', 'A', 'B', 'F', 'REJ', 'C', 'UN', 'CTS'];
+            let gradeHtml = '<option value="">-- เกรดทั้งหมด --</option>';
+            orderedGrades.forEach(g => {
+                if (uniqueGrade.has(g)) { gradeHtml += `<option value="${g}">${g}</option>`; uniqueGrade.delete(g); }
+            });
+            uniqueGrade.forEach(g => { gradeHtml += `<option value="${g}">${g}</option>`; });
+            dg.innerHTML = gradeHtml; dg.value = oldG;
+        }
+
+        function syncSalesData() {
+            let btn = document.getElementById('btn-sync-price');
+            let originalText = btn.innerHTML;
+            btn.innerHTML = `⏳ กำลังประมวลผล...`;
+
+            setTimeout(() => {
+                // --- ส่วนที่ 1: ดึงราคาเพื่อหาค่าเฉลี่ย ---
+                let allSalesKeys = ['salesDB_ConfLoaded', 'salesDB_ConfAdv', 'salesDB_ConfTT', 'salesDB_ConfLC', 'salesDB_ConfDom', 'salesDB_ConfNext', 'salesDB_Draft'];
+                let priceMapArray = {}; 
+
+                allSalesKeys.forEach(key => {
+                    let rawData = localStorage.getItem(key);
+                    if(rawData) {
+                        let parsed = JSON.parse(rawData);
+                        parsed.forEach(row => {
+                            let sale = String(row[3] || '').trim(); 
+                            let w = String(row[8] || '').trim();
+                            let l = String(row[9] || '').trim();
+                            let t = String(row[10] || '').trim();
+                            let grade = String(row[11] || '').trim().toUpperCase();
+                            let price = cleanNum(row[32]); 
+
+                            if(w && l && t && price > 0) {
+                                let isDom = (sale === 'ในประเทศ');
+                                let mapKey = makeStockKey(w, l, t, grade);
+                                
+                                if (!priceMapArray[mapKey]) priceMapArray[mapKey] = { thb: [], usd: [] };
+                                if (isDom) {
+                                    priceMapArray[mapKey].thb.push(price);
+                                } else {
+                                    priceMapArray[mapKey].usd.push(price);
+                                }
+                            }
+                        });
+                    }
+                });
+
+                let priceMap = {};
+                for (let key in priceMapArray) {
+                    let usdArr = priceMapArray[key].usd;
+                    let thbArr = priceMapArray[key].thb;
+                    
+                    if (usdArr.length > 0 && thbArr.length === 0) {
+                        let sum = usdArr.reduce((a, b) => a + b, 0);
+                        let avg = sum / usdArr.length;
+                        priceMap[key] = { price: parseFloat(avg.toFixed(3)), currency: 'USD' };
+                    } 
+                    else if (thbArr.length > 0 && usdArr.length === 0) {
+                        let sum = thbArr.reduce((a, b) => a + b, 0);
+                        let avg = sum / thbArr.length;
+                        priceMap[key] = { price: parseFloat(avg.toFixed(3)), currency: 'THB' };
+                    } 
+                    else if (usdArr.length > 0 && thbArr.length > 0) {
+                        let sumTHB = thbArr.reduce((a, b) => a + b, 0);
+                        let sumUSDinTHB = usdArr.reduce((a, b) => a + (b * globalExchangeRate), 0);
+                        
+                        let totalItems = thbArr.length + usdArr.length;
+                        let avgTHB = (sumTHB + sumUSDinTHB) / totalItems;
+                        
+                        priceMap[key] = { price: parseFloat(avgTHB.toFixed(4)), currency: 'THB' };
+                    }
+                }
+
+                // --- ส่วนที่ 2: ดึงยอดจองเพื่อตัดสต๊อก ---
+                let deductKeys = ['salesDB_ConfAdv', 'salesDB_ConfTT', 'salesDB_ConfLC', 'salesDB_ConfDom'];
+                let committedMap = {};
+
+                deductKeys.forEach(key => {
+                    let rawData = localStorage.getItem(key);
+                    if(rawData) {
+                        let parsed = JSON.parse(rawData);
+                        parsed.forEach(row => {
+                            let w = String(row[8] || '').trim();
+                            let l = String(row[9] || '').trim();
+                            let t = String(row[10] || '').trim();
+                            let grade = String(row[11] || '').trim().toUpperCase();
+                            let sheets = cleanNum(row[31]); 
+
+                            if(w && l && t && sheets > 0) {
+                                let mapKey = makeStockKey(w, l, t, grade);
+                                if (!committedMap[mapKey]) committedMap[mapKey] = 0;
+                                committedMap[mapKey] += sheets;
+                            }
+                        });
+                    }
+                });
+
+                // --- ส่วนที่ 3: อัปเดตข้อมูลใส่ตารางสต๊อก ---
+                let updatedCount = 0;
+                window.recentlyUpdatedKeys = new Set();
+
+                currentStockData.forEach(item => {
+                    let key = makeStockKey(item.w, item.l, item.t, item.grade);
+                    let changed = false;
+
+                    if(priceMap[key]) {
+                        let currentPrice = item.priceObj ? parseFloat(item.priceObj.price) : 0;
+                        let currentCurr = item.priceObj ? item.priceObj.currency : '';
+                        let newPrice = priceMap[key].price;
+                        let newCurr = priceMap[key].currency;
+
+                        if(Math.abs(currentPrice - newPrice) > 0.001 || currentCurr !== newCurr) {
+                            if(!item.priceObj) item.priceObj = { price: 0, currency: 'THB' }; 
+                            item.priceObj.price = newPrice;
+                            item.priceObj.currency = newCurr;
+                            priceDB[key] = item.priceObj; 
+                            changed = true;
+                        }
+                    }
+
+                    let newCommitted = committedMap[key] || 0;
+                    if(item.committedQty !== newCommitted) {
+                        item.committedQty = newCommitted;
+                        changed = true;
+                    }
+
+                    if(changed) {
+                        window.recentlyUpdatedKeys.add(key); 
+                        updatedCount++;
+                    }
+                });
+
+                localStorage.setItem('fullInventoryData', JSON.stringify(currentStockData));
+                localStorage.setItem('stockPriceDB', JSON.stringify(priceDB));
+                renderStockView(); 
+                
+                alert(`✅ ซิงค์ข้อมูลสำเร็จ!\n• อัปเดตราคาขายเฉลี่ย\n• ตัดยอดจองจาก 4 กล่องหน้า Sales\nระบบปรับปรุงข้อมูลไปทั้งหมด ${updatedCount} รายการครับ`);
+                
+                setTimeout(() => {
+                    window.recentlyUpdatedKeys.clear();
+                    renderStockView();
+                }, 3000);
+
+                btn.innerHTML = originalText;
+            }, 100);
+        }
+
+        function renderStockView() {
+            let filterT = document.getElementById('view-t').value;
+            let filterGrade = document.getElementById('view-grade').value;
+            let filterW = document.getElementById('view-w').value;
+            let filterL = document.getElementById('view-l').value;
+
+            let tbody = document.getElementById('stock-table-body');
+            let tfoot = document.getElementById('stock-table-foot'); 
+            let html = '';
+            let count = 0;
+            let totalPhysical = 0;
+            let totalEq25 = 0;
+            let totalStockValueTHB = 0;
+            let totalFreeStock = 0; 
+            let totalFreeStockValueTHB = 0; 
+
+            currentStockData.forEach(item => {
+                let pass = true;
+                if (filterT !== "" && item.t !== filterT) pass = false;
+                if (filterW !== "" && item.w !== filterW) pass = false;
+                if (filterL !== "" && item.l !== filterL) pass = false;
+                if (filterGrade !== "" && item.grade !== filterGrade) pass = false;
+
+                if (pass) {
+                    count++;
+                    
+                    let qty = cleanNum(item.qty);
+                    let wNum = cleanNum(item.w);
+                    let lNum = cleanNum(item.l);
+                    let tNum = cleanNum(item.t);
+                    
+                    let eq25 = 0;
+                    if(wNum > 0 && lNum > 0 && tNum > 0 && qty > 0) {
+                        eq25 = qty * ((wNum * lNum) / 2976800) * (tNum / 2.5);
+                    }
+                    
+                    let rawFreeStock = qty - (item.committedQty || 0); 
+                    let isShortage = rawFreeStock < 0;
+                    let displayFreeStock = isShortage ? 0 : rawFreeStock; 
+
+                    let itemKey = makeStockKey(item.w, item.l, item.t, item.grade);
+                    let priceData = priceDB[itemKey];
+                    let inputPrice = 0;
+                    let inputCurr = 'THB';
+                    
+                    if (typeof priceData === 'object' && priceData !== null) {
+                        inputPrice = parseFloat(priceData.price) || 0;
+                        inputCurr = priceData.currency || 'THB';
+                    } else if (typeof priceData === 'number' || typeof priceData === 'string') {
+                        inputPrice = parseFloat(priceData) || 0;
+                    }
+
+                    let priceInTHB = inputCurr === 'USD' ? (inputPrice * globalExchangeRate) : inputPrice;
+                    let convertLabel = '';
+                    if (inputCurr === 'USD' && inputPrice > 0) {
+                        convertLabel = `<div class="text-[10px] text-slate-400 mt-1">≈ ฿${formatCommas(priceInTHB)}</div>`;
+                    }
+
+                    let itemValueTHB = qty * priceInTHB;
+                    let displayFreeStockValueTHB = displayFreeStock * priceInTHB; 
+
+                    totalPhysical += qty;
+                    totalEq25 += eq25;
+                    totalStockValueTHB += itemValueTHB;
+                    totalFreeStock += displayFreeStock; 
+                    totalFreeStockValueTHB += displayFreeStockValueTHB; 
+
+                    let qtyStr = formatCommas(qty);
+                    let eq25Str = formatCommas(eq25);
+                    let valStr = formatCommas(itemValueTHB);
+                    let freeStr = formatCommas(displayFreeStock);
+                    let freeValStr = formatCommas(displayFreeStockValueTHB); 
+                    
+                    let qtyColor = qty > 0 ? 'text-emerald-600' : 'text-rose-600';
+                    let eqColor = eq25 > 0 ? 'text-indigo-600' : 'text-slate-400';
+                    let valColor = itemValueTHB > 0 ? 'text-emerald-700' : 'text-slate-400';
+                    
+                    let freeColor = isShortage ? 'text-rose-600 animate-pulse' : (displayFreeStock > 0 ? 'text-sky-700' : 'text-slate-400');
+                    let freeValColor = isShortage ? 'text-rose-600 animate-pulse' : (displayFreeStockValueTHB > 0 ? 'text-sky-800' : 'text-slate-400');
+
+                    let safeDesc = (item.desc && item.desc !== 'undefined') ? item.desc : '';
+
+                    let isUpdated = window.recentlyUpdatedKeys && window.recentlyUpdatedKeys.has(itemKey);
+                    let trClass = isUpdated ? 'bg-emerald-100 transition duration-300 border-b border-emerald-200' : 'hover:bg-indigo-50/50 transition duration-150 border-b border-slate-100';
+                    let inputClass = isUpdated ? 'price-input bg-emerald-50 border-emerald-400 text-emerald-800' : 'price-input';
+                    
+                    html += `
+                        <tr class="${trClass}">
+                            <td class="px-4 py-3 text-center text-slate-400 font-medium border-r border-slate-100">${count}</td>
+                            <td class="px-4 py-3 border-r border-slate-100">
+                                <div class="font-bold text-slate-800">${item.w} x ${item.l} x ${item.t}</div>
+                                <div class="text-[10px] text-slate-400 mt-0.5 truncate max-w-[280px]">${safeDesc}</div>
+                            </td>
+                            <td class="px-4 py-3 text-center font-bold text-slate-600 border-r border-slate-100">${item.grade || '-'}</td>
+                            <td class="px-4 py-3 text-right font-bold ${qtyColor} text-[13px] border-r border-slate-100">${qtyStr}</td>
+                            <td class="px-4 py-3 text-right font-bold ${eqColor} text-[13px] bg-indigo-50/30 border-r border-slate-100">${eq25Str}</td>
+                            <td class="px-3 py-2 text-right bg-amber-50/50 border-r border-slate-100 align-middle">
+                                <div class="flex justify-end items-center space-x-1">
+                                    <input type="number" id="price_${itemKey}" class="${inputClass}" placeholder="0.00" value="${inputPrice > 0 ? inputPrice : ''}" onchange="updateItemPrice('${itemKey}')">
+                                    <select id="curr_${itemKey}" class="filter-select px-1 py-1 text-[11px] h-[30px] font-bold text-slate-700 bg-slate-50" onchange="updateItemPrice('${itemKey}')">
+                                        <option value="THB" ${inputCurr==='THB'?'selected':''}>฿</option>
+                                        <option value="USD" ${inputCurr==='USD'?'selected':''}>$</option>
+                                    </select>
+                                </div>
+                                ${convertLabel}
+                            </td>
+                            <td class="px-4 py-3 text-right font-extrabold ${valColor} text-[13px] bg-emerald-50/30 border-r border-slate-100">${valStr}</td>
+                            <td class="px-4 py-3 text-right font-extrabold ${freeColor} text-[13px] bg-sky-50/40 border-r border-slate-100">${freeStr}</td>
+                            <td class="px-4 py-3 text-right font-extrabold ${freeValColor} text-[13px] bg-sky-100/50 shadow-[inset_4px_0_4px_rgba(0,0,0,0.02)]">${freeValStr}</td>
+                        </tr>
+                    `;
+                }
+            });
+
+            if (count === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="px-5 py-12 text-center text-slate-400 font-medium text-base">ไม่มีรายการสินค้าที่ตรงกับเงื่อนไข</td></tr>`;
+                tfoot.innerHTML = ''; 
+            } else {
+                tbody.innerHTML = html;
+                tfoot.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="px-4 py-3 text-right font-extrabold text-slate-800">ยอดรวมที่ค้นหาเจอ (Total):</td>
+                        <td class="px-4 py-3 text-right font-extrabold text-emerald-600 text-[14px] border-r border-slate-300">${formatCommas(totalPhysical)}</td>
+                        <td class="px-4 py-3 text-right font-extrabold text-indigo-700 text-[14px] bg-indigo-100/50 border-r border-slate-300">${formatCommas(totalEq25)}</td>
+                        <td class="px-4 py-3 border-r border-slate-300"></td>
+                        <td class="px-4 py-3 text-right font-extrabold text-emerald-800 text-[15px] bg-emerald-200/50 border-r border-slate-300 underline decoration-emerald-400 decoration-2 underline-offset-4">฿ ${formatCommas(totalStockValueTHB)}</td>
+                        <td class="px-4 py-3 text-right font-extrabold text-sky-800 text-[15px] bg-sky-200/60 border-r border-slate-300">${formatCommas(totalFreeStock)}</td>
+                        <td class="px-4 py-3 text-right font-extrabold text-sky-900 text-[15px] bg-sky-300/60 underline decoration-sky-500 decoration-2 underline-offset-4">฿ ${formatCommas(totalFreeStockValueTHB)}</td>
+                    </tr>
+                `;
+            }
+
+            document.getElementById('stock-count-label').innerHTML = `แสดงผล <span class="mx-1">${count}</span> รายการ`;
+        }
+
+        function updateItemPrice(itemKey) {
+            let priceVal = parseFloat(document.getElementById('price_' + itemKey).value) || 0;
+            let currVal = document.getElementById('curr_' + itemKey).value;
+            
+            priceDB[itemKey] = { price: priceVal, currency: currVal };
+            localStorage.setItem('stockPriceDB', JSON.stringify(priceDB));
+
+            currentStockData.forEach(item => {
+                let key = makeStockKey(item.w, item.l, item.t, item.grade);
+                if (key === itemKey) { 
+                    item.priceObj = { price: priceVal, currency: currVal }; 
+                }
+            });
+            localStorage.setItem('fullInventoryData', JSON.stringify(currentStockData));
+
+            renderStockView();
+        }
+
+        function clearStockFilters() {
+            document.getElementById('view-t').value = ""; document.getElementById('view-grade').value = "";
+            document.getElementById('view-w').value = ""; document.getElementById('view-l').value = "";
+            renderStockView();
+        }
+
+        function searchRawTable() {
+            let inputEle = document.getElementById('raw-search-input');
+            if(!inputEle) return; 
+            let input = inputEle.value.toLowerCase();
+            let table = document.querySelector('#raw-table-container table');
+            if (!table) return;
+            
+            let rows = table.querySelectorAll('tbody tr');
+            if (!rows.length) rows = Array.from(table.querySelectorAll('tr')).filter(row => !row.querySelector('th'));
+            rows.forEach(row => {
+                let rowText = row.innerText.toLowerCase();
+                row.style.display = rowText.includes(input) ? '' : 'none';
+            });
+        }
+
+        // ----------------------------------------------------
+        // 🟢 โหมดแก้ตารางแมนนวลอัจฉริยะ (Manual Edit Mode)
+        // ----------------------------------------------------
+        function editRawTable() {
+            let pin = prompt("🔐 กรุณาใส่รหัสผ่านเพื่อแก้ไขสต๊อกแบบแมนนวล (รหัส: 8888)");
+            if (pin === "8888") {
+                let table = document.querySelector('#raw-table-container table');
+                if(!table) {
+                    alert("⚠️ ไม่มีข้อมูลต้นฉบับให้แก้ไข กรุณาอัปโหลดไฟล์ Excel อย่างน้อย 1 ครั้งเพื่อเป็นต้นแบบครับ");
+                    return;
+                }
+                
+                let cells = table.querySelectorAll('tbody td, thead th');
+                cells.forEach(cell => {
+                    if (cell.tagName.toLowerCase() === 'td') {
+                        cell.setAttribute('contenteditable', 'true');
+                        cell.removeAttribute('v'); 
+                        cell.removeAttribute('t');
+                        cell.removeAttribute('z');
+                    }
+                });
+
+                let rows = table.querySelectorAll('tr');
+                rows.forEach((row, index) => {
+                    let cell = document.createElement(row.querySelector('th') ? 'th' : 'td');
+                    cell.className = 'action-cell bg-amber-100 border border-amber-300 text-center sticky left-0 z-10 w-28';
+                    
+                    if(row.querySelector('th')) {
+                        cell.innerText = '⚙️ จัดการ';
+                        cell.style.color = '#1e293b';
+                    } else {
+                        cell.setAttribute('contenteditable', 'false'); 
+                        cell.innerHTML = `
+                            <div class="flex justify-center space-x-1">
+                                <button onclick="moveRowUp(this)" class="p-1 bg-white hover:bg-slate-200 rounded shadow-sm transition" title="เลื่อนขึ้น">🔼</button>
+                                <button onclick="moveRowDown(this)" class="p-1 bg-white hover:bg-slate-200 rounded shadow-sm transition" title="เลื่อนลง">🔽</button>
+                                <button onclick="deleteThisRow(this)" class="p-1 bg-rose-100 hover:bg-rose-200 rounded text-rose-600 shadow-sm transition" title="ลบแถวนี้">❌</button>
+                            </div>
+                        `;
+                    }
+                    row.insertBefore(cell, row.firstChild);
+                });
+                
+                document.getElementById('raw-edit-controls').classList.remove('hidden');
+                document.getElementById('btn-edit-raw').classList.add('hidden');
+                alert("🔓 เปิดโหมดแก้ไขแล้ว! คุณสามารถพิมพ์แก้ตัวเลข เลื่อนสลับแถว หรือลบแถวได้เลยครับ");
+            } else if (pin !== null) {
+                alert("❌ รหัสผ่านไม่ถูกต้อง!");
+            }
+        }
+
+        window.moveRowUp = function(btn) {
+            let row = btn.closest('tr');
+            let prevRow = row.previousElementSibling;
+            if(prevRow && !prevRow.querySelector('th')) {
+                row.parentNode.insertBefore(row, prevRow);
+            }
+        };
+
+        window.moveRowDown = function(btn) {
+            let row = btn.closest('tr');
+            let nextRow = row.nextElementSibling;
+            if(nextRow) {
+                row.parentNode.insertBefore(nextRow, row);
+            }
+        };
+
+        window.deleteThisRow = function(btn) {
+            if(confirm('🗑️ ยืนยันการลบทิ้งทั้งแถวหรือไม่?')) {
+                let row = btn.closest('tr');
+                row.parentNode.removeChild(row);
+            }
+        };
+
+        function addRawRow() {
+            let table = document.querySelector('#raw-table-container table');
+            if(!table) return;
+            let tbody = table.querySelector('tbody') || table;
+            
+            let rows = tbody.querySelectorAll('tr');
+            let lastRow = rows[rows.length - 1];
+            if(!lastRow) return;
+
+            let newRow = lastRow.cloneNode(true);
+            let cells = newRow.querySelectorAll('td');
+            
+            cells.forEach(cell => {
+                if(!cell.classList.contains('action-cell')) {
+                    cell.innerText = '';
+                }
+            });
+            
+            tbody.appendChild(newRow);
+            let container = document.getElementById('raw-table-container');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 🟢 อ่านข้อมูลตรงๆ จาก SheetJS ใหม่ เพื่อให้ตัวเลขไม่อัปเดตกลับไปเป็น 0
+        function saveRawTable() {
+            let table = document.querySelector('#raw-table-container table');
+            if(!table) return;
+            
+            document.getElementById('loading-overlay').classList.remove('hidden');
+            
+            setTimeout(() => {
+                let actionCells = table.querySelectorAll('.action-cell');
+                actionCells.forEach(cell => cell.remove());
+                
+                let allCells = table.querySelectorAll('td, th');
+                allCells.forEach(c => {
+                    let textVal = c.innerText.trim();
+                    let rs = c.getAttribute('rowspan');
+                    let cs = c.getAttribute('colspan');
+                    
+                    while(c.attributes.length > 0) {
+                        c.removeAttribute(c.attributes[0].name);
+                    }
+                    
+                    if(rs) c.setAttribute('rowspan', rs);
+                    if(cs) c.setAttribute('colspan', cs);
+                    
+                    c.innerText = textVal; 
+                });
+                
+                let htmlStr = document.getElementById('raw-table-container').innerHTML;
+                localStorage.setItem('rawExcelHTML', htmlStr);
+                
+                let worksheet = XLSX.utils.table_to_sheet(table);
+                const rawJsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""}); 
+
+                let c_qty = 12, c_90 = 13, c_180 = 14, c_270 = 15, c_360 = 16, c_over = 17;
+                for(let r = 0; r < Math.min(15, rawJsonData.length); r++) {
+                    let row = rawJsonData[r];
+                    if(!row) continue;
+                    for(let c = 0; c < row.length; c++) {
+                        let val = String(row[c] || '').trim().toLowerCase().replace(/\s+/g, '');
+                        if (val === 'จำนวนแผ่น') c_qty = c; 
+                        if (val === '1-90') c_90 = c;
+                        if (val === '91-180' || val === '90-180') c_180 = c;
+                        if (val === '181-270') c_270 = c;
+                        if (val === '271-360') c_360 = c;
+                        if (val === 'over360' || val === '>360') c_over = c;
+                    }
+                }
+                
+                if (c_90 > 0 && c_qty !== c_90 - 1) {
+                    c_qty = c_90 - 1; 
+                }
+
+                let newStock = [];
+                let rowCount = 0;
+                let knownGrades = ['AAA', 'AV', 'A', 'B', 'F'];
+
+                for (let i = 0; i < rawJsonData.length; i++) {
+                    let row = rawJsonData[i];
+                    if(!row || row.length === 0) continue;
+                    
+                    let desc = '';
+                    for(let c = 0; c <= 6; c++) {
+                        let tempDesc = String(row[c] || '').trim();
+                        if (tempDesc.length > desc.length && tempDesc.toLowerCase() !== 'normal' && !tempDesc.includes('ลำดับ')) {
+                            desc = tempDesc;
+                        }
+                    }
+                    
+                    if(!desc || desc.length < 5 || desc.toLowerCase().includes('รวม') || desc.toLowerCase() === 'สินค้า') continue; 
+
+                    let cleanDescForAI = desc.replace(/,/g, ''); 
+                    let w='', l='', t='';
+                    
+                    let fullDimMatch = cleanDescForAI.match(/([0-9]+)\s*[xX*]\s*([0-9]+)\s*[xX*]\s*([0-9\.]+)/i);
+                    if (fullDimMatch) {
+                        w = fullDimMatch[1]; l = fullDimMatch[2]; t = fullDimMatch[3];
+                    } else {
+                        let wlMatch = cleanDescForAI.match(/([0-9]+)\s*[xX*]\s*([0-9]+)/i);
+                        if(wlMatch) { w = wlMatch[1]; l = wlMatch[2]; }
+                        let tMatch = cleanDescForAI.match(/[xX*]\s*([0-9\.]+)\s*(?:mm|มม|m)/i);
+                        if(tMatch) { t = tMatch[1]; }
+                    }
+
+                    if(!w && !l && !t) continue; 
+
+                    let grade = '';
+                    for (let c = 3; c <= 8; c++) {
+                        let tempVal = String(row[c] || '').trim().toUpperCase();
+                        tempVal = tempVal.replace(/^(GRADE|เกรด)\s*/i, '').trim();
+                        if (knownGrades.includes(tempVal)) { grade = tempVal; break; }
+                    }
+                    if (!grade) {
+                        let gMatch = desc.match(/(?:GRADE|เกรด)\s*([A-Z0-9]+)/i);
+                        if(gMatch) grade = gMatch[1].toUpperCase();
+                    }
+                    if(grade) grade = grade.replace(/^GRADE\s+/i, '').trim();
+
+                    let qtyRaw = String(row[c_qty] || '0').replace(/,/g, '');
+                    let qty = parseFloat(qtyRaw) || 0;
+
+                    let d90 = c_90 !== -1 ? (parseFloat(String(row[c_90] || '0').replace(/,/g, '')) || 0) : 0;
+                    let d180 = c_180 !== -1 ? (parseFloat(String(row[c_180] || '0').replace(/,/g, '')) || 0) : 0;
+                    let d270 = c_270 !== -1 ? (parseFloat(String(row[c_270] || '0').replace(/,/g, '')) || 0) : 0;
+                    let d360 = c_360 !== -1 ? (parseFloat(String(row[c_360] || '0').replace(/,/g, '')) || 0) : 0;
+                    let dOver = c_over !== -1 ? (parseFloat(String(row[c_over] || '0').replace(/,/g, '')) || 0) : 0;
+
+                    let wNum = cleanNum(w); let lNum = cleanNum(l); let tNum = cleanNum(t);
+                    let eq25 = 0;
+                    if(wNum > 0 && lNum > 0 && tNum > 0 && qty > 0) {
+                        eq25 = qty * ((wNum * lNum) / 2976800) * (tNum / 2.5);
+                    }
+
+                    let itemKey = makeStockKey(w, l, t, grade);
+                    
+                    // ให้คงค่ายอดจองเดิมไว้
+                    let existingItem = currentStockData.find(item => itemKey === makeStockKey(item.w, item.l, item.t, item.grade));
+                    let committedQty = existingItem ? (existingItem.committedQty || 0) : 0;
+
+                    let pObj = priceDB[itemKey] || {price: 0, currency: 'THB'};
+
+                    newStock.push({ 
+                        desc: desc, w: w, l: l, t: t, grade: grade, qty: qty, eq25: eq25, priceObj: pObj,
+                        d90: d90, d180: d180, d270: d270, d360: d360, dOver: dOver,
+                        committedQty: committedQty
+                    });
+                    rowCount++;
+                }
+
+                if (rowCount > 0) {
+                    currentStockData = newStock;
+                    localStorage.setItem('fullInventoryData', JSON.stringify(newStock));
+                    
+                    populateStockDropdowns();
+                    renderStockView();
+                    
+                    alert(`✅ บันทึกสต๊อกแมนนวลสำเร็จ! (รวม ${rowCount} รายการ)\n\n📌 โปรดกดปุ่ม "ซิงค์ราคา & ตัดยอดจอง" เพื่ออัปเดตยอดจองล่าสุดอีกครั้งครับ`);
+                } else {
+                    alert('❌ ไม่พบข้อมูล หรือตารางว่างเปล่า');
+                }
+
+                document.getElementById('raw-edit-controls').classList.add('hidden');
+                document.getElementById('btn-edit-raw').classList.remove('hidden');
+                document.getElementById('loading-overlay').classList.add('hidden');
+
+            }, 500);
+        }
+
+        function parseAgingWorkbookRows(rawJsonData) {
+            const normalizeHeader = value => String(value ?? '').trim().toLowerCase().replace(/[–—]/g, '-').replace(/\s+/g, '');
+            const knownGrades = ['AAA', 'AV', 'A', 'B', 'F', 'REJ', 'C', 'UN', 'CTS'];
+            let descCol = -1;
+            let sizeCols = [];
+            let gradeCols = [];
+            let qtyCandidates = [];
+            let c90 = -1, c180 = -1, c270 = -1, c360 = -1, cOver = -1;
+            let summary = null;
+
+            for (let r = 0; r < Math.min(20, rawJsonData.length); r++) {
+                const row = rawJsonData[r] || [];
+                for (let c = 0; c < row.length; c++) {
+                    const val = normalizeHeader(row[c]);
+                    if ((val === 'สินค้า' || val === 'product') && descCol < 0) descCol = c;
+                    if (val === 'size' || val === 'ขนาด') sizeCols.push(c);
+                    if (val === 'grade' || val === 'เกรด') gradeCols.push(c);
+                    if (val === 'จำนวนแผ่น') qtyCandidates.push(c);
+                    if (val === '1-90' || val === '01-90') c90 = c;
+                    if (val === '91-180' || val === '90-180') c180 = c;
+                    if (val === '181-270') c270 = c;
+                    if (val === '271-360') c360 = c;
+                    if (val === 'over360' || val === '>360') cOver = c;
+                    if (!summary && (val === 'grade' || val === 'เกรด') && normalizeHeader(row[c + 1]) === 'จำนวนแผ่น' && normalizeHeader(row[c + 2]) === '%') {
+                        summary = { row: r, gradeCol: c, qtyCol: c + 1 };
+                    }
+                }
+            }
+
+            if (c90 < 0 && c180 > 0) c90 = c180 - 1;
+            if (c180 < 0 && c90 >= 0) c180 = c90 + 1;
+            if (c270 < 0 && c180 >= 0) c270 = c180 + 1;
+            if (c360 < 0 && c270 >= 0) c360 = c270 + 1;
+            if (cOver < 0 && c360 >= 0) cOver = c360 + 1;
+
+            let qtyCol = c90 > 0 ? c90 - 1 : -1;
+            if (qtyCol < 0) qtyCol = qtyCandidates.filter(c => c > descCol).sort((a, b) => a - b)[0] ?? -1;
+            if (descCol < 0 || qtyCol < 0 || c90 < 0 || c180 < 0 || c270 < 0 || c360 < 0 || cOver < 0) {
+                throw new Error(`ไม่พบหัวตารางสินค้า/จำนวนแผ่น/Aging ที่ครบถ้วน (สินค้า=${descCol}, จำนวน=${qtyCol}, 1-90=${c90}, 91-180=${c180}, 181-270=${c270}, 271-360=${c360}, Over=${cOver})`);
+            }
+
+            const gradeCol = gradeCols.filter(c => c < qtyCol).sort((a, b) => b - a)[0] ?? -1;
+            const sizeCol = sizeCols.filter(c => c < qtyCol).sort((a, b) => b - a)[0] ?? -1;
+            const expectedGradeTotals = {};
+            let expectedTotal = null;
+            if (summary) {
+                for (let r = summary.row + 1; r < Math.min(rawJsonData.length, summary.row + 20); r++) {
+                    const gradeLabel = String((rawJsonData[r] || [])[summary.gradeCol] ?? '').trim().toUpperCase();
+                    const value = cleanNum((rawJsonData[r] || [])[summary.qtyCol]);
+                    if (!gradeLabel) continue;
+                    if (gradeLabel.includes('รวม')) { expectedTotal = value; break; }
+                    if (knownGrades.includes(gradeLabel)) expectedGradeTotals[gradeLabel] = value;
+                }
+            }
+
+            const existingByKey = new Map(currentStockData.map(item => [makeStockKey(item.w, item.l, item.t, item.grade), item]));
+            const stockByKey = new Map();
+            const rowErrors = [];
+
+            rawJsonData.forEach((row, rowIndex) => {
+                if (!row || row.length === 0) return;
+                let desc = String(row[descCol] ?? '').trim();
+                if (!desc || desc.toLowerCase() === 'สินค้า' || desc.includes('รวม')) return;
+
+                const dimMatch = desc.replace(/,/g, '').match(/([0-9]+(?:\.[0-9]+)?)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)\s*[xX*]\s*([0-9]+(?:\.[0-9]+)?)/i);
+                if (!dimMatch) return;
+                const w = normalizeDimension(dimMatch[1]);
+                const l = normalizeDimension(dimMatch[2]);
+                const t = normalizeDimension(dimMatch[3]);
+
+                let grade = gradeCol >= 0 ? String(row[gradeCol] ?? '').trim().toUpperCase().replace(/^(GRADE|เกรด)\s*/i, '') : '';
+                if (!knownGrades.includes(grade)) {
+                    const gradeMatch = desc.match(/(?:GRADE|เกรด)\s*([A-Z0-9]+)/i);
+                    grade = gradeMatch ? gradeMatch[1].toUpperCase() : '';
+                }
+                if (!knownGrades.includes(grade)) return;
+
+                const qty = cleanNum(row[qtyCol]);
+                const d90 = cleanNum(row[c90]);
+                const d180 = cleanNum(row[c180]);
+                const d270 = cleanNum(row[c270]);
+                const d360 = cleanNum(row[c360]);
+                const dOver = cleanNum(row[cOver]);
+                const agingTotal = d90 + d180 + d270 + d360 + dOver;
+                if (qty < 0 || agingTotal !== qty) {
+                    rowErrors.push(`แถว ${rowIndex + 1}: จำนวนแผ่น ${qty} / Aging ${agingTotal}`);
+                    return;
+                }
+
+                let sku = descCol > 0 ? String(row[descCol - 1] ?? '').trim() : '';
+                if (!/[A-Za-z]/.test(sku)) sku = '';
+                const itemKey = makeStockKey(w, l, t, grade);
+                if (stockByKey.has(itemKey)) {
+                    const item = stockByKey.get(itemKey);
+                    item.qty += qty; item.d90 += d90; item.d180 += d180; item.d270 += d270; item.d360 += d360; item.dOver += dOver;
+                    item.eq25 = item.qty * ((cleanNum(w) * cleanNum(l)) / 2976800) * (cleanNum(t) / 2.5);
+                    if (sku && !item.sku.includes(sku)) item.sku = [item.sku, sku].filter(Boolean).join(', ');
+                    return;
+                }
+
+                const existing = existingByKey.get(itemKey);
+                const priceObj = priceDB[itemKey] || (existing && existing.priceObj) || { price: 0, currency: 'THB' };
+                stockByKey.set(itemKey, {
+                    sku, desc, size: sizeCol >= 0 ? (String(row[sizeCol] ?? 'Normal') || 'Normal') : 'Normal', w, l, t, grade, qty,
+                    eq25: qty * ((cleanNum(w) * cleanNum(l)) / 2976800) * (cleanNum(t) / 2.5), priceObj,
+                    d90, d180, d270, d360, dOver, committedQty: existing ? cleanNum(existing.committedQty) : 0
+                });
+            });
+
+            if (rowErrors.length) throw new Error(`ยอด Aging ไม่ตรงกัน ${rowErrors.length} แถว\n${rowErrors.slice(0, 5).join('\n')}`);
+            const stock = Array.from(stockByKey.values());
+            if (!stock.length) throw new Error('ไม่พบรายการสินค้าที่อ่านได้');
+
+            const total = stock.reduce((sum, item) => sum + item.qty, 0);
+            const gradeTotals = stock.reduce((result, item) => {
+                result[item.grade] = (result[item.grade] || 0) + item.qty;
+                return result;
+            }, {});
+            if (expectedTotal !== null && total !== expectedTotal) throw new Error(`ยอดรวม ${formatCommas(total)} ไม่ตรงกับตารางสรุป ${formatCommas(expectedTotal)}`);
+            Object.entries(expectedGradeTotals).forEach(([grade, expected]) => {
+                if ((gradeTotals[grade] || 0) !== expected) throw new Error(`ยอดเกรด ${grade} ไม่ตรงกับตารางสรุป`);
+            });
+            return { stock, total, gradeTotals };
+        }
+
+        function reportDateFromFileName(fileName) {
+            const match = String(fileName || '').match(/(\d{1,2})[.\-_/](\d{1,2})[.\-_/](\d{2,4})/);
+            if (!match) return null;
+            let year = Number(match[3]);
+            if (year >= 2400) year -= 543;
+            else if (year < 100) year += 1957;
+            const month = String(Number(match[2])).padStart(2, '0');
+            const day = String(Number(match[1])).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function uploadStockExcel(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('loading-overlay').classList.remove('hidden');
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                setTimeout(() => { 
+                    try {
+                        const data = new Uint8Array(e.target.result); 
+                        const workbook = XLSX.read(data, {type: 'array'}); 
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const rawJsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""}); 
+                        const parsed = parseAgingWorkbookRows(rawJsonData);
+                        const previousData = localStorage.getItem('fullInventoryData') || '[]';
+                        const previousMeta = localStorage.getItem('stockImportMeta') || '';
+                        const previousRaw = localStorage.getItem('rawExcelHTML') || '';
+                        const reportDate = reportDateFromFileName(file.name);
+                        const htmlStr = stockRowsToRawHTML(parsed.stock);
+                        const meta = {
+                            reportDate,
+                            importedAt: new Date().toISOString(),
+                            sourceType: 'manual-excel',
+                            fileName: file.name,
+                            rowCount: parsed.stock.length,
+                            totalQty: parsed.total,
+                            gradeTotals: parsed.gradeTotals,
+                            parserVersion: 'aging-workbook-v2'
+                        };
+
+                        localStorage.setItem('fullInventoryDataBackup', previousData);
+                        localStorage.setItem('stockImportMetaBackup', previousMeta);
+                        localStorage.setItem('rawExcelHTMLBackup', previousRaw);
+                        localStorage.setItem('fullInventoryData', JSON.stringify(parsed.stock));
+                        localStorage.setItem('rawExcelHTML', htmlStr);
+                        localStorage.setItem('stockImportMeta', JSON.stringify(meta));
+                        currentStockData = parsed.stock;
+                        rawExcelHTML = htmlStr;
+                        document.getElementById('raw-table-container').innerHTML = htmlStr;
+                        document.getElementById('btn-rollback-stock').classList.remove('hidden');
+                        updateDateTitle(); populateStockDropdowns(); renderStockView();
+                        setAutoStockStatus(`นำเข้า Excel สำเร็จ • ${parsed.stock.length} รายการ • ${formatCommas(parsed.total)} แผ่น`, 'warn');
+                        alert(`✅ อัปเดตสต๊อกจาก Excel สำเร็จ\nรวม ${parsed.stock.length} รายการ / ${formatCommas(parsed.total)} แผ่น\nราคากับยอดจองเดิมถูกเก็บไว้`);
+                    } catch (error) {
+                        alert('เกิดข้อผิดพลาดในการอ่านไฟล์: ' + error.message);
+                    }
+                    
+                    document.getElementById('loading-overlay').classList.add('hidden');
+                    event.target.value = ''; 
+                }, 500);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+    </script>
+</body>
+</html>
