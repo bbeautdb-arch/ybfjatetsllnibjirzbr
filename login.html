@@ -115,6 +115,7 @@
 const LOG_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwcerDqFFb0cYXmCsIz3LX79-IF_eX4XEA5CK_vgtpXCObS8xKrBDvfLFNSSArEy8KZ/exec';
 const LOG_SECRET    = '';
 const GRADE_AUTH_API = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/login';
+const STOCK_AUTH_API = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/stock/login';
 const HR_AUTH_API = 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/api/aaf/login';
 const MAINTENANCE_AUTH_API = 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/api/aaf/login';
 const CLOSING_AUTH_API = 'https://kabin-close.bbeautybbsoraai.chatgpt.site/api/aaf/login';
@@ -169,7 +170,8 @@ function logAttempt(username, success, role) {
 }
 
 async function doLogin() {
-  const user = document.getElementById('username').value.trim().toLowerCase();
+  const enteredUser = document.getElementById('username').value.trim().toLowerCase();
+  const user = enteredUser === 'op thantiva' ? 'opthantiva' : enteredUser;
   const pass = document.getElementById('password').value.trim();
   const errEl = document.getElementById('error-msg');
 
@@ -194,10 +196,10 @@ async function doLogin() {
       const result = await response.json();
       const returnedUsername = String(result.user?.username || '').trim().toLowerCase();
       if (!response.ok || !result.ok || !result.user || !result.bridgeSessionToken ||
-          returnedUsername !== user || result.user.role !== configured.role) {
+          returnedUsername !== user || result.user.role !== (configured.serverRole || configured.role)) {
         found = null;
       } else {
-        found = result.user;
+        found = { ...result.user, role: configured.role, salesman: configured.salesman };
         bridgeSessionToken = result.bridgeSessionToken;
         authSource = configured.authSource || 'grade';
       }
@@ -223,18 +225,20 @@ async function doLogin() {
     salesman: found.salesman, loginAt: new Date().toISOString(),
     bridgeSessionToken: bridgeSessionToken,
     gradeBridgeSessionToken: authSource === 'grade' ? bridgeSessionToken : null,
+    stockSessionToken: authSource === 'stock' ? bridgeSessionToken : null,
     authSource: authSource,
   }));
 
-  const target = found.role === 'purchase_material' ? 'production_plan.html' : 'dashboard_home.html';
+  const target = found.role === 'stock_viewer' ? 'stock_manager.html' : found.role === 'purchase_material' ? 'production_plan.html' : 'dashboard_home.html';
   setTimeout(()=>{ window.location.href = target; }, 300);
 }
 
+if(new URLSearchParams(location.search).has('reauth')) sessionStorage.removeItem('aaf_user');
 const sess = sessionStorage.getItem('aaf_user');
 if(sess){
   try{
     const parsed = JSON.parse(sess);
-    window.location.href = parsed.role === 'purchase_material' ? 'production_plan.html' : 'dashboard_home.html';
+    window.location.href = parsed.role === 'stock_viewer' ? 'stock_manager.html' : parsed.role === 'purchase_material' ? 'production_plan.html' : 'dashboard_home.html';
   }catch(e){
     window.location.href = 'dashboard_home.html';
   }
