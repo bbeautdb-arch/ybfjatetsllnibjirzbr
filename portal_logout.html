@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; connect-src https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site">
 <title>AAF Company Portal — ออกจากระบบ</title>
 <style>
   * { box-sizing: border-box; }
@@ -19,12 +19,18 @@
     <p>กำลังล้างสิทธิ์จากทุกระบบและกลับหน้าเข้าสู่ระบบ…</p>
   </main>
 <script>
+(async()=>{
+let session=null;try{session=JSON.parse(sessionStorage.getItem('aaf_user')||'null');}catch{}
+const token=session?.stockSessionToken||session?.gradeBridgeSessionToken||session?.bridgeSessionToken;
+if(token)await fetch('https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/portal/logout',{method:'POST',keepalive:true,signal:AbortSignal.timeout(8000),headers:{Authorization:'Bearer '+token,'Content-Type':'text/plain'},body:'{}'}).catch(()=>{});
 sessionStorage.clear();
 const portalLogin = 'https://bbeautdb-arch.github.io/AAF-System/login.html';
 const closingLogout = 'https://kabin-close.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(portalLogin);
 const gradeLogout = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(closingLogout);
 const hrLogout = 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(gradeLogout);
-window.location.replace(hrLogout);
+const maintenanceLogout='https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next='+encodeURIComponent(hrLogout);
+window.location.replace(maintenanceLogout);
+})();
 </script>
 </body>
 </html>

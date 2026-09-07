@@ -97,11 +97,11 @@
 <div class="login-card">
   <div id="error-msg" class="err-msg">ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</div>
 
-  <input id="username" type="text" placeholder="Username"
+  <input id="username" type="text" aria-label="ชื่อผู้ใช้" autocomplete="username" maxlength="64" placeholder="Username"
     onkeydown="if(event.key==='Enter') document.getElementById('password').focus()">
 
   <div class="pw-wrap">
-    <input id="password" type="password" placeholder="Password"
+    <input id="password" type="password" aria-label="รหัสผ่าน" autocomplete="current-password" maxlength="256" placeholder="Password"
       onkeydown="if(event.key==='Enter') doLogin()" style="padding-right:50px">
     <button class="pw-toggle" onclick="togglePw()" type="button">SHOW</button>
   </div>
@@ -112,15 +112,36 @@
 <p style="position:fixed;bottom:8px;left:8px;color:rgba(255,255,255,0.5);font-size:11px;z-index:5">v8-2026-08-29</p>
 
 <script>
-const LOG_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwcerDqFFb0cYXmCsIz3LX79-IF_eX4XEA5CK_vgtpXCObS8xKrBDvfLFNSSArEy8KZ/exec';
-const LOG_SECRET    = '';
+
+
 const GRADE_AUTH_API = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/login';
 const STOCK_AUTH_API = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/stock/login';
 const HR_AUTH_API = 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/api/aaf/login';
 const MAINTENANCE_AUTH_API = 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/api/aaf/login';
 const CLOSING_AUTH_API = 'https://kabin-close.bbeautybbsoraai.chatgpt.site/api/aaf/login';
 
-const USERS = {};
+const USERS = {
+  'vee': { serverAuth: true, authApi: STOCK_AUTH_API, authSource: 'stock', role: 'stock_viewer', name: 'วี', salesman: null },
+  // บัญชีที่เข้าแดชบอร์ดเกรดตรวจรหัสผ่านที่ server และไม่เก็บรหัสไว้ใน HTML
+  'admin':    { serverAuth: true, role: 'admin',  name: 'Admin',       salesman: null },
+  'boss':     { serverAuth: true, role: 'admin',  name: 'ผู้บริหาร',    salesman: null },
+  'hraaf':    { serverAuth: true, authApi: HR_AUTH_API, authSource: 'hr', role: 'hr', name: 'ฝ่ายทรัพยากรบุคคล', salesman: null },
+  'ช่างaaf':  { serverAuth: true, authApi: MAINTENANCE_AUTH_API, authSource: 'maintenance', role: 'maintenance', name: 'ช่าง AAF', salesman: null },
+  'accounting': { serverAuth: true, authApi: CLOSING_AUTH_API, authSource: 'closing', role: 'accounting', name: 'ฝ่ายบัญชี', salesman: null },
+  'nok':      { serverAuth: true, authApi: STOCK_AUTH_API, authSource: 'stock', serverRole: 'stock_viewer', role: 'sales', name: 'Nok', salesman: 'Nok' },
+  'kim':      { serverAuth: true, authApi: STOCK_AUTH_API, authSource: 'stock', serverRole: 'stock_viewer', role: 'sales', name: 'Kim', salesman: 'Kim' },
+  'lek':      { serverAuth: true, authApi: STOCK_AUTH_API, authSource: 'stock', serverRole: 'stock_viewer', role: 'sales', name: 'Lek', salesman: 'Lek' },
+  'tor':      { serverAuth: true, authApi: STOCK_AUTH_API, authSource: 'stock', serverRole: 'stock_viewer', role: 'sales', name: 'Tor', salesman: 'Tor' },
+  'angkana':  { serverAuth: true, authApi: STOCK_AUTH_API, authSource: 'stock', serverRole: 'stock_viewer', role: 'sales', name: 'K.Angkana', salesman: 'K.Angkana' },
+  'than':     { serverAuth: true, authApi: STOCK_AUTH_API, authSource: 'stock', serverRole: 'stock_viewer', role: 'sales', name: 'Than', salesman: 'Than' },
+  'opthantiva': { serverAuth: true, authApi: STOCK_AUTH_API, authSource: 'stock', serverRole: 'stock_viewer', role: 'sales', name: 'Thantiva', salesman: 'Thantiva' },
+  // หัวหน้ากะผลิต — เห็นหน้าแผนผลิต (ดูอย่างเดียว) และหน้าสรุปเกรด/ปัญหาประจำวัน
+  'shift1':   { serverAuth: true, role: 'production', name: 'หัวหน้ากะ 1', salesman: null },
+  // ผู้ลงข้อมูลเกรด — เข้าได้เฉพาะหน้า %เกรดและปัญหาประจำวัน (สิทธิ์บันทึก/แก้ไข)
+  'chen':     { serverAuth: true, role: 'grade_admin', name: 'ผู้ลงข้อมูลเกรด', salesman: null },
+  // จัดซื้อวัตถุดิบ — เห็นเฉพาะหน้าจัดซื้อวัตถุดิบ (ดู KPI เป้า + กรอกผลจัดซื้อจริงประจำวัน)
+  'purchase1': { serverAuth:true, authApi:'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/portal/login', authSource:'portal', role: 'purchase_material', name: 'จัดซื้อวัตถุดิบ', salesman: null },
+};
 
 function togglePw() {
   const pw = document.getElementById('password');
@@ -146,30 +167,10 @@ function detectDevice() {
   return `${browser} on ${os}`;
 }
 
-function logAttempt(username, success, role) {
-  if (!LOG_ENDPOINT || LOG_ENDPOINT.includes('PASTE_YOUR')) return;
-  const payload = {
-    username: username, success: success, role: role || '',
-    device: detectDevice(), ua: navigator.userAgent,
-  };
-  fetch('https://ipapi.co/json/')
-    .then(r => r.json())
-    .then(geo => {
-      payload.ip = geo.ip || '';
-      payload.city = geo.city || '';
-      payload.country = geo.country_name || '';
-    })
-    .catch(() => {})
-    .finally(() => {
-      fetch(LOG_ENDPOINT, {
-        method: 'POST', mode: 'no-cors',
-        headers: {'Content-Type': 'text/plain'},
-        body: JSON.stringify(payload),
-      }).catch(()=>{});
-    });
-}
+function logAttempt() {}
 
 async function doLogin() {
+  if(document.getElementById('btn-login').disabled)return;
   const enteredUser = document.getElementById('username').value.trim().toLowerCase();
   const user = enteredUser === 'op thantiva' ? 'opthantiva' : enteredUser;
   const pass = document.getElementById('password').value.trim();
@@ -190,6 +191,7 @@ async function doLogin() {
         method: 'POST',
         mode: 'cors',
         cache: 'no-store',
+        signal: AbortSignal.timeout(20000),
         headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
         body: JSON.stringify({ username: user, password: pass }),
       });
@@ -240,7 +242,7 @@ if(sess){
     const parsed = JSON.parse(sess);
     window.location.href = parsed.role === 'stock_viewer' ? 'stock_manager.html' : parsed.role === 'purchase_material' ? 'production_plan.html' : 'dashboard_home.html';
   }catch(e){
-    window.location.href = 'dashboard_home.html';
+    sessionStorage.removeItem('aaf_user');
   }
 }
 

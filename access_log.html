@@ -113,8 +113,8 @@
 
 <script>
 // ⚙️ ตั้งค่าให้ตรงกับ login.html และ AppsScript_Code.gs
-const LOG_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwcerDqFFb0cYXmCsIz3LX79-IF_eX4XEA5CK_vgtpXCObS8xKrBDvfLFNSSArEy8KZ/exec';
-const LOG_SECRET    = '';
+const LOG_ENDPOINT = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/portal/logs';
+
 
 // ตรวจสิทธิ์: เฉพาะ admin เท่านั้น
 const sess = sessionStorage.getItem('aaf_user');
@@ -125,9 +125,10 @@ if (user && user.role !== 'admin') {
   document.getElementById('content').classList.add('hidden');
 }
 
+const escapeLog=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function fmtTime(ts) {
   const d = new Date(ts);
-  if (isNaN(d)) return ts;
+  if (isNaN(d)) return escapeLog(ts);
   return d.toLocaleString('th-TH', {day:'2-digit',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
 
@@ -152,12 +153,13 @@ async function loadLogs() {
   document.getElementById('main-content').classList.add('hidden');
 
   try {
-    const resp = await fetch(`${LOG_ENDPOINT}?key=${LOG_SECRET}`);
+    const token=user?.gradeBridgeSessionToken||user?.bridgeSessionToken||'';
+    const resp = await fetch(LOG_ENDPOINT,{cache:'no-store',headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(30000)});
     const data = await resp.json();
     if (!data.ok) throw new Error(data.error || 'unauthorized');
     renderAll(data.logs || []);
   } catch (err) {
-    document.getElementById('loading').innerHTML = `<p class="text-red-400">❌ โหลดข้อมูลไม่สำเร็จ: ${err.message}</p>`;
+    document.getElementById('loading').innerHTML = `<p class="text-red-400">❌ โหลดข้อมูลไม่สำเร็จ: ${escapeLog(err.message)}</p>`;
     return;
   }
   document.getElementById('loading').classList.add('hidden');
@@ -192,7 +194,7 @@ function renderAll(logs) {
   document.getElementById('user-freq-table').innerHTML = freqArr.map(([u, d], i) => `
     <div class="flex items-center gap-3 py-2 border-b border-gray-700/50">
       <span class="text-gray-600 text-xs w-5">${i+1}</span>
-      <span class="text-white text-sm font-medium w-24">${u}</span>
+      <span class="text-white text-sm font-medium w-24">${escapeLog(u)}</span>
       <div class="flex-1 bg-gray-900 rounded-full h-5 overflow-hidden">
         <div class="bg-gradient-to-r from-green-600 to-green-400 h-full flex items-center px-2" style="width:${Math.max(d.count/maxCount*100, 8)}%">
           <span class="text-[10px] text-white font-bold">${d.count} ครั้ง</span>
@@ -215,10 +217,10 @@ function renderAll(logs) {
   document.getElementById('user-devices-table').innerHTML = Object.entries(devMap).map(([u, d]) => {
     const multiDevice = d._all.size > 1;
     return `<div class="flex items-center gap-3 py-2.5 border-b border-gray-700/50">
-      <span class="text-white text-sm font-medium w-24">${u}</span>
-      <span class="text-gray-300 text-xs flex-1">${d.device || '-'}</span>
-      <span class="text-gray-400 text-xs w-40">${d.city ? d.city+', ' : ''}${d.country || '-'}</span>
-      <span class="text-gray-600 text-xs w-24 font-mono">${d.ip || '-'}</span>
+      <span class="text-white text-sm font-medium w-24">${escapeLog(u)}</span>
+      <span class="text-gray-300 text-xs flex-1">${escapeLog(d.device || '-')}</span>
+      <span class="text-gray-400 text-xs w-40">${escapeLog(d.city ? d.city+', ' : '')}${escapeLog(d.country || '-')}</span>
+      <span class="text-gray-600 text-xs w-24 font-mono">${escapeLog(d.ip || '-')}</span>
       ${multiDevice ? `<span class="text-amber-400 text-[10px] bg-amber-900/30 px-2 py-0.5 rounded-full">⚠️ ${d._all.size} อุปกรณ์/ที่ตั้ง</span>` : `<span class="text-green-500 text-[10px]">✓ ปกติ</span>`}
     </div>`;
   }).join('') || '<p class="text-gray-500 text-sm">ยังไม่มีข้อมูล</p>';
@@ -238,9 +240,9 @@ function renderAll(logs) {
   document.getElementById('failed-attempts-table').innerHTML = failArr.length ? failArr.map(([u, d]) => {
     const suspicious = d.count >= 3;
     return `<div class="flex items-center gap-3 py-2.5 border-b border-gray-700/50">
-      <span class="text-white text-sm font-medium w-24">${u}</span>
+      <span class="text-white text-sm font-medium w-24">${escapeLog(u)}</span>
       <span class="${suspicious ? 'text-red-400 font-bold' : 'text-gray-300'} text-sm w-24">${d.count} ครั้ง</span>
-      <span class="text-gray-500 text-xs flex-1">${[...d.ips].join(', ')}</span>
+      <span class="text-gray-500 text-xs flex-1">${escapeLog([...d.ips].join(', '))}</span>
       <span class="text-gray-600 text-xs w-28 text-right">ล่าสุด ${timeAgo(d.last)}</span>
       ${suspicious ? `<span class="text-red-400 text-[10px] bg-red-900/30 px-2 py-0.5 rounded-full">🚨 น่าสงสัย</span>` : ''}
     </div>`;
@@ -250,11 +252,11 @@ function renderAll(logs) {
   document.getElementById('raw-log-tbody').innerHTML = logs.slice(0, 100).map(l => `
     <tr class="border-b border-gray-700/30 hover:bg-gray-700/20">
       <td class="py-2 px-2 text-gray-400 font-mono">${fmtTime(l.Timestamp)}</td>
-      <td class="py-2 px-2 text-white">${l.Username || '-'}</td>
+      <td class="py-2 px-2 text-white">${escapeLog(l.Username || '-')}</td>
       <td class="py-2 px-2">${l.Status === 'สำเร็จ' ? '<span class="text-green-400">✓ สำเร็จ</span>' : '<span class="text-red-400">✗ ล้มเหลว</span>'}</td>
-      <td class="py-2 px-2 text-gray-400">${l.Device || '-'}</td>
-      <td class="py-2 px-2 text-gray-500 font-mono">${l.IP || '-'}</td>
-      <td class="py-2 px-2 text-gray-500">${l.City ? l.City+', ' : ''}${l.Country || '-'}</td>
+      <td class="py-2 px-2 text-gray-400">${escapeLog(l.Device || '-')}</td>
+      <td class="py-2 px-2 text-gray-500 font-mono">${escapeLog(l.IP || '-')}</td>
+      <td class="py-2 px-2 text-gray-500">${escapeLog(l.City ? l.City+', ' : '')}${escapeLog(l.Country || '-')}</td>
     </tr>`).join('');
 }
 

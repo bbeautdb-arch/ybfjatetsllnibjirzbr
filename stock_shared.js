@@ -125,7 +125,7 @@
     bar.before(rp);$('report-day').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
     $('report-day').oninput=()=>{reportData=null;reportDataDay=null;$('download-stock-report').disabled=true;$('report-summary').textContent='กดดูรายงานเพื่อโหลดวันที่เลือก';};
     $('reload-shared').onclick=refresh;$('open-stock-report').onclick=()=>{location.hash='report';openReport();};$('load-stock-report').onclick=loadReport;$('download-stock-report').onclick=window.downloadStockReport;
-    $('stock-logout').onclick=()=>{sessionStorage.removeItem('aaf_user');location.href=LOGIN;};
+    $('stock-logout').onclick=()=>{location.href='portal_logout.html';};
     $('btn-rollback-stock').hidden=true;$('btn-rollback-stock').classList.add('hidden');$('btn-edit-raw').hidden=true;$('btn-edit-raw').style.display='none';$('raw-edit-controls').remove();
     $('btn-open-auto-mail-import').hidden=true;$('btn-sync-price').hidden=true;document.querySelector('input[type=file]').closest('label').hidden=true;$('global-exchange-rate').disabled=true;
     $('stock-table-body').innerHTML='<tr><td>กำลังเชื่อมต่อข้อมูลส่วนกลาง...</td></tr>';

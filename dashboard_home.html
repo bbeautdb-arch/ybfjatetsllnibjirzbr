@@ -204,12 +204,7 @@ container.innerHTML = pages.map(p => {
 
 function doLogout() {
   if(!confirm('ออกจากระบบ?')) return;
-  sessionStorage.clear();
-  const portalLogin = 'https://bbeautdb-arch.github.io/AAF-System/login.html';
-  const closingLogout = 'https://kabin-close.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(portalLogin);
-  const gradeLogout = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(closingLogout);
-  const hrLogout = 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(gradeLogout);
-  window.location.href = 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(hrLogout);
+  location.href='portal_logout.html';
 }
 </script>
 </body>
