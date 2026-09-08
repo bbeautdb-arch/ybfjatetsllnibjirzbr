@@ -69,6 +69,9 @@
                 </p>
             </div>
             <div class="mt-4 md:mt-0 flex space-x-3 items-center">
+                <a href="stock_report.html" class="bg-emerald-700 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition flex items-center text-sm">
+                    📄 รายงานสต๊อก
+                </a>
                 <a href="dashboard_home.html" class="bg-violet-600 hover:bg-violet-500 text-white font-bold py-2 px-6 rounded-lg shadow-md transition flex items-center text-sm">
                     📊 กลับหน้าหลัก
                 </a>
@@ -196,6 +199,10 @@
         </div>
 
     </div>
+
+    <section id="stock-summary" data-aaf-stock-summary class="max-w-[1500px] mx-auto w-full" aria-label="สรุปสต๊อกสำหรับส่งรายงาน">
+        <p role="status">รายงานภาพยาวจะแสดงเมื่อโหลดข้อมูลส่วนกลางสำเร็จ — ใช้เฉพาะค่าที่บันทึกแล้ว</p>
+    </section>
 
     <div id="loading-overlay" class="hidden fixed inset-0 bg-slate-900/50 z-[100000] flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center">
@@ -1258,6 +1265,7 @@
         }
 
     </script>
-    <script src="stock_shared.js?v=20260904"></script>
+    <script src="stock_summary.js?v=20260908"></script>
+    <script src="stock_shared.js?v=20260908"></script>
 </body>
 </html>

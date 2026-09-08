@@ -1,2 +1,45 @@
 <!doctype html>
-<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>รายงานสต๊อก AAF ประจำวัน</title><meta http-equiv="refresh" content="0;url=stock_manager.html#report"></head><body><a href="stock_manager.html#report">เปิดรายงานสต๊อกประจำวัน / Excel</a></body></html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>รายงานสต๊อก AAF</title>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body{margin:0;background:#eef3f7;color:#172b42;font-family:'Prompt',sans-serif}
+    .report-shell{max-width:1440px;margin:auto;padding:24px}
+    .report-nav{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:20px}
+    .report-nav h1{font-size:24px;margin:0;font-weight:600}
+    .report-links{display:flex;gap:10px;flex-wrap:wrap}
+    .report-links a,.report-links button,#report-signin{display:inline-block;border:1px solid #becedc;border-radius:9px;padding:10px 14px;background:white;color:#213e56;font:500 14px 'Prompt',sans-serif;text-decoration:none;cursor:pointer}
+    .report-links button:disabled{opacity:.6;cursor:wait}
+    #report-status{font-size:14px;line-height:1.7;margin:0 0 16px;color:#52657a}
+    #report-status[data-error=true]{color:#a52728}
+    #report-signin{background:#213e56;color:white;margin-bottom:20px}
+    [hidden]{display:none!important}
+    a:focus-visible,button:focus-visible{outline:3px solid #289785;outline-offset:3px}
+    @media(max-width:650px){.report-shell{padding:12px}.report-nav h1{font-size:22px}}
+  </style>
+</head>
+<body>
+  <main class="report-shell">
+    <nav class="report-nav" aria-label="เมนูรายงานสต๊อก">
+      <h1>รายงานสต๊อก AAF</h1>
+      <div class="report-links">
+        <a href="stock_manager.html">← กลับหน้าสต๊อก</a>
+        <a href="stock_manager.html#report">รายงานประจำวัน / Excel</a>
+        <button id="report-refresh" type="button">โหลดข้อมูลล่าสุด</button>
+      </div>
+    </nav>
+    <p id="report-status" role="status" aria-live="polite">กำลังโหลดข้อมูลที่บันทึกแล้วจากระบบส่วนกลาง…</p>
+    <a id="report-signin" href="login.html?reauth=1" hidden>เข้าสู่ระบบ AAF</a>
+    <section id="stock-summary" data-aaf-stock-summary aria-label="รายงานสต๊อกฉบับเต็ม">
+      <p>รายงานจะแสดงหลังตรวจสอบสิทธิ์และโหลดข้อมูลสำเร็จ ไม่ใช้ข้อมูลเก่าที่เก็บในเครื่อง</p>
+    </section>
+    <noscript>กรุณาเปิด JavaScript เพื่อโหลดรายงานสต๊อกหลังเข้าสู่ระบบ</noscript>
+  </main>
+  <script src="stock_summary.js?v=20260908"></script>
+  <script src="stock_report.js?v=20260908"></script>
+</body>
+</html>

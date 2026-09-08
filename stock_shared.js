@@ -70,6 +70,8 @@
     populateStockDropdowns();renderStockView();
     rawExcelHTML=stockRowsToRawHTML(data.rows.map(r=>({...r,qty:r.baseQty})));$('raw-table-container').innerHTML=rawExcelHTML;
     setAutoStockStatus(data.report?`ข้อมูลส่วนกลาง • รายงาน ${formatThaiReportDate(data.report.reportDate)} • ${data.rows.length} รายการ • ยอดเมล ${fmt(data.report.expectedTotal)} แผ่น`:'ยังไม่มีรายงานในฐานข้อมูลส่วนกลาง');
+    // Read-only report; a rendering failure must never interrupt an existing save.
+    try{window.AAFStockSummary?.update(data,r=>values(r,data));}catch(e){window.AAFStockSummary?.showError('รายงานภาพยาวแสดงไม่ได้: '+e.message);}
     // Compatibility for existing sales screens; never used as authoritative read.
     if(data.report)try{localStorage.setItem('fullInventoryData',JSON.stringify(data.rows));localStorage.setItem('stockPriceDB',JSON.stringify(priceDB));localStorage.setItem('exchangeRate_USD_THB',String(globalExchangeRate));localStorage.setItem('stockImportMeta',JSON.stringify({...data.report,importedAt:data.importedAt,sender:data.report.source?.sender,subject:data.report.source?.subject,sourceType:data.report.source?.type}));}catch{}
   }
