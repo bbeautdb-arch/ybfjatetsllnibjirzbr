@@ -4,7 +4,7 @@
   'use strict';
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const fmt=n=>Number(n||0).toLocaleString('en-US',{maximumFractionDigits:2});
-  let data,save,section,dialog;
+  let data,save,section,dialog,morningDialog,morningReview=null,morningSubmitting=false;
   function render(){
     if(!section||!data)return;
     const p=data.sellablePlan,mode=document.getElementById('plan-filter').value;
@@ -12,7 +12,7 @@
     document.getElementById('plan-state').textContent=p?`บันทึกส่วนกลางแล้ว · เมล ${data.report.reportDate} · ข้อมูลขาย ${p.month} · ${p.source.rowCount} รายการ · ${new Date(p.appliedAt).toLocaleString('th-TH')}${p.needsSalesRefresh?' · รออัปเดตแผนขายของรายงานวันนี้':''}`:data.sellableRules==='aaf-sellable-20260910-v2'?'บันทึกกติกาโยกรอบเช้าแล้ว · ยอดจองเดิมยังอยู่ · รอแผนหน้า 09 รอบ 13:30':'ยังไม่ได้บันทึกกติกาโยกในระบบกลาง';
     document.getElementById('plan-open').hidden=!data.permissions.adjust;
     for(const id of ['plan-enable','plan-sales-export'])document.getElementById(id).hidden=!data.permissions.adjust;
-    document.getElementById('plan-enable').disabled=data.stockWorkflowVersion!==1||data.sellableRules==='aaf-sellable-20260910-v2';
+    document.getElementById('plan-enable').disabled=morningSubmitting||data.stockWorkflowVersion!==1||data.sellableRules==='aaf-sellable-20260910-v2';
     document.getElementById('plan-sales-export').disabled=data.stockWorkflowVersion!==1||data.sellableRules!=='aaf-sellable-20260910-v2';
     const totals=['sheet','strip'].map(unit=>{const r=data.rows.filter(x=>(x.unit||'sheet')===unit),sum=k=>r.reduce((n,x)=>n+Math.round((x[k]||0)*100),0)/100;return `${unit==='sheet'?'แผ่น':'ชิ้น strip'}: หลังโยก ${fmt(sum('qty'))} · จอง ${fmt(sum('committedQty'))} · Free ${fmt(sum('freeQty'))} · ต้องผลิต ${fmt(sum('productionQty'))}`;});
     document.getElementById('plan-totals').textContent=totals.join('\n');
@@ -27,11 +27,34 @@
     (document.querySelector('main')||document.body).append(section);
     const morning=document.createElement('div');morning.innerHTML='<button class="shared-btn" id="plan-enable" hidden>บันทึกกติกาโยกรอบเช้า (คงยอดจอง)</button> <button class="shared-btn shared-secondary" id="plan-sales-export" hidden>Excel ส่งฝ่ายขาย · ก่อนหักจอง</button><p id="morning-plan-state" style="white-space:pre-wrap"></p>';
     section.insertBefore(morning,document.getElementById('plan-open'));
-    document.getElementById('plan-enable').onclick=async()=>{
-      if(!data?.permissions.adjust||data.stockWorkflowVersion!==1||!data.report)return;
-      if(!confirm('บันทึกกติกาโยก 1.6 A และ 1.8 A/B → 1.6 B เฉพาะ 1220×2440 และ 1270 → 1260 จากรายงาน '+data.report.reportDate+' โดยคงยอดจอง ราคา หมายเหตุ และการติดตามเดิม?'))return;
-      const b=document.getElementById('plan-enable');b.disabled=true;
-      try{const ok=await save({action:'enableSellableRules',rules:'aaf-sellable-20260910-v2',stockChecksum:data.report.checksum});document.getElementById('morning-plan-state').textContent=ok?'บันทึกกติกาในระบบกลางแล้ว ยังไม่ได้ส่งไฟล์ให้ฝ่ายขาย':'ยังไม่บันทึก กรุณาดูสาเหตุด้านบน';}finally{render();}
+    morningDialog=document.createElement('dialog');morningDialog.id='morning-confirm-dialog';
+    morningDialog.setAttribute('aria-labelledby','morning-confirm-title');morningDialog.setAttribute('aria-describedby','morning-confirm-review');
+    morningDialog.innerHTML='<h2 id="morning-confirm-title">ยืนยันกติกาโยกรอบเช้า</h2><p id="morning-confirm-review" style="white-space:pre-wrap"></p><p id="morning-confirm-state" role="status" aria-live="polite"></p><button type="button" id="morning-confirm-cancel" class="shared-btn shared-secondary" autofocus>ยกเลิก</button> <button type="button" id="morning-confirm-submit" class="shared-btn">ยืนยันและบันทึกกติกา</button>';
+    document.body.append(morningDialog);
+    style.textContent+='#morning-confirm-dialog{width:min(650px,95vw);padding:24px;border:1px solid #94a3b8;border-radius:12px}#morning-confirm-dialog::backdrop{background:#0f172a99}#morning-confirm-dialog h2{font-size:22px;font-weight:700}#morning-confirm-dialog p{margin:14px 0}#morning-confirm-state{color:#be123c}';
+    const confirmSubmit=document.getElementById('morning-confirm-submit'),confirmCancel=document.getElementById('morning-confirm-cancel'),confirmState=document.getElementById('morning-confirm-state');
+    document.getElementById('plan-enable').onclick=()=>{
+      if(morningSubmitting||morningDialog.open||!data?.permissions.adjust||data.stockWorkflowVersion!==1||!data.report||data.sellableRules==='aaf-sellable-20260910-v2')return;
+      morningReview={reportDate:data.report.reportDate,stockChecksum:data.report.checksum,revision:data.revision};
+      document.getElementById('morning-confirm-review').textContent='รายงานเมล '+morningReview.reportDate+' · Revision '+morningReview.revision+'\n\n1. เฉพาะขนาด 1220×2440: โยก 1.6 A และ 1.8 A/B รวมกับ 1.6 B เดิม\n2. กว้าง 1270 → 1260 โดยคงยาว ความหนา และเกรด\n\nคงยอดจอง ราคา หมายเหตุ และการติดตามเดิม ไม่เปลี่ยนสเปกออเดอร์ และยังไม่ส่งไฟล์ให้ฝ่ายขาย\nกติกา: aaf-sellable-20260910-v2';
+      confirmState.textContent='';morningDialog.showModal();
+    };
+    confirmCancel.onclick=()=>{if(!morningSubmitting)morningDialog.close();};
+    morningDialog.addEventListener('cancel',event=>{if(morningSubmitting)event.preventDefault();});
+    morningDialog.addEventListener('close',()=>{morningReview=null;});
+    confirmSubmit.onclick=async()=>{
+      if(morningSubmitting||!morningDialog.open||!morningReview)return;
+      if(!data?.permissions.adjust||data.stockWorkflowVersion!==1){confirmState.textContent='ไม่มีสิทธิ์บันทึกกติกา กรุณาปิดแล้วโหลดข้อมูลล่าสุด';return;}
+      if(data.revision!==morningReview.revision||data.report?.reportDate!==morningReview.reportDate||data.report?.checksum!==morningReview.stockChecksum||data.sellableRules==='aaf-sellable-20260910-v2'){
+        confirmState.textContent='ข้อมูลเปลี่ยนหลังเปิดหน้าต่างยืนยัน กรุณายกเลิกแล้วตรวจข้อมูลล่าสุดก่อนยืนยันใหม่';return;
+      }
+      morningSubmitting=true;confirmSubmit.disabled=true;confirmCancel.disabled=true;confirmState.textContent='กำลังบันทึกกติกา…';render();
+      try{
+        const ok=await save({action:'enableSellableRules',rules:'aaf-sellable-20260910-v2',stockChecksum:morningReview.stockChecksum});
+        const message=ok?'บันทึกกติกาในระบบกลางแล้ว ยังไม่ได้ส่งไฟล์ให้ฝ่ายขาย':'ยังไม่บันทึก กรุณาดูสาเหตุด้านบน';
+        document.getElementById('morning-plan-state').textContent=message;confirmState.textContent=message;if(ok)morningDialog.close();
+      }catch{confirmState.textContent='ยืนยันผลบันทึกไม่ได้ กรุณาปิดแล้วโหลดข้อมูลล่าสุดก่อนลองอีกครั้ง';}
+      finally{morningSubmitting=false;confirmSubmit.disabled=false;confirmCancel.disabled=false;render();}
     };
     document.getElementById('plan-sales-export').onclick=()=>window.downloadSales04Stock();
     dialog=document.createElement('dialog');dialog.id='plan-dialog';dialog.innerHTML='<h2>บันทึกแผนโยกและยอดจองทั้งชุด</h2><p>ใช้สต๊อกเมลต้นฉบับแล้วโยกตามสองกติกา ยอดจองใหม่แทนแผนเดิม ไม่บวกซ้ำ หากมีค่าปรับมือของรายงานวันนี้ ระบบจะหยุดให้ตรวจสอบก่อน</p><textarea id="plan-json" aria-label="JSON แผนโยกและยอดจอง" spellcheck="false"></textarea><p id="plan-import-state"></p><button id="plan-apply" class="shared-btn">ตรวจสอบและบันทึกส่วนกลาง</button> <button id="plan-cancel" class="shared-btn shared-secondary">ปิด</button>';
