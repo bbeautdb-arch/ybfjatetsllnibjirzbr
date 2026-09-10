@@ -68,7 +68,10 @@
                     💡 ฐานข้อมูลหลัก: คำนวณตัดสต๊อก, แปลงปริมาตร (2.5 mm.) และประเมินมูลค่า (THB/USD)
                 </p>
             </div>
-            <div class="mt-4 md:mt-0 flex space-x-3 items-center">
+            <div class="mt-4 md:mt-0 flex flex-wrap gap-3 items-center">
+                <a id="stock-preparation-link" href="https://aaf-sales-stock-preparation.bbeautybbsoraai.chatgpt.site/" target="_blank" rel="noopener noreferrer" class="bg-sky-700 hover:bg-sky-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition flex items-center text-sm" title="เปิดหน้าเตรียมตัดสต๊อกในแท็บใหม่ ต้องมีสิทธิ์เข้าถึงรายงาน">
+                    📋 เตรียมตัดสต๊อก ↗
+                </a>
                 <a href="stock_report.html" class="bg-emerald-700 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition flex items-center text-sm">
                     📄 รายงานสต๊อก
                 </a>
@@ -118,6 +121,9 @@
                     <select id="view-grade" class="filter-select" onchange="renderStockView()"><option value="">-- เกรดทั้งหมด --</option></select>
                     <select id="view-w" class="filter-select" onchange="renderStockView()"><option value="">-- กว้าง (W) --</option></select>
                     <select id="view-l" class="filter-select" onchange="renderStockView()"><option value="">-- ยาว (L) --</option></select>
+                    <label class="flex items-center gap-2 text-sm font-semibold text-slate-700" title="ซ่อนเฉพาะ Physical = 0 ในตารางนี้ ไม่ลบรายการหรือเปลี่ยนยอดจอง">
+                        <input id="view-hide-zero" type="checkbox" onchange="setStockHideZero(this.checked)"> ซ่อนสต๊อก 0 (Physical)
+                    </label>
                     <button onclick="clearStockFilters()" class="text-xs font-semibold text-slate-400 hover:text-rose-500 underline transition ml-2">ล้างตัวกรอง</button>
                 </div>
                 
@@ -247,6 +253,16 @@
 
         function makeStockKey(w, l, t, grade) {
             return `w${normalizeDimension(w)}_l${normalizeDimension(l)}_t${normalizeDimension(t)}_g${String(grade || '').trim().toUpperCase()}`;
+        }
+
+        function setStockHideZero(checked) {
+            document.getElementById('view-hide-zero').checked = Boolean(checked);
+            try { localStorage.setItem('stockHideZeroPreference', checked ? '1' : '0'); } catch {}
+            renderStockView();
+        }
+
+        function restoreStockHideZero() {
+            try { document.getElementById('view-hide-zero').checked = localStorage.getItem('stockHideZeroPreference') === '1'; } catch {}
         }
 
         function getStockImportMeta() {
@@ -443,6 +459,7 @@
         let globalExchangeRate = parseFloat(localStorage.getItem('exchangeRate_USD_THB')) || 35.50;
 
         window.onload = () => {
+            restoreStockHideZero();
             applyAutoStockSnapshot({ silent: true });
             updateDateTitle();
             document.getElementById('global-exchange-rate').value = globalExchangeRate.toFixed(2);
@@ -677,6 +694,7 @@
                 if (filterW !== "" && item.w !== filterW) pass = false;
                 if (filterL !== "" && item.l !== filterL) pass = false;
                 if (filterGrade !== "" && item.grade !== filterGrade) pass = false;
+                if (!window.AAFStockFilters.matches(item, {hideZero: document.getElementById('view-hide-zero').checked})) pass = false;
 
                 if (pass) {
                     count++;
@@ -809,6 +827,8 @@
         }
 
         function clearStockFilters() {
+            document.getElementById('view-hide-zero').checked = false;
+            try { localStorage.setItem('stockHideZeroPreference', '0'); } catch {}
             document.getElementById('view-t').value = ""; document.getElementById('view-grade').value = "";
             document.getElementById('view-w').value = ""; document.getElementById('view-l').value = "";
             renderStockView();
@@ -1265,7 +1285,10 @@
         }
 
     </script>
-    <script src="stock_summary.js?v=20260909-conversions"></script>
-    <script src="stock_shared.js?v=20260908"></script>
+    <script src="stock_filters.js?v=20260910-catalog"></script>
+    <script src="stock_summary.js?v=20260910-catalog"></script>
+    <script src="stock_plan_ui.js?v=20260910-daily"></script>
+    <script src="stock_sales_export.js?v=20260910-daily"></script>
+    <script src="stock_shared.js?v=20260910-daily"></script>
 </body>
 </html>

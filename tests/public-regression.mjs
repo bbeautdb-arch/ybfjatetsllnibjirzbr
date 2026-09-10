@@ -5,6 +5,11 @@ const files=readdirSync(new URL('../',import.meta.url)).filter(f=>/\.(html|js)$/
 const workflow=readFileSync(new URL('../.github/workflows/static.yml',import.meta.url),'utf8');
 assert(readFileSync(new URL('../login-bg.png',import.meta.url)).length>0,'Missing login background');
 assert(workflow.includes('cp ./login-bg.png _site/'),'Login background excluded from deployment');
+const stockPage=readFileSync(new URL('../stock_manager.html',import.meta.url),'utf8');
+const prepLink=stockPage.match(/<a\b[^>]*id="stock-preparation-link"[^>]*>/)?.[0];
+assert(prepLink,'Stock Manager needs a preparation report link');
+assert(prepLink.includes('href="https://aaf-sales-stock-preparation.bbeautybbsoraai.chatgpt.site/"'),'Preparation link must use the approved online destination');
+assert(prepLink.includes('target="_blank"')&&prepLink.includes('rel="noopener noreferrer"'),'Preparation link must safely keep Stock Manager open');
 for(const file of files){
  const source=readFileSync(new URL('../'+file,import.meta.url),'utf8');
  assert(!/AAF_PLAN_SECRET|const API_SECRET|const LOG_SECRET|password\s*:\s*['"][^'"]+/.test(source),'Public secret in '+file);

@@ -5,7 +5,7 @@
   const API='https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/stock';
   const LOGIN='https://bbeautdb-arch.github.io/AAF-System/login.html?reauth=1';
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const fmt=n=>Number(n||0).toLocaleString('th-TH',{maximumFractionDigits:0});
+  const fmt=n=>Number(n||0).toLocaleString('th-TH',{maximumFractionDigits:2});
   const fmtPrice=n=>Number(n||0).toLocaleString('th-TH',{maximumFractionDigits:4});
   const dateText=d=>d?new Date(d).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}):'—';
   const $=id=>document.getElementById(id);
@@ -44,17 +44,17 @@
     cols.push('ฟรีสต๊อก (Free)','มูลค่าฟรีสต๊อก (฿)','การติดตามยอดขาย','หมายเหตุ');
     const head=$('stock-table-body').closest('table').querySelector('thead');head.id='stock-table-head';head.innerHTML='<tr>'+cols.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr>';
   }
-  function filtered(data=shared){return (data?.rows||[]).filter(r=>['t','w','l','grade'].every(k=>!$('view-'+k)?.value||String(r[k])===$('view-'+k).value));}
+  function filtered(data=shared){const filters=Object.fromEntries(['t','w','l','grade'].map(k=>[k,$('view-'+k)?.value]));filters.hideZero=!!$('view-hide-zero')?.checked;return (data?.rows||[]).filter(r=>window.AAFStockFilters.matches(r,filters));}
   function values(r,data=shared){const price=r.priceObj?.price||0,curr=r.priceObj?.currency||'THB',thb=price*(curr==='USD'?data.exchangeRate:1);return {price,curr,thb,eq:r.qty*(Number(r.w)*Number(r.l)/2976800)*(Number(r.t)/2.5),value:r.qty*thb,freeValue:r.freeQty*thb};}
   function editNumber(r,field){const active=field==='physical'?r.physicalOverride:r.freeOverride;return `<td class="shared-edit"><div><input class="shared-input" type="number" min="0" step="1" data-draft="${field}" data-key="${esc(r.key)}" aria-label="${field==='physical'?'ปรับสต๊อก':'ปรับฟรีสต๊อก'} ${esc(r.w+'x'+r.l+'x'+r.t+' '+r.grade)}" value="${field==='physical'?r.qty:r.freeQty}"> <button class="shared-btn" data-save="${field}" data-key="${esc(r.key)}">เซฟ</button></div><button class="shared-btn shared-secondary" style="margin-top:5px" data-reset="${field}" data-key="${esc(r.key)}">ใช้${field==='physical'?'ยอดเมล':'สูตรเดิม'}</button><small>${active?'เซฟ '+esc(dateText(active.at)):'ยังไม่ได้ปรับระหว่างวัน'}</small></td>`;}
   function textCell(r,field){const editable=can(field);return `<td class="shared-note">${editable?`<textarea maxlength="4000" data-draft="${field}" data-key="${esc(r.key)}" aria-label="${field==='note'?'หมายเหตุ':'การติดตามยอดขาย'} ${esc(r.key)}">${esc(r[field])}</textarea><br><button class="shared-btn" data-save="${field}" data-key="${esc(r.key)}">เซฟ</button>`:`<div class="shared-copy">${esc(r[field]||'—')}</div>`}<small class="shared-meta">${r[field+'At']?esc(r[field+'By']+' · '+dateText(r[field+'At'])):''}</small></td>`;}
   window.renderStockView=function(){
     if(!shared)return;header();const rows=filtered();let qty=0,eq=0,val=0,free=0,fv=0;
     $('stock-table-body').innerHTML=rows.map((r,i)=>{const v=values(r);qty+=r.qty;eq+=v.eq;val+=v.value;free+=r.freeQty;fv+=v.freeValue;
-      return `<tr><td>${i+1}</td><td><b>${esc(r.w+' x '+r.l+' x '+r.t)}</b><small class="shared-meta">${esc(r.desc)}</small></td><td>${esc(r.grade)}</td>${isOwner()?editNumber(r,'physical'):''}<td class="shared-number" style="color:#047857">${fmt(r.qty)}${r.physicalOverride?'<small class="shared-meta">ยอดเมล '+fmt(r.baseQty)+'</small>':''}</td><td class="shared-number" style="color:#4f46e5">${fmt(v.eq)}</td><td>${isOwner()?`<input class="shared-input" type="number" min="0" step="0.001" data-price="${esc(r.key)}" value="${v.price}"><select data-currency="${esc(r.key)}" class="filter-select"><option ${v.curr==='THB'?'selected':''}>THB</option><option ${v.curr==='USD'?'selected':''}>USD</option></select><button class="shared-btn" data-save-price="${esc(r.key)}">เซฟ</button>`:fmtPrice(v.price)+' '+v.curr}</td><td class="shared-number">${fmt(v.value)}</td>${isOwner()?editNumber(r,'free'):''}<td class="shared-number" style="color:#0369a1">${fmt(r.freeQty)}${r.freeOverride?'<small class="shared-meta">ปรับระหว่างวัน</small>':''}</td><td class="shared-number">${fmt(v.freeValue)}</td>${textCell(r,'followup')}${textCell(r,'note')}</tr>`;
+      return `<tr><td>${i+1}</td><td><b>${esc(r.w+' x '+r.l+' x '+r.t)}</b><small class="shared-meta">${esc(r.desc)}</small><small class="shared-meta">SKU: ${esc(r.sku||'—')}${r.retained?' · เก็บรายการเดิม · ไม่พบในเมลวันนี้ (ยอดเมล 0)':''}</small></td><td>${esc(r.grade)}</td>${isOwner()?editNumber(r,'physical'):''}<td class="shared-number" style="color:#047857">${fmt(r.qty)}${r.physicalOverride?'<small class="shared-meta">ยอดเมล '+fmt(r.baseQty)+'</small>':''}</td><td class="shared-number" style="color:#4f46e5">${fmt(v.eq)}</td><td>${isOwner()?`<input class="shared-input" type="number" min="0" step="0.001" data-price="${esc(r.key)}" value="${v.price}"><select data-currency="${esc(r.key)}" class="filter-select"><option ${v.curr==='THB'?'selected':''}>THB</option><option ${v.curr==='USD'?'selected':''}>USD</option></select><button class="shared-btn" data-save-price="${esc(r.key)}">เซฟ</button>`:fmtPrice(v.price)+' '+v.curr}</td><td class="shared-number">${fmt(v.value)}</td>${isOwner()?editNumber(r,'free'):''}<td class="shared-number" style="color:#0369a1">${fmt(r.freeQty)}${r.freeOverride?'<small class="shared-meta">ปรับระหว่างวัน</small>':''}</td><td class="shared-number">${fmt(v.freeValue)}</td>${textCell(r,'followup')}${textCell(r,'note')}</tr>`;
     }).join('')||`<tr><td colspan="${isOwner()?13:11}">ไม่พบรายการสินค้า</td></tr>`;
     $('stock-table-foot').innerHTML=`<tr><td colspan="${isOwner()?4:3}">ยอดรวมตามตัวกรอง</td><td>${fmt(qty)}</td><td>${fmt(eq)}</td><td></td><td>${fmt(val)}</td>${isOwner()?'<td></td>':''}<td>${fmt(free)}</td><td>${fmt(fv)}</td><td></td><td></td></tr>`;
-    $('stock-count-label').textContent='แสดงผล '+rows.length+' รายการ';
+    $('stock-count-label').textContent='แสดง '+rows.length+' / '+shared.rows.length+' รายการ'+($('view-hide-zero')?.checked?' · ซ่อน Physical = 0 (ไม่ลบรายการ)':'');
     document.querySelectorAll('[data-draft],[data-price],[data-currency]').forEach(x=>{x.value=draftValue(x.dataset.draft||(x.dataset.price?'price':'currency'),x.dataset.key||x.dataset.price||x.dataset.currency,x.value);});
   };
   function accept(data){if(shared&&data.revision!==shared.revision){reportData=null;reportDataDay=null;$('download-stock-report').disabled=true;}shared=data;user=data.actor;currentStockData=data.rows;globalExchangeRate=data.exchangeRate;priceDB=Object.fromEntries(data.rows.map(r=>[r.key,r.priceObj]));
@@ -68,14 +68,15 @@
     const hasPortal=['admin','sales'].includes(session?.role);
     $('stock-nav-home').hidden=!hasPortal;$('stock-nav-sales').hidden=!hasPortal;
     populateStockDropdowns();renderStockView();
-    rawExcelHTML=stockRowsToRawHTML(data.rows.map(r=>({...r,qty:r.baseQty})));$('raw-table-container').innerHTML=rawExcelHTML;
+    rawExcelHTML=stockRowsToRawHTML(data.rows.filter(r=>r.rawSource!==false).map(r=>({...r,sku:r.rawSku??r.sku,qty:r.baseQty})));$('raw-table-container').innerHTML=rawExcelHTML;
+    window.AAFStockPlanUI?.update(data,save);
     setAutoStockStatus(data.report?`ข้อมูลส่วนกลาง • รายงาน ${formatThaiReportDate(data.report.reportDate)} • ${data.rows.length} รายการ • ยอดเมล ${fmt(data.report.expectedTotal)} แผ่น`:'ยังไม่มีรายงานในฐานข้อมูลส่วนกลาง');
     // Read-only report; a rendering failure must never interrupt an existing save.
     try{window.AAFStockSummary?.update(data,r=>values(r,data));}catch(e){window.AAFStockSummary?.showError('รายงานภาพยาวแสดงไม่ได้: '+e.message);}
     // Compatibility for existing sales screens; never used as authoritative read.
     if(data.report)try{localStorage.setItem('fullInventoryData',JSON.stringify(data.rows));localStorage.setItem('stockPriceDB',JSON.stringify(priceDB));localStorage.setItem('exchangeRate_USD_THB',String(globalExchangeRate));localStorage.setItem('stockImportMeta',JSON.stringify({...data.report,importedAt:data.importedAt,sender:data.report.source?.sender,subject:data.report.source?.subject,sourceType:data.report.source?.type}));}catch{}
   }
-  async function save(body){if(busy)return false;if(dirty&&(body.action==='import'||body.action==='commercial'&&Object.keys(body.values).length>1)){banner('มีร่างที่ยังไม่เซฟ กรุณาบันทึกให้ครบหรือกดโหลดล่าสุดก่อนเปลี่ยนข้อมูลทั้งชุด',true);return false;}busy=true;document.querySelectorAll('[data-save],[data-save-price],[data-reset],[data-draft],[data-price],[data-currency]').forEach(b=>b.disabled=true);
+  async function save(body){if(busy)return false;if(dirty&&(body.action==='import'||body.action==='applySellablePlan'||body.action==='enableSellableRules'||body.action==='commercial'&&Object.keys(body.values).length>1)){banner('มีร่างที่ยังไม่เซฟ กรุณาบันทึกให้ครบหรือกดโหลดล่าสุดก่อนเปลี่ยนข้อมูลทั้งชุด',true);return false;}busy=true;document.querySelectorAll('[data-save],[data-save-price],[data-reset],[data-draft],[data-price],[data-currency]').forEach(b=>b.disabled=true);
     try{const data=await request({...body,expectedRevision:shared.revision,reportDate:shared.report?.reportDate});
       if(body.action==='edit')drafts.delete(draftId(body.field,body.key));
       if(body.action==='commercial')for(const key of Object.keys(body.values)){drafts.delete(draftId('price',key));drafts.delete(draftId('currency',key));}
@@ -84,7 +85,7 @@
     catch(e){banner(e.message+(e.status===409?' — ข้อมูลที่พิมพ์ยังอยู่ กรุณาจด/คัดลอกก่อนกดโหลดล่าสุด':''),true);return false;}
     finally{busy=false;document.querySelectorAll('[data-save],[data-save-price],[data-reset],[data-draft],[data-price],[data-currency]').forEach(b=>b.disabled=false);}}
   async function snapshotFromRows(rows,meta,type='outlook-auto-mail'){
-    const base=rows.map(r=>({sku:r.sku||'',desc:r.desc,size:r.size||'Normal',w:String(Number(r.w)),l:String(Number(r.l)),t:String(Number(r.t)),grade:r.grade,qty:r.baseQty??r.qty,d90:r.d90,d180:r.d180,d270:r.d270,d360:r.d360,dOver:r.dOver}));
+    const base=rows.filter(r=>r.rawSource!==false).map(r=>({sku:r.rawSku??r.sku??'',desc:r.desc,size:r.size||'Normal',w:String(Number(r.w)),l:String(Number(r.l)),t:String(Number(r.t)),grade:r.grade,qty:r.baseQty??r.qty,d90:r.d90,d180:r.d180,d270:r.d270,d360:r.d360,dOver:r.dOver}));
     const grades=Object.fromEntries(['AV','AAA','A','B','F','REJ','C','UN','CTS'].map(g=>[g,0]));base.forEach(r=>grades[r.grade]+=r.qty);
     const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(base))))).map(b=>b.toString(16).padStart(2,'0')).join('');
     return {version:1,parserVersion:'stock-shared-migration-v1',reportDate:meta.reportDate,sourceRowCount:meta.sourceRowCount||base.reduce((n,r)=>n+Math.max(1,r.sku.split(',').filter(Boolean).length),0),source:{type,sender:meta.sender||'usermail@ace-energy.co.th',subject:meta.subject||'FYI-AAF :: รายงาน Aging Time สินค้าคงเหลือ',receivedAt:meta.receivedAt||meta.importedAt},expectedTotal:meta.expectedTotal??meta.totalQty??base.reduce((n,r)=>n+r.qty,0),expectedGradeTotals:{...Object.fromEntries(Object.keys(grades).map(g=>[g,0])),...(meta.expectedGradeTotals??meta.gradeTotals??grades)},checksum:'sha256:'+digest,rows:base};
@@ -96,31 +97,48 @@
   window.updateExchangeRate=value=>save({action:'exchangeRate',value:Number(value)});
   window.updateItemPrice=()=>{};window.fetchRealTimeExchangeRate=()=>{};
   window.uploadStockExcel=async event=>{const f=event.target.files[0];if(!f||!isOwner())return;try{const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});const p=parseAgingWorkbookRows(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''}));let day=reportDateFromFileName(f.name);if(!day)day=prompt('วันที่รายงานในไฟล์ (YYYY-MM-DD)');if(!day)return;await save({action:'import',snapshot:await snapshotFromRows(p.stock,{reportDate:day},'manual-excel')});}catch(e){banner(e.message,true);}finally{event.target.value='';}};
-  window.syncSalesData=async()=>{if(!isOwner())return;
-    const priceKeys=['salesDB_ConfLoaded','salesDB_ConfAdv','salesDB_ConfTT','salesDB_ConfLC','salesDB_ConfDom','salesDB_ConfNext','salesDB_Draft'];
-    const deductKeys=['salesDB_ConfAdv','salesDB_ConfTT','salesDB_ConfLC','salesDB_ConfDom'];
-    if(!deductKeys.some(k=>localStorage.getItem(k)))return banner('ไม่พบข้อมูลฝ่ายขายใน Chrome นี้ จึงยังไม่เปลี่ยนยอดจอง',true);
-    const ps={},cs={};for(const k of priceKeys)for(const r of safeJSONParse(localStorage.getItem(k),[])){if(!r[8]||!r[9]||!r[10]||cleanNum(r[32])<=0)continue;const key=makeStockKey(r[8],r[9],r[10],String(r[11]||'').toUpperCase());(ps[key]??=[]).push({price:cleanNum(r[32]),currency:r[3]==='ในประเทศ'?'THB':'USD'});}
-    for(const k of deductKeys)for(const r of safeJSONParse(localStorage.getItem(k),[])){const key=makeStockKey(r[8],r[9],r[10],String(r[11]||'').toUpperCase());cs[key]=(cs[key]||0)+cleanNum(r[31]);}
-    const vals={};for(const r of shared.rows){const arr=ps[r.key];const v={committedQty:cs[r.key]||0};if(arr?.length){const currency=arr.every(p=>p.currency==='USD')?'USD':'THB';v.priceObj={currency,price:Number((arr.reduce((s,p)=>s+p.price*(currency==='THB'&&p.currency==='USD'?globalExchangeRate:1),0)/arr.length).toFixed(4))};}vals[r.key]=v;}
-    await save({action:'commercial',values:vals});
+  // The legacy localStorage sync used an unweighted average and also replaced
+  // reservations. It is not compatible with the owner's September 11 policy.
+  window.syncSalesData=()=>{if(!isOwner())return;
+    banner('ยังไม่เปลี่ยนราคา/ยอดจอง: ต้องจับคู่ราคาเดือนปัจจุบันจากหน้า 01 กับลำดับจองที่ตรวจแล้วก่อน จึงคำนวณตามจำนวนจริงและราคาเฉลี่ยถ่วงน้ำหนักได้ ปุ่มซิงค์แบบเดิมหยุดใช้แล้ว ส่วนเซฟรายแถวยังใช้ได้',true);
   };
   function reportRows(data){return data.rows.map((r,i)=>{const v=values(r,data);return [i+1,r.sku,r.w,r.l,Number(r.t),r.grade,r.baseQty,r.qty,r.committedQty,r.freeQty,v.eq,v.price,v.curr,v.value,v.freeValue,r.followup,r.followupBy||'',r.followupAt||'',r.note,r.noteBy||'',r.noteAt||''];});}
+  window.downloadSales04Stock=async()=>{
+    if(!isOwner()||busy)return;
+    if(dirty)return banner('มีร่างที่ยังไม่เซฟ กรุณาเซฟหรือโหลดล่าสุดก่อนเตรียมไฟล์ส่งฝ่ายขาย',true);
+    const button=$('plan-sales-export'),message=$('morning-plan-state');busy=true;if(button)button.disabled=true;
+    try{
+      const fresh=await request();accept(fresh);
+      const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+      const model=window.AAFStockSalesExport.build(fresh,today),wb=XLSX.utils.book_new();
+      for(const [name,rows] of [['Summary',model.summary],['Stock',model.stock],['Sources',model.source]]){
+        const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=rows[0].map((_,i)=>({wch:name==='Stock'?(i===0?28:18):(i===0?28:90)}));
+        for(const k of Object.keys(ws)){if(k[0]==='!')continue;if(ws[k].t==='s')delete ws[k].f;}
+        if(name==='Stock')ws['!autofilter']={ref:'A1:L'+model.stock.length};XLSX.utils.book_append_sheet(wb,ws,name);
+      }
+      XLSX.writeFile(wb,model.fileName);
+      const text='สร้างไฟล์จากข้อมูลส่วนกลางล่าสุดแล้ว · Physical หลังโยก ก่อนหักจอง · ยังไม่ได้ส่งเข้าฝ่ายขาย ต้องเทียบราคาและตรวจผลนำเข้าหน้า 04';
+      banner(text);if(message)message.textContent=text;
+    }catch(e){banner(e.message,true);if(message)message.textContent=e.message;}
+    finally{busy=false;window.AAFStockPlanUI?.update(shared,save);}
+  };
   window.downloadStockReport=()=>{if(!reportData)return;const d=reportData;const wb=XLSX.utils.book_new();const hdr=['ลำดับ','SKU','กว้าง (mm)','ยาว (mm)','หนา (mm)','เกรด','ยอดเมล (แผ่น)','Physical ล่าสุด','ยอดจอง','Free ล่าสุด','เทียบ 2.5 mm','ราคาต่อแผ่น','สกุลเงิน','มูลค่าสต๊อก (THB)','มูลค่า Free (THB)','การติดตามยอดขาย','ผู้ติดตาม','บันทึกติดตามเมื่อ','หมายเหตุ','ผู้บันทึกหมายเหตุ','บันทึกหมายเหตุเมื่อ'];
     const ws=XLSX.utils.aoa_to_sheet([['รายงานสต๊อกและติดตามยอดขายประจำวัน'],['วันที่รายงาน', reportDataDay,'รายงานเมลอ้างอิง',d.report?.reportDate||''],['ข้อมูลส่วนกลางบันทึกล่าสุด',d.updatedAt||'','USD/THB',d.exchangeRate],[],hdr,...reportRows(d)]);
     ws['!cols']=hdr.map((_,i)=>({wch:[1,15,18].includes(i)?50:i===17||i===20?26:17}));ws['!autofilter']={ref:'A5:U'+(d.rows.length+5)};ws['!rows']=[{hpt:25},{hpt:22},{hpt:22},{hpt:8},{hpt:32}];
     // Explicit text cells prevent notes beginning with =,+,-,@ becoming formulas.
-    for(const key of Object.keys(ws)){if(key[0]==='!')continue;const cell=ws[key];if(cell.t==='s')delete cell.f;if(cell.t==='n')cell.z=/^[ABCDGHIJ]\d+$/.test(key)?'#,##0':'#,##0.00';}
+    for(const key of Object.keys(ws)){if(key[0]==='!')continue;const cell=ws[key];if(cell.t==='s')delete cell.f;if(cell.t==='n')cell.z=/^[ABCDGH]\d+$/.test(key)?'#,##0':'#,##0.00';}
     const summary=[['สรุปรายงานสต๊อก'],['วันที่',reportDataDay],['รายงานเมลอ้างอิง',d.report?.reportDate||''],['จำนวนสเปก',d.rows.length],['Physical รวม',d.rows.reduce((s,r)=>s+r.qty,0)],['Free รวม',d.rows.reduce((s,r)=>s+r.freeQty,0)],['มูลค่าสต๊อก THB',d.rows.reduce((s,r)=>s+values(r,d).value,0)],['มูลค่า Free THB',d.rows.reduce((s,r)=>s+values(r,d).freeValue,0)],['แหล่งข้อมูล','Stock AAF ส่วนกลาง'],['URL','https://bbeautdb-arch.github.io/AAF-System/stock_manager.html'],['ข้อกำหนด','ใช้ข้อมูลที่กดเซฟแล้ว ไม่รวมข้อความหรือตัวเลขที่ยังเป็นร่าง']];
-    const sum=XLSX.utils.aoa_to_sheet(summary);sum['!cols']=[{wch:27},{wch:85}];XLSX.utils.book_append_sheet(wb,sum,'สรุปประจำวัน');XLSX.utils.book_append_sheet(wb,ws,'สต๊อกและติดตาม');XLSX.writeFile(wb,'AAF_Stock_Report_'+reportDataDay+'.xlsx');
+    if(d.rows.some(r=>r.priceMissing))summary.push(['คำเตือนมูลค่า','มูลค่ายังไม่ครบ: สเปกปลายทางจากการโยกบางรายการยังไม่มีราคา ไม่ได้หมายถึง 0 บาท']);const sum=XLSX.utils.aoa_to_sheet(summary);sum['!cols']=[{wch:27},{wch:85}];XLSX.utils.book_append_sheet(wb,sum,'สรุปประจำวัน');XLSX.utils.book_append_sheet(wb,ws,'สต๊อกและติดตาม');XLSX.writeFile(wb,'AAF_Stock_Report_'+reportDataDay+'.xlsx');
   };
   async function loadReport(){reportData=null;reportDataDay=null;$('download-stock-report').disabled=true;try{const day=$('report-day').value;const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const loaded=day===today?await request():await request(null,day);if($('report-day').value!==day)return;reportData=loaded;reportDataDay=day;$('report-summary').textContent=`${reportData.rows.length} สเปก · Physical ${fmt(reportData.rows.reduce((s,r)=>s+r.qty,0))} แผ่น · Free ${fmt(reportData.rows.reduce((s,r)=>s+r.freeQty,0))} แผ่น · บันทึกล่าสุด ${dateText(reportData.updatedAt)}`;$('download-stock-report').disabled=!reportData.report;}catch(e){$('report-summary').textContent=e.message;}}
   function openReport(){$('shared-report').hidden=false;loadReport();$('shared-report').scrollIntoView({behavior:'smooth'});}
   async function refresh(){if(busy)return;if(dirty&&!confirm('มีข้อมูลยังไม่เซฟ โหลดล่าสุดจะทิ้งร่างที่พิมพ์ ยืนยันหรือไม่?'))return;try{const fresh=await request();drafts.clear();dirty=false;accept(fresh);banner('โหลดข้อมูลส่วนกลางล่าสุดแล้ว');}catch(e){banner(e.message,true);}}
   window.onload=async()=>{
+    restoreStockHideZero();
     const links=document.querySelectorAll('a[href="dashboard_home.html"],a[href="sales_analytics.html"]');links.forEach(a=>a.id=a.getAttribute('href')==='dashboard_home.html'?'stock-nav-home':'stock-nav-sales');
     const bar=document.createElement('div');bar.id='shared-toolbar';bar.innerHTML='<span id="stock-user"></span><button class="shared-btn shared-secondary" id="reload-shared">โหลดล่าสุด</button><button class="shared-btn" id="open-stock-report">รายงานประจำวัน / Excel</button><button class="shared-btn shared-secondary" id="stock-logout">ออกจากระบบ</button><span id="shared-message" role="status"></span>';
     $('auto-stock-panel').before(bar);
+    window.AAFStockPlanUI?.setup(bar);
     const permission=document.createElement('div');permission.id='followup-permission';permission.hidden=true;permission.style.cssText='margin:10px 0;padding:12px;background:#eef2ff;border-radius:8px;font-size:14px';permission.innerHTML='<label>ผู้มีสิทธิ์ลงการติดตามยอดขาย <select id="followup-editor" class="filter-select"></select></label> <button class="shared-btn" id="save-followup-editor">เซฟสิทธิ์</button><span style="margin-left:8px;color:#64748b">แก้ได้เฉพาะติดตามยอดขาย · วีดูและดาวน์โหลดเท่านั้น</span>';bar.after(permission);
     $('save-followup-editor').onclick=()=>save({action:'assignFollowup',username:$('followup-editor').value||null});
     const rp=document.createElement('section');rp.id='shared-report';rp.hidden=true;rp.innerHTML='<h2 style="font-size:22px;font-weight:700">รายงานสต๊อกประจำวัน</h2><p style="font-size:14px;margin:8px 0">ใช้ค่าที่บันทึกในระบบแล้วทั้งชุด ไม่รวมร่างที่ยังไม่กดเซฟ รายงานย้อนหลังเริ่มตั้งแต่วันที่เปิดระบบส่วนกลาง</p><label>วันที่รายงาน <input type="date" id="report-day" class="shared-input" style="width:165px"></label> <button class="shared-btn shared-secondary" id="load-stock-report">ดูรายงาน</button> <button class="shared-btn" id="download-stock-report" disabled>ดาวน์โหลด Excel</button><p id="report-summary" style="margin-top:12px;font-size:14px"></p>';

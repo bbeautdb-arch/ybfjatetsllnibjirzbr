@@ -38,7 +38,12 @@ jobs:
         with:
           node-version: '22'
       - name: Check public pages before deployment
-        run: node tests/public-regression.mjs
+        run: |
+          node tests/public-regression.mjs
+          node tests/stock-catalog.mjs
+          node tests/stock-morning.mjs
+          node tests/stock-summary.mjs
+          node tests/stock-report.mjs
       - name: Stage public files only
         run: |
           mkdir _site
