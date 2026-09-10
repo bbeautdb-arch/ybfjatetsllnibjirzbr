@@ -40,7 +40,9 @@
     }).sort((a,b)=>Number(a.t)-Number(b.t)||Number(a.w)-Number(b.w)||Number(a.l)-Number(b.l)||String(a.grade).localeCompare(String(b.grade))||String(a.key).localeCompare(String(b.key)));
     const total=blank(),grades=new Map(gradeOrder.map(g=>[g,blank()])),thickness=new Map(),aging=agingKeys.map(()=>0);
     for(const r of rows){add(total,r);if(!grades.has(r.grade))grades.set(r.grade,blank());add(grades.get(r.grade),r);const t=String(Number(r.t));if(!thickness.has(t))thickness.set(t,blank());add(thickness.get(t),r);agingKeys.forEach((k,i)=>aging[i]+=r[k]);}
-    return {rows,total,grades:[...grades],thickness:[...thickness],aging,reportDate:data.report.reportDate,updatedAt:data.updatedAt,importedAt:data.importedAt,revision:String(data.revision??''),exchangeRate:data.exchangeRate,sourceRowCount:data.report.sourceRowCount,renderedAt:new Date().toISOString()};
+    let cash=null,cashError='';
+    try{cash=window.AAFStockCash?.build(data)||null;}catch(e){cashError=e.message;}
+    return {rows,total,grades:[...grades],thickness:[...thickness],aging,reportDate:data.report.reportDate,updatedAt:data.updatedAt,importedAt:data.importedAt,revision:String(data.revision??''),exchangeRate:data.exchangeRate,sourceRowCount:data.report.sourceRowCount,renderedAt:new Date().toISOString(),cash,cashError};
   }
   const cell=n=>'<td class="ss-num">'+number(n)+'</td>';
   const equivalents=v=>`<td class="ss-num ss-equivalent">${number(v.eq4x8,2)}</td><td class="ss-num ss-equivalent">${number(v.eq,2)}</td>`;
@@ -155,27 +157,28 @@
     [data-aaf-stock-summary] .ss-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     @media(max-width:800px){[data-aaf-stock-summary]:not(.ss-export) .ss-content{padding:12px}[data-aaf-stock-summary]:not(.ss-export) .ss-hero{padding:20px;flex-wrap:wrap}[data-aaf-stock-summary]:not(.ss-export) .ss-hero h2{font-size:25px}[data-aaf-stock-summary]:not(.ss-export) .ss-kpis,[data-aaf-stock-summary]:not(.ss-export) .ss-values{grid-template-columns:1fr 1fr}[data-aaf-stock-summary]:not(.ss-export) .ss-groups{grid-template-columns:1fr}[data-aaf-stock-summary]:not(.ss-export) .ss-detail{font-size:10px}[data-aaf-stock-summary]:not(.ss-export) .ss-detail th,[data-aaf-stock-summary]:not(.ss-export) .ss-detail td{padding:6px 3px}[data-aaf-stock-summary]:not(.ss-export) .ss-band{flex-wrap:wrap}[data-aaf-stock-summary]:not(.ss-export) .ss-aging-grid b{font-size:17px}[data-aaf-stock-summary]:not(.ss-export) .ss-kpi strong{font-size:26px}[data-aaf-stock-summary]:not(.ss-export) .ss-footer{flex-direction:column}}
   `;document.head.append(style);
-  function showError(message){if(!root)return;const n=root.querySelector('.ss-status')||root;n.textContent=message;n.classList.add('ss-error');if(root.querySelector('.ss-download'))root.querySelector('.ss-download').disabled=true;latest=null;root.querySelector('.ss-sheet')?.remove();}
-  function update(data,calculate){if(!root)return;const m=model(data,calculate);latest=m;root.classList.remove('ss-error');root.innerHTML=`<div class="ss-tools"><div><h2>สรุปสต๊อกสำหรับส่งรายงาน</h2><p>รายงานยาวครบทุกแถว • ข้อมูลอ่านอย่างเดียว ไม่เปลี่ยนข้อมูลสต๊อก</p></div><button type="button" class="ss-download" ${exporting?'disabled':''}>ดาวน์โหลดภาพยาว PNG</button></div><p class="ss-status" role="status">ภาพรวมจากข้อมูลส่วนกลางที่โหลดล่าสุด — ใช้เฉพาะค่าที่บันทึกสำเร็จจากหน้าสต๊อก</p>${html(m)}`;root.querySelector('.ss-download').addEventListener('click',download);}
+  function showError(message){if(!root)return;const n=root.querySelector('.ss-status')||root;n.textContent=message;n.classList.add('ss-error');root.querySelectorAll('.ss-download,.cash-download').forEach(b=>b.disabled=true);latest=null;root.querySelector('.ss-sheet')?.remove();root.querySelector('.cash-sheet')?.remove();}
+  let jumpedToCash=false;
+  function update(data,calculate){if(!root)return;const m=model(data,calculate);latest=m;root.classList.remove('ss-error');root.innerHTML=`<div class="ss-tools"><div><h2>สรุปสต๊อกสำหรับส่งรายงาน</h2><p>รายงานยาวครบทุกแถว • ข้อมูลอ่านอย่างเดียว ไม่เปลี่ยนข้อมูลสต๊อก</p><a href="#stock-cash">ดูสต๊อกและเงิน ↓</a></div><button type="button" class="ss-download" ${exporting?'disabled':''}>ดาวน์โหลดภาพยาว PNG</button></div><p class="ss-status" role="status">ภาพรวมจากข้อมูลส่วนกลางที่โหลดล่าสุด — ใช้เฉพาะค่าที่บันทึกสำเร็จจากหน้าสต๊อก</p>${html(m)}${m.cash?`<div class="ss-tools" style="margin-top:28px"><h2>กล่องสต๊อกและเงิน</h2><button type="button" class="cash-download" ${exporting?'disabled':''}>ดาวน์โหลดกล่องสต๊อกและเงิน PNG</button></div>${window.AAFStockCash.render(m.cash)}`:m.cashError?`<p class="ss-error">ยังแสดงกล่องเงินไม่ได้: ${esc(m.cashError)}</p>`:''}`;root.querySelector('.ss-download').addEventListener('click',()=>download());root.querySelector('.cash-download')?.addEventListener('click',()=>download('cash'));if(!jumpedToCash&&location.hash==='#stock-cash'&&m.cash){jumpedToCash=true;root.querySelector('#stock-cash').scrollIntoView();}}
   async function loadCanvas(){
     if(window.html2canvas)return window.html2canvas;
     if(!canvasLoader)canvasLoader=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';script.crossOrigin='anonymous';script.referrerPolicy='no-referrer';script.onload=()=>window.html2canvas?resolve(window.html2canvas):reject(new Error('โหลดเครื่องมือสร้างภาพไม่สำเร็จ'));script.onerror=()=>{script.remove();canvasLoader=null;reject(new Error('โหลดเครื่องมือสร้างภาพไม่ได้ กรุณาตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง'));};document.head.append(script);});
     return canvasLoader;
   }
-  async function download(){
+  async function download(which='stock'){
     if(!latest||exporting)return;exporting=true;const captured=latest;let box=null;
     const status=text=>{const p=root.querySelector('.ss-status');if(p)p.textContent=text;};
-    root.querySelector('.ss-download').disabled=true;status('กำลังสร้างภาพยาวครบทุกแถว กรุณารอสักครู่…');
+    root.querySelectorAll('.ss-download,.cash-download').forEach(b=>b.disabled=true);status('กำลังสร้างภาพยาวครบทุกแถว กรุณารอสักครู่…');
     try{
       const canvasFn=await loadCanvas();await document.fonts?.ready;
-      box=document.createElement('div');box.dataset.aafStockSummary='';box.className='ss-export';box.style.cssText='position:absolute;left:-20000px;top:0;width:1440px;padding:0;background:white;';box.innerHTML=html(captured);document.body.append(box);
-      const sheet=box.querySelector('.ss-sheet'),height=Math.ceil(sheet.getBoundingClientRect().height),scale=Math.min(1.5,30000/height,Math.sqrt(48000000/(1440*height)));
+      box=document.createElement('div');box.dataset.aafStockSummary='';box.className='ss-export';box.style.cssText='position:absolute;left:-20000px;top:0;width:1440px;padding:0;background:white;';box.innerHTML=which==='cash'?window.AAFStockCash.render(captured.cash):html(captured);document.body.append(box);
+      const sheet=box.querySelector(which==='cash'?'.cash-sheet':'.ss-sheet'),height=Math.ceil(sheet.getBoundingClientRect().height),scale=Math.min(1.5,30000/height,Math.sqrt(48000000/(1440*height)));
       if(scale<0.65)throw new Error('ข้อความยาวเกินขนาดภาพที่อ่านได้ในรูปเดียว กรุณาถ่ายภาพเต็มหน้าผ่านเบราว์เซอร์แทน');
       const canvas=await canvasFn(sheet,{backgroundColor:'#ffffff',scale,width:1440,height,windowWidth:1500,windowHeight:1000,scrollX:0,scrollY:0,logging:false});
       const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('เบราว์เซอร์สร้างภาพไม่สำเร็จ');
-      const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='AAF_Stock_Summary_'+captured.reportDate+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+      const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(which==='cash'?'AAF_Stock_Cash_':'AAF_Stock_Summary_')+captured.reportDate+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
       status(`ดาวน์โหลดภาพครบ ${captured.rows.length} สเปกแล้ว · ข้อมูลบันทึก ${when(captured.updatedAt)}${latest!==captured?' · มีข้อมูลใหม่บนหน้าจอหลังเริ่มสร้างภาพ':''}`);
-    }catch(e){status('ยังไม่ได้ดาวน์โหลดภาพ: '+e.message);}finally{box?.remove();exporting=false;const b=root.querySelector('.ss-download');if(b)b.disabled=!latest;}
+    }catch(e){status('ยังไม่ได้ดาวน์โหลดภาพ: '+e.message);}finally{box?.remove();exporting=false;root.querySelectorAll('.ss-download,.cash-download').forEach(b=>b.disabled=!latest);}
   }
   window.AAFStockSummary={update,showError};
   // Pure read-only builders exposed for regression tests and isolated previews.

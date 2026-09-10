@@ -44,10 +44,11 @@ jobs:
           node tests/stock-morning.mjs
           node tests/stock-summary.mjs
           node tests/stock-report.mjs
+          node --test tests/stock-cash.mjs
       - name: Stage public files only
         run: |
           mkdir _site
-          cp ./*.html ./*.js _site/
+          cp ./*.html ./*.js ./*.css _site/
           cp ./login-bg.png _site/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
