@@ -45,6 +45,7 @@ jobs:
           node tests/stock-summary.mjs
           node tests/stock-report.mjs
           node --test tests/stock-cash.mjs
+          node --test tests/stock-reservations.mjs
       - name: Stage public files only
         run: |
           mkdir _site
