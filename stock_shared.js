@@ -3,7 +3,7 @@
 (() => {
   'use strict';
   const API='https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/stock';
-  const LOGIN='https://bbeautdb-arch.github.io/AAF-System/login.html?reauth=1';
+  const LOGIN='https://bbeautdb-arch.github.io/ybfjatetsllnibjirzbr/login.html?reauth=1';
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const fmt=n=>Number(n||0).toLocaleString('th-TH',{maximumFractionDigits:2});
   const fmtPrice=n=>Number(n||0).toLocaleString('th-TH',{maximumFractionDigits:4});
@@ -127,7 +127,7 @@
     ws['!cols']=hdr.map((_,i)=>({wch:[1,15,18].includes(i)?50:i===17||i===20?26:17}));ws['!autofilter']={ref:'A5:U'+(d.rows.length+5)};ws['!rows']=[{hpt:25},{hpt:22},{hpt:22},{hpt:8},{hpt:32}];
     // Explicit text cells prevent notes beginning with =,+,-,@ becoming formulas.
     for(const key of Object.keys(ws)){if(key[0]==='!')continue;const cell=ws[key];if(cell.t==='s')delete cell.f;if(cell.t==='n')cell.z=/^[ABCDGH]\d+$/.test(key)?'#,##0':'#,##0.00';}
-    const summary=[['สรุปรายงานสต๊อก'],['วันที่',reportDataDay],['รายงานเมลอ้างอิง',d.report?.reportDate||''],['จำนวนสเปก',d.rows.length],['Physical รวม',d.rows.reduce((s,r)=>s+r.qty,0)],['Free รวม',d.rows.reduce((s,r)=>s+r.freeQty,0)],['มูลค่าสต๊อก THB',d.rows.reduce((s,r)=>s+values(r,d).value,0)],['มูลค่า Free THB',d.rows.reduce((s,r)=>s+values(r,d).freeValue,0)],['แหล่งข้อมูล','Stock AAF ส่วนกลาง'],['URL','https://bbeautdb-arch.github.io/AAF-System/stock_manager.html'],['ข้อกำหนด','ใช้ข้อมูลที่กดเซฟแล้ว ไม่รวมข้อความหรือตัวเลขที่ยังเป็นร่าง']];
+    const summary=[['สรุปรายงานสต๊อก'],['วันที่',reportDataDay],['รายงานเมลอ้างอิง',d.report?.reportDate||''],['จำนวนสเปก',d.rows.length],['Physical รวม',d.rows.reduce((s,r)=>s+r.qty,0)],['Free รวม',d.rows.reduce((s,r)=>s+r.freeQty,0)],['มูลค่าสต๊อก THB',d.rows.reduce((s,r)=>s+values(r,d).value,0)],['มูลค่า Free THB',d.rows.reduce((s,r)=>s+values(r,d).freeValue,0)],['แหล่งข้อมูล','Stock AAF ส่วนกลาง'],['URL','https://bbeautdb-arch.github.io/ybfjatetsllnibjirzbr/stock_manager.html'],['ข้อกำหนด','ใช้ข้อมูลที่กดเซฟแล้ว ไม่รวมข้อความหรือตัวเลขที่ยังเป็นร่าง']];
     if(d.rows.some(r=>r.priceMissing))summary.push(['คำเตือนมูลค่า','มูลค่ายังไม่ครบ: สเปกปลายทางจากการโยกบางรายการยังไม่มีราคา ไม่ได้หมายถึง 0 บาท']);const sum=XLSX.utils.aoa_to_sheet(summary);sum['!cols']=[{wch:27},{wch:85}];XLSX.utils.book_append_sheet(wb,sum,'สรุปประจำวัน');XLSX.utils.book_append_sheet(wb,ws,'สต๊อกและติดตาม');XLSX.writeFile(wb,'AAF_Stock_Report_'+reportDataDay+'.xlsx');
   };
   async function loadReport(){reportData=null;reportDataDay=null;$('download-stock-report').disabled=true;try{const day=$('report-day').value;const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const loaded=day===today?await request():await request(null,day);if($('report-day').value!==day)return;reportData=loaded;reportDataDay=day;$('report-summary').textContent=`${reportData.rows.length} สเปก · Physical ${fmt(reportData.rows.reduce((s,r)=>s+r.qty,0))} แผ่น · Free ${fmt(reportData.rows.reduce((s,r)=>s+r.freeQty,0))} แผ่น · บันทึกล่าสุด ${dateText(reportData.updatedAt)}`;$('download-stock-report').disabled=!reportData.report;}catch(e){$('report-summary').textContent=e.message;}}
