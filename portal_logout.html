@@ -24,7 +24,7 @@ let session=null;try{session=JSON.parse(sessionStorage.getItem('aaf_user')||'nul
 const token=session?.stockSessionToken||session?.gradeBridgeSessionToken||session?.bridgeSessionToken;
 if(token)await fetch('https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/portal/logout',{method:'POST',keepalive:true,signal:AbortSignal.timeout(8000),headers:{Authorization:'Bearer '+token,'Content-Type':'text/plain'},body:'{}'}).catch(()=>{});
 sessionStorage.clear();
-const portalLogin = 'https://bbeautdb-arch.github.io/AAF-System/login.html';
+const portalLogin = 'https://bbeautdb-arch.github.io/ybfjatetsllnibjirzbr/login.html';
 const closingLogout = 'https://kabin-close.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(portalLogin);
 const gradeLogout = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(closingLogout);
 const hrLogout = 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/api/aaf/logout?next=' + encodeURIComponent(gradeLogout);

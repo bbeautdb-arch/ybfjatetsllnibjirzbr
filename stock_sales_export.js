@@ -33,7 +33,7 @@
     const total=totals.sheet+totals.strip;
     return {stock:[['SKU','กว้าง','ยาว','หนา','เกรด','Physical','ยอดจอง','Free','ราคาต่อแผ่น','สกุลเงิน','มูลค่าสต๊อก (THB)','หน่วย'],...stock],
       summary:[['รายการ','ค่า'],['วันที่รายงาน',today],['จำนวนสเปก',stock.length],['Physical รวม',total],['Free รวม',total],['แผ่น',totals.sheet],['ชิ้น strip',totals.strip],['นโยบาย','Physical หลังโยกและค่าปรับมือที่เซฟแล้ว ก่อนหักจอง; ยอดจองในไฟล์ 0, Free = Physical'],['ข้อควรตรวจ','ตัวนำเข้าเว็บขายเขียนทับราคาและรีเซ็ต Aging; ต้องเทียบราคาเดิมก่อนนำเข้า ไฟล์นี้ไม่ใช่หลักฐานว่าส่งแล้ว']],
-      source:[['หลักฐาน','ค่า'],['URL','https://bbeautdb-arch.github.io/AAF-System/stock_manager.html'],['รายงานเมล',data.report.reportDate],['Checksum เมล',data.report.checksum],['Revision',data.revision],['กติกา',RULES],['บันทึกส่วนกลางเมื่อ',data.updatedAt||''],['USD/THB',data.exchangeRate]],
+      source:[['หลักฐาน','ค่า'],['URL','https://bbeautdb-arch.github.io/ybfjatetsllnibjirzbr/stock_manager.html'],['รายงานเมล',data.report.reportDate],['Checksum เมล',data.report.checksum],['Revision',data.revision],['กติกา',RULES],['บันทึกส่วนกลางเมื่อ',data.updatedAt||''],['USD/THB',data.exchangeRate]],
       fileName:'AAF_Stock_For_Sales_'+today+'.xlsx',totals};
   }
   window.AAFStockSalesExport={build};
