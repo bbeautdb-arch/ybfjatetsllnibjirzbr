@@ -18,7 +18,7 @@
   const token=()=>session?.stockSessionToken||session?.gradeBridgeSessionToken||session?.bridgeSessionToken||'';
   const can=k=>!!shared?.permissions?.[k];
   const isOwner=()=>can('adjust');
-  const banner=(message,error=false)=>{const n=$('shared-message');if(n){n.textContent=message;n.style.color=error?'#be123c':'#047857';}};
+  const banner=(message,error=false)=>{const n=$('shared-message');if(n){n.textContent=message;n.style.color=error?'#be123c':'#047857';}const access=$('stock-report-access');if(access){access.hidden=!error;$('stock-report-access-message').textContent=error?message:'';}};
   const css=document.createElement('style');css.textContent=`
     [hidden]{display:none!important}
     #shared-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
@@ -135,6 +135,7 @@
   async function refresh(){if(busy)return;if(dirty&&!confirm('มีข้อมูลยังไม่เซฟ โหลดล่าสุดจะทิ้งร่างที่พิมพ์ ยืนยันหรือไม่?'))return;try{const fresh=await request();drafts.clear();dirty=false;accept(fresh);banner('โหลดข้อมูลส่วนกลางล่าสุดแล้ว');}catch(e){banner(e.message,true);}}
   window.onload=async()=>{
     restoreStockHideZero();
+    if($('stock-report-retry'))$('stock-report-retry').onclick=refresh;
     const links=document.querySelectorAll('a[href="dashboard_home.html"],a[href="sales_analytics.html"]');links.forEach(a=>a.id=a.getAttribute('href')==='dashboard_home.html'?'stock-nav-home':'stock-nav-sales');
     const bar=document.createElement('div');bar.id='shared-toolbar';bar.innerHTML='<span id="stock-user"></span><button class="shared-btn shared-secondary" id="reload-shared">โหลดล่าสุด</button><button class="shared-btn" id="open-stock-report">รายงานประจำวัน / Excel</button><button class="shared-btn shared-secondary" id="stock-logout">ออกจากระบบ</button><span id="shared-message" role="status"></span>';
     $('auto-stock-panel').before(bar);
