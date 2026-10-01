@@ -984,14 +984,14 @@ module.exports = {
       if ([...root.querySelectorAll('[data-free-price]')].some(input => input.validity.badInput || input.getAttribute('aria-invalid') === 'true')) {error = 'ยังไม่เซฟ · ตรวจราคาให้มากกว่า 0 หรือเว้นว่าง'; saveStatus(); return;}
       const snapshot = {...copyCatalog(pricing),savedAt:new Date().toISOString()};
       saving = true; error = ''; saveStatus();
-      try {await enqueue(() => payload(snapshot),value => {committed = snapshot;committedFx = positive(value.privateContent.fx);hasSavedState = true;dirty = !sameCatalog(pricing,committed);});}
+      try {await enqueue(() => payload(snapshot),value => {committed = snapshot;committedFx = positive(value.privateContent.fx);hasSavedState = true;dirty = !sameCatalog(pricing,committed);});notifyReportSummary('saved');}
       catch (cause) {error = cause?.code === 'state-too-large' ? 'ยังไม่เซฟ · ราคาและหมายเหตุรวมเกิน 16 KB กรุณาย่อหมายเหตุ' : 'เซฟไม่สำเร็จ · ราคาและหมายเหตุยังไม่ถูกบันทึก กรุณากดใหม่';}
       finally {saving = false; saveStatus();}
     }
     function saveFx() {
       if (storeLoading || storeLoadFailed) return;
       // Only the committed catalog accompanies FX autosaves. Price/note drafts are never saved implicitly.
-      enqueue(() => payload(committed),value => {committedFx = positive(value.privateContent.fx);hasSavedState = true;if (error === 'บันทึกอัตราไม่สำเร็จ · กรุณาลองใหม่') {error = ''; saveStatus();}}).catch(() => {error = 'บันทึกอัตราไม่สำเร็จ · กรุณาลองใหม่'; saveStatus();});
+      enqueue(() => payload(committed),value => {committedFx = positive(value.privateContent.fx);hasSavedState = true;if (error === 'บันทึกอัตราไม่สำเร็จ · กรุณาลองใหม่') {error = ''; saveStatus();}}).then(() => notifyReportSummary('saved')).catch(() => {error = 'บันทึกอัตราไม่สำเร็จ · กรุณาลองใหม่'; saveStatus();});
     }
     function exportSaved(button = null) {
       if (!hasSavedState) {error = 'ยังไม่มีราคาและหมายเหตุที่เซฟให้ส่งออก';saveStatus();return null;}
@@ -1034,6 +1034,65 @@ module.exports = {
       const values = priced.map(rowValue).filter(value => value !== null);
       const partial = values.reduce((sum,value) => sum+value,0);
       return {value:values.length === available.length ? partial : null, partial,priced:priced.length,valued:values.length,total:available.length,missingFx:priced.filter(row => currency(pricing.currencies,priceKey(specKey(row))) === 'USD' && positive(pricing.fx) === null).length};
+    }
+    const reportUnits = () => ({sheet:0,strip:0});
+    const addReportUnit = (target,unit,value) => {if (Object.hasOwn(target,unit)) target[unit] += value;};
+    function reportQuantities(rows, quantityOf) {
+      const byUnit = reportUnits();let eq4x8 = 0, eq2_5 = 0;
+      rows.forEach(row => {
+        const qty = Number(quantityOf(row));if (!Number.isFinite(qty)) return;
+        addReportUnit(byUnit,row.unit,qty);
+        const areaEquivalent = qty*row.w*row.l/(1220*2440);
+        eq4x8 += areaEquivalent;eq2_5 += areaEquivalent*row.t/2.5;
+      });
+      return {byUnit,eq4x8,eq2_5};
+    }
+    function committedPriceKey(displayKey) {
+      const reverse = reversedSpecKey(displayKey);
+      const owns = key => Object.hasOwn(committed.prices,key) || Object.hasOwn(committed.currencies,key);
+      return owns(displayKey) ? displayKey : owns(reverse) ? reverse : displayKey;
+    }
+    function inventoryReport(field) {
+      const rows = model.all.stock.rows, quantities = reportQuantities(rows,row => row[field]);
+      const unpricedByUnit = reportUnits(), missingFxByUnit = reportUnits();
+      let knownValueTHB = 0, pricedSpecCount = 0, valuedSpecCount = 0, totalSpecCount = 0, missingFxSpecCount = 0;
+      rows.forEach(row => {
+        const qty = Number(row[field]);if (!(qty > 0)) return;
+        totalSpecCount++;
+        const key = committedPriceKey(specKey(row)), price = positive(committed.prices[key]);
+        if (price === null) {addReportUnit(unpricedByUnit,row.unit,qty);return;}
+        pricedSpecCount++;
+        const code = currency(committed.currencies,key), fx = code === 'USD' ? positive(committedFx) : 1;
+        if (fx === null) {missingFxSpecCount++;addReportUnit(missingFxByUnit,row.unit,qty);return;}
+        knownValueTHB += qty*price*fx;valuedSpecCount++;
+      });
+      const complete = valuedSpecCount === totalSpecCount;
+      return {...quantities,valueTHB:complete ? knownValueTHB : null,knownValueTHB,coverage:{complete,pricedSpecCount,valuedSpecCount,totalSpecCount,missingFxSpecCount,unpricedByUnit,missingFxByUnit}};
+    }
+    function soldReport(rows) {
+      const quantities = reportQuantities(rows,row => row.qty), byCurrency = {};
+      let knownValueTHB = 0, knownRowCount = 0, unknownRowCount = 0, missingFxRowCount = 0;
+      rows.forEach(row => {
+        if (!Number.isFinite(row.amount) || !row.currency) {unknownRowCount++;return;}
+        byCurrency[row.currency] = (byCurrency[row.currency] || 0)+row.amount;
+        if (row.currency === 'THB') {knownValueTHB += row.amount;knownRowCount++;return;}
+        if (row.currency === 'USD' && positive(committedFx) !== null) {knownValueTHB += row.amount*committedFx;knownRowCount++;return;}
+        missingFxRowCount++;
+      });
+      const complete = unknownRowCount === 0 && missingFxRowCount === 0;
+      return {...quantities,valueTHB:complete ? knownValueTHB : null,knownValueTHB,byCurrency,coverage:{complete,knownRowCount,unknownRowCount,missingFxRowCount,totalRowCount:rows.length,orderCount:new Set(rows.map(row => row.orderKey)).size}};
+    }
+    function getReportSummary() {
+      const loadedRows = model.salesRows.filter(row => row.status === 'loaded');
+      const paidUnloadedRows = model.salesRows.filter(row => row.status === 'paid');
+      return {version:1,catalog:{hasSavedCatalog:hasSavedState,fxThbPerUsd:positive(committedFx),savedAt:committed.savedAt || null},physical:inventoryReport('physical'),reserved:inventoryReport('reserved'),free:inventoryReport('free'),sold:{...soldReport([...loadedRows,...paidUnloadedRows]),loaded:soldReport(loadedRows),paidUnloaded:soldReport(paidUnloadedRows)}};
+    }
+    function notifyReportSummary(reason) {
+      if (destroyed) return;
+      const meta = {reason};
+      const call = callback => {try {callback(getReportSummary(),meta);} catch (cause) {win.console?.error?.('AAF sales preview report summary callback failed',cause);}};
+      if (typeof options.onReportSummary === 'function') call(options.onReportSummary);
+      if (reason === 'saved' && typeof options.onSavedReportSummary === 'function' && options.onSavedReportSummary !== options.onReportSummary) call(options.onSavedReportSummary);
     }
     const bahtText = (value, decimals = 0) => Number.isFinite(value) ? '≈ '+value.toLocaleString('en-US',{minimumFractionDigits:decimals,maximumFractionDigits:decimals})+' ฿' : 'รอมูลค่า';
 
@@ -1406,9 +1465,13 @@ module.exports = {
     if (!externalStore) on(win,'openai:set_globals',event => {
       if (event.detail?.globals?.widgetState && !writeCount && !queuedWrites && !writeFailed && !dirty && !saving && !error && readState(event.detail.globals.widgetState)) {syncInputs();updateFinancialView();saveStatus();}
     });
+    ready = Promise.resolve(ready).then(result => {
+      if (destroyed || result === false || storeLoadFailed) return false;
+      notifyReportSummary('ready');return true;
+    });
     // Mounting never writes state; changes are handled only by explicit interactions.
     function destroy() {destroyed = true;cleanups.forEach(fn => fn());}
-    return {destroy,ready,getPriceState:() => ({...pricing,...copyCatalog(pricing),dirty,saving}),savePrices,exportSaved};
+    return {destroy,ready,getPriceState:() => ({...pricing,...copyCatalog(pricing),dirty,saving}),getReportSummary,savePrices,exportSaved};
   }
   host.mountAllThickness = mountAllThickness;
   if (typeof module !== 'undefined' && module.exports) module.exports = mountAllThickness;

@@ -26,15 +26,16 @@ function descendants(root){return[root,...root.children.flatMap(descendants),...
 function find(root,predicate){return descendants(root).find(predicate);}
 
 function runtime(){
-  const fetchQueue=[],fetchCalls=[],mounts=[],builds=[],windowListeners={};
+  const fetchQueue=[],fetchCalls=[],mounts=[],builds=[],windowListeners={},summaries=[];
   let user=null;
   const sessionStorage={getItem:key=>key==='aaf_user'&&user?JSON.stringify(user):null};
   const document={currentScript:{src:'https://public.example/assets/stock_sales_controller.js'},createElement:tag=>new FakeElement(tag)};
   const window={
+    AAFStockSummary:{setSalesSummary(value){summaries.push(value);}},
     AafAllModel:{buildModel(salesRows,stockRows,modelOptions){const model={salesRows,stockRows,modelOptions};builds.push(model);return model;}},
     mountAllThickness(root,model,options){
       const state={dirty:false,saving:false};
-      const controller={ready:Promise.resolve(),destroyed:false,destroy(){this.destroyed=true;},getPriceState(){return state;}};
+      const controller={ready:Promise.resolve(),destroyed:false,destroy(){this.destroyed=true;},getPriceState(){return state;},getReportSummary(){return {label:options.metadata.monthLabel,saved:true};}};
       mounts.push({root,model,options,state,controller});return controller;
     },
     addEventListener(name,fn){windowListeners[name]=fn;},
@@ -49,7 +50,7 @@ function runtime(){
   const context=vm.createContext({window,document,sessionStorage,fetch,URL,JSON,Promise,Error,console});
   vm.runInContext(source,context,{filename:'stock_sales_controller.js'});
   return{
-    api:window.AAFSalesPreview,fetchCalls,mounts,builds,windowListeners,
+    api:window.AAFSalesPreview,fetchCalls,mounts,builds,windowListeners,summaries,
     slot:()=>new FakeElement('main'),
     setToken(token){user=token?{stockSessionToken:token}:null;},
     enqueue(value){fetchQueue.push(value);},
@@ -90,6 +91,13 @@ assert(!source.includes('SYNTHETIC-')&&!source.includes('"salesRows":['));
   assert.equal(r.mounts.length,1,'same-session reattach reuses the existing view');
   assert.equal(second.children[0],host);assert.equal(r.api.isDirty(),true,'unsaved draft survives reattach');
   assert.equal(r.mounts[0].controller.destroyed,false);
+  assert.deepEqual(r.api.getReportSummary(),{label:'A',saved:true});
+  r.mounts[0].options.onReportSummary({label:'SAVED',saved:true});
+  assert.deepEqual(r.api.getReportSummary(),{label:'SAVED',saved:true});
+  assert.equal(r.summaries.at(-1).label,'SAVED');
+  r.setToken('token-B');assert.equal(r.api.getReportSummary(),null,'changed token never returns prior catalog summary');
+  r.mounts[0].options.onReportSummary({label:'STALE',saved:true});
+  assert.equal(r.summaries.at(-1).label,'SAVED','late old-token callback cannot repaint top KPIs');
 }
 
 // Save reads the latest global revision, performs CAS on the mounted catalog revision, and rejects stale catalogs before POST.
