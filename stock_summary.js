@@ -96,22 +96,39 @@
     const legend=groups.map(g=>`<span><i style="background:${g.color}"></i>${esc(thicknessLabel(g.t))} mm</span>`).join('');
     return `<div class="ss-aging-chart"><h4>กราฟ Aging เดิม · เทียบพื้นที่เป็นแผ่นมาตรฐาน 1,220 × 2,440 มม.</h4><div class="ss-aging-chart-main"><div><svg class="ss-aging-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="กราฟ Aging จากรายงานเมล แยกตามความหนา โดยแปลงเป็นแผ่นมาตรฐาน 1220 × 2440 มม.">${ticks}<line x1="${left}" x2="${left}" y1="${top}" y2="${top+innerH}" class="ss-aging-axisline"/><line x1="${left}" x2="${width-right}" y1="${top+innerH}" y2="${top+innerH}" class="ss-aging-axisline"/>${bars.join('')}${labels}</svg></div><div class="ss-aging-insights"><h4>ความหนาที่สูงสุดในแต่ละช่วง</h4>${insights}</div></div><div class="ss-aging-legend">${legend}</div><div class="ss-aging-total">รวม Aging ${number(m.agingEquivalent.reduce((a,b)=>a+b,0))} แผ่นเทียบ 1,220 × 2,440 มม.</div></div>`;
   }
+  const display=v=>v===null||v===undefined?'—':number(v);
+  const quantityText=b=>b?number(b.sheet||0)+' แผ่น'+(b.strip?' · ไม้แถบ '+number(b.strip)+' ชิ้น':''):'—';
+  function kpiHTML(summary){
+    const cards=[
+      ['physical','สต๊อกจริง · Physical','สต๊อกหลังโยก','มูลค่าสต๊อกรวม'],
+      ['sold','ขายแล้ว','โหลดแล้ว / รับเงินแล้ว · ไม่ซ้ำกัน','มูลค่าขายโดยประมาณ'],
+      ['reserved','ยอดจอง','รายการยังไม่โหลด · รวมรับเงินแล้วที่รอโหลด','มูลค่าจอง · ราคาสต๊อกประมาณการ'],
+      ['free','พร้อมขาย · Free','คงเหลือหลังหักจองรายสเปก','มูลค่า Free']
+    ];
+    return cards.map(([id,label,note,moneyLabel])=>{
+      const b=summary?.[id],complete=!!b?.coverage?.complete;
+      const money=b?(b.valueTHB??((b.coverage?.valuedSpecCount||b.coverage?.knownRowCount)?b.knownValueTHB:null)):null;
+      const partial=b&&!complete?' · บางส่วน':'';
+      const units=b?.byUnit;
+      const split=id==='sold'?`<div class="ss-sold-loading" aria-label="ยอดขายแยกการโหลด"><div><span>โหลดแล้ว</span><b>${quantityText(b?.loaded?.byUnit)}</b></div><div><span>ยังไม่โหลด</span><b>${quantityText(b?.paidUnloaded?.byUnit)}</b></div></div>`:'';
+      return `<div class="ss-kpi ss-kpi-${id}"><div class="ss-physical-main"><h3>${label}</h3><strong>${display(units?.sheet)}</strong><small>${b?'แผ่น · '+note:'รอข้อมูลหัวข้อ 02'}</small>${units?.strip?`<div class="ss-strip-quantity">ไม้แถบ <b>${number(units.strip)}</b> ชิ้น</div>`:''}</div><dl class="ss-physical-equivalents"><div><dt>เทียบ 4×8 · ความหนาเดิม</dt><dd>${display(b?.eq4x8)} <small>แผ่น</small></dd></div><div><dt>เทียบ 4×8 · หนา 2.5 มม.</dt><dd>${display(b?.eq2_5)} <small>แผ่น</small></dd></div></dl>${split}<div class="ss-kpi-value"><span>${moneyLabel}${partial}</span><b>${money===null?'—':'฿ '+number(money)}</b>${b&&!complete?'<small>มูลค่ายังไม่ครบ · ไม่ตีรายการที่ไม่มีราคาเป็นศูนย์</small>':''}</div></div>`;
+    }).join('');
+  }
+  function setSalesSummary(summary){
+    if(!latest)return;
+    latest={...latest,salesSummary:summary};
+    const cards=root?.querySelector('.ss-kpis');if(cards)cards.innerHTML=kpiHTML(summary);
+    const fx=root?.querySelector('.ss-exchange b');if(fx)fx.textContent=summary?.catalog?.fxThbPerUsd?number(summary.catalog.fxThbPerUsd,4):'—';
+    const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=summary?'อ้างอิงหัวข้อ 02 · ใช้ราคาและเรทที่เซฟแล้ว':'รอข้อมูลจากหัวข้อ 02 · ยังไม่แสดงยอดจากชุดอื่น';
+  }
   function html(m){
     const t=m.total,overrides=m.rows.filter(r=>r.physicalAt||r.freeAt).length,followed=m.rows.filter(r=>String(r.followup).trim()).length;
-    const s=m.sold;
-    const kpis=[
-      {id:'physical',label:'สต๊อกจริง · Physical',qty:t.qty,note:'แผ่น/ชิ้น ณ ยอดที่เซฟล่าสุด',area:t.eq4x8,volume:t.eq,money:t.value,moneyLabel:'มูลค่าสต๊อกรวม'},
-      {id:'sold',label:'ขายแล้ว',qty:s?.qty??null,note:s?'โหลดแล้ว / รับเงินแล้ว · ไม่ซ้ำกัน':'ยังไม่มีข้อมูลขายที่ยืนยัน',area:s?.eq4x8??null,volume:s?.eq??null,money:s?.value??null,moneyLabel:s?.unpricedQty?'มูลค่าขายเฉพาะส่วนที่มีราคา':'มูลค่าขายโดยประมาณ',extra:s?`ข้อมูล ${when(s.capturedAt)}${s.stripQty?' · ไม้แถบ '+number(s.stripQty)+' ชิ้น':''}`:''},
-      {id:'reserved',label:'ยอดจอง',qty:t.committedQty,note:'แผ่น/ชิ้น จากยอดจองในระบบ',area:t.reservedEq4x8,volume:t.reservedEq,money:t.committedQty&&t.reservedUnpricedQty===t.committedQty?null:t.reservedValue,moneyLabel:'มูลค่าจอง · ราคาสต๊อกประมาณการ',extra:t.reservedUnpricedQty?'ยังไม่รวมส่วนที่ไม่มีราคา '+number(t.reservedUnpricedQty)+' หน่วย':''},
-      {id:'free',label:'พร้อมขาย · Free',qty:t.freeQty,note:'แผ่น/ชิ้น ใช้ค่า Free ที่เซฟไว้',area:t.freeEq4x8,volume:t.freeEq,money:t.freeValue,moneyLabel:'มูลค่า Free'}
-    ];
-    const display=v=>v===null?'—':number(v);
     let index=0;
     return `<article class="ss-sheet">
-      <header class="ss-hero"><div><div class="ss-eyebrow">AAF / STOCK & SALES FOLLOW-UP</div><h2>รายงานสต๊อกและติดตามการขาย</h2><p>อ้างอิงรายงานเมล ${esc(reportDay(m.reportDate))}</p></div><div class="ss-hero-meta"><div class="ss-stamp">ข้อมูลที่บันทึกแล้ว<br><b>ครบ ${number(m.rows.length)} สเปก</b><br>ทุกเกรด · ทุกขนาด</div><div class="ss-exchange"><span>อัตราแลกเปลี่ยน</span><b>${number(m.exchangeRate,4)}</b><small>บาท / 1 USD</small></div></div></header>
+      <header class="ss-hero"><div><div class="ss-eyebrow">AAF / STOCK & SALES FOLLOW-UP</div><h2>รายงานสต๊อกและติดตามการขาย</h2><p>อ้างอิงรายงานเมล ${esc(reportDay(m.reportDate))}</p></div><div class="ss-hero-meta"><div class="ss-stamp">ข้อมูลที่บันทึกแล้ว<br><b>ครบ ${number(m.rows.length)} สเปก</b><br>ทุกเกรด · ทุกขนาด</div><div class="ss-exchange"><span>อัตราแลกเปลี่ยน · หัวข้อ 02</span><b>${m.salesSummary?.catalog?.fxThbPerUsd?number(m.salesSummary.catalog.fxThbPerUsd,4):'—'}</b><small>บาท / 1 USD</small></div></div></header>
       <div class="ss-content"><div class="ss-context"><span>ข้อมูลส่วนกลางล่าสุด <b>${esc(when(m.updatedAt))}</b></span><span>เวลาไทย (UTC+7) · ภาพรวมทั้งชุด ไม่ใช้ตัวกรองในหน้าสต๊อก</span></div>
-      <div class="ss-kpis">${kpis.map(k=>`<div class="ss-kpi ss-kpi-${k.id}"><div class="ss-physical-main"><h3>${k.label}</h3><strong>${display(k.qty)}</strong><small>${k.note}</small></div><dl class="ss-physical-equivalents"><div><dt>เทียบ 4×8 · ความหนาเดิม</dt><dd>${display(k.area)} <small>แผ่น</small></dd></div><div><dt>เทียบ 4×8 · หนา 2.5 มม.</dt><dd>${display(k.volume)} <small>แผ่น</small></dd></div></dl><div class="ss-kpi-value"><span>${k.moneyLabel}</span><b>${k.money===null?'—':'฿ '+number(k.money)}</b>${k.extra?`<small>${esc(k.extra)}</small>`:''}</div></div>`).join('')}</div>
-      ${m.rows.some(r=>r.priceMissing)?'<p class="ss-help" style="color:#be123c">มูลค่ายังไม่ครบ: สเปกปลายทางจากการโยกบางรายการยังไม่มีราคา ไม่ใช่สินค้าราคา 0 บาท</p>':''}
+      <p class="ss-sales-summary-source" role="status">${m.salesSummary?'อ้างอิงหัวข้อ 02 · ใช้ราคาและเรทที่เซฟแล้ว':'รอข้อมูลจากหัวข้อ 02 · ยังไม่แสดงยอดจากชุดอื่น'}</p>
+      <div class="ss-kpis">${kpiHTML(m.salesSummary)}</div>
       <div class="ss-section-title"><span>01</span><h3>ภาพรวมแยกเกรดและความหนา</h3></div>
       <div class="ss-groups">${groupTable('แยกตามเกรด',m.grades,'เกรด',t)}${groupTable('แยกตามความหนา',m.thickness.filter(([,totals])=>totals.qty>0).map(([thick,totals])=>[thicknessLabel(thick),totals]),'หนา (mm)',t)}</div>
       <div class="ss-aging"><h3>Aging ตามรายงานเมลต้นฉบับ</h3><div class="ss-aging-grid">${m.aging.map((n,i)=>`<div><small>${agingLabels[i]}</small><b>${number(n)}</b><span>${t.agingBaseQty?number(n/t.agingBaseQty*100,1):'0'}%</span></div>`).join('')}</div><p>ฐาน Aging ${number(m.aging.reduce((a,b)=>a+b,0))} / ยอดเมลต้นฉบับ ${number(t.agingBaseQty)} หน่วย · ไม่กระจายยอดปรับระหว่างวันเข้าอายุสินค้า</p>${agingChart(m)}</div>
@@ -163,6 +180,12 @@
     [data-aaf-stock-summary] .ss-kpi-sold{background:#eff6ff;border-color:#bdd2ef;color:#24528a}
     [data-aaf-stock-summary] .ss-kpi-reserved{background:#fff9ed;border-color:#e5d5ad;color:#785b24}
     [data-aaf-stock-summary] .ss-kpi-free{background:#e4f6f0;border-color:#8bcdba;color:#06634e}
+    [data-aaf-stock-summary] .ss-sales-summary-source{font-size:12px;color:#52657a;margin:0 0 10px}
+    [data-aaf-stock-summary] .ss-strip-quantity{font-size:13px;margin-top:6px;color:#52657a}
+    [data-aaf-stock-summary] .ss-sold-loading{display:grid;grid-template-columns:1fr 1fr;gap:10px;grid-column:1/-1;border-top:1px solid #bdd2ef;padding-top:10px}
+    [data-aaf-stock-summary] .ss-sold-loading div{display:flex;flex-direction:column;gap:4px;background:#ffffffa6;border:1px solid #d3e2f4;border-radius:8px;padding:8px 10px;min-width:0}
+    [data-aaf-stock-summary] .ss-sold-loading span{font-size:12px;color:#52657a}
+    [data-aaf-stock-summary] .ss-sold-loading b{font-size:15px;font-variant-numeric:tabular-nums}
     [data-aaf-stock-summary] .ss-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;margin:20px 0;font-size:12px;color:#52657a}
     [data-aaf-stock-summary] .ss-values b{display:block;color:#172b42;font-size:19px;font-weight:600;margin-top:4px}
     [data-aaf-stock-summary] .ss-help{font-size:12px;color:#52657a;line-height:1.8;margin:12px 0 18px}
@@ -259,7 +282,7 @@
   function showError(message){if(!root)return;const n=root.querySelector('.ss-status')||root;n.textContent=message;n.classList.add('ss-error');root.querySelectorAll('.ss-download,.cash-download').forEach(b=>b.disabled=true);latest=null;root.querySelector('.ss-sheet')?.remove();root.querySelector('.cash-sheet')?.remove();}
   let jumpedToCash=false;
   function update(data,calculate){
-    if(!root)return;const m=model(data,calculate);latest=m;root.classList.remove('ss-error');
+    if(!root)return;const m=model(data,calculate);m.salesSummary=window.AAFSalesPreview?.getReportSummary?.()||null;latest=m;root.classList.remove('ss-error');
     // Retain the same native preview node: changing stock revisions must not discard price/note drafts.
     const preview=root.querySelector('#stock-sales-preview-host');
     const focused=preview?.shadowRoot?.activeElement;
@@ -291,7 +314,7 @@
       status(`ดาวน์โหลดภาพครบ ${captured.rows.length} สเปกแล้ว · ข้อมูลบันทึก ${when(captured.updatedAt)}${latest!==captured?' · มีข้อมูลใหม่บนหน้าจอหลังเริ่มสร้างภาพ':''}`);
     }catch(e){status('ยังไม่ได้ดาวน์โหลดภาพ: '+e.message);}finally{box?.remove();exporting=false;root.querySelectorAll('.ss-download,.cash-download').forEach(b=>b.disabled=!latest);}
   }
-  window.AAFStockSummary={update,showError};
+  window.AAFStockSummary={update,showError,setSalesSummary};
   // Pure read-only builders exposed for regression tests and isolated previews.
   window.AAFStockSummary.buildModel=model;window.AAFStockSummary.renderHTML=html;
 })();

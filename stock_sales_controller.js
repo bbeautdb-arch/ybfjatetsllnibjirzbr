@@ -3,9 +3,10 @@
   'use strict';
   const API='https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/stock';
   const assetBase=new URL('.',document.currentScript.src);
-  let host=null,view=null,session='',catalogRevision=0,pending=null,generation=0;
+  let host=null,view=null,session='',catalogRevision=0,pending=null,generation=0,reportSummary=null;
   const token=()=>{try{const s=JSON.parse(sessionStorage.getItem('aaf_user'));return s?.stockSessionToken||s?.gradeBridgeSessionToken||s?.bridgeSessionToken||'';}catch{return '';}};
   const current=(version,currentHost,auth)=>version===generation&&currentHost===host&&auth===session&&auth===token();
+  function publishReportSummary(summary){reportSummary=summary;window.AAFStockSummary?.setSalesSummary?.(summary);}
   async function request(body=null,catalogOnly=false){
     const auth=token();if(!auth)throw new Error('กรุณาเข้าสู่ระบบ AAF ก่อนดูยอดขาย');
     const response=await fetch(API+(body?'':'?view=salesPreview'+(catalogOnly?'&catalogOnly=1':'')),{method:body?'POST':'GET',cache:'no-store',headers:{Authorization:'Bearer '+auth,...(body?{'Content-Type':'text/plain;charset=UTF-8'}:{})},...(body?{body:JSON.stringify(body)}:{})});
@@ -62,18 +63,19 @@
     }};
     // Both grouping and financial arithmetic remain in the original model/view.
     const model=window.AafAllModel.buildModel(p.salesRows,p.stockRows,p.modelOptions);
-    const mountedView=window.mountAllThickness(root,model,{...p.options,store,persistenceLabel:'เก็บราคา สกุลเงิน และหมายเหตุในระบบ · ไม่เปลี่ยนยอดสต๊อกหรือใบขาย'});view=mountedView;
-    if(mountedView.ready)await mountedView.ready;
+    const mountedView=window.mountAllThickness(root,model,{...p.options,store,persistenceLabel:'เก็บราคา สกุลเงิน และหมายเหตุในระบบ · ไม่เปลี่ยนยอดสต๊อกหรือใบขาย',onReportSummary:summary=>{if(current(version,currentHost,auth))publishReportSummary(summary);}});view=mountedView;
+    if(mountedView.ready&&(await mountedView.ready)===false){mountedView.destroy();if(view===mountedView)view=null;throw new Error('โหลดราคาที่เซฟไว้ไม่สำเร็จ · ยังไม่แสดงยอดสรุป');}
     if(!current(version,currentHost,auth)){mountedView.destroy();if(view===mountedView)view=null;return;}
+    if(mountedView.getReportSummary)publishReportSummary(mountedView.getReportSummary());
     message(state,'');state.hidden=true;
   }
   function attach(slot){
     if(!slot)return;
     const auth=token();
     if(host&&session===auth){slot.replaceChildren(host);return pending;}
-    if(view)view.destroy();view=null;session=auth;const version=++generation,{state,content}=shell(),currentHost=host;slot.replaceChildren(currentHost);
+    if(view)view.destroy();view=null;session=auth;publishReportSummary(null);const version=++generation,{state,content}=shell(),currentHost=host;slot.replaceChildren(currentHost);
     pending=request().then(data=>current(version,currentHost,auth)?mount(data,content,state,version,currentHost,auth):undefined).catch(e=>{if(current(version,currentHost,auth))message(state,e.message,true);});return pending;
   }
-  window.AAFSalesPreview={attach,isDirty:()=>!!view?.getPriceState().dirty,isSaving:()=>!!view?.getPriceState().saving};
+  window.AAFSalesPreview={attach,isDirty:()=>!!view?.getPriceState().dirty,isSaving:()=>!!view?.getPriceState().saving,getReportSummary:()=>session===token()?reportSummary:null};
   window.addEventListener('beforeunload',event=>{if(view?.getPriceState().dirty||view?.getPriceState().saving){event.preventDefault();event.returnValue='';}});
 })();
