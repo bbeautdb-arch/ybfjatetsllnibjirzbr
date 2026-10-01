@@ -865,51 +865,8 @@
         // 🟢 โหมดแก้ตารางแมนนวลอัจฉริยะ (Manual Edit Mode)
         // ----------------------------------------------------
         function editRawTable() {
-            let pin = prompt("🔐 กรุณาใส่รหัสผ่านเพื่อแก้ไขสต๊อกแบบแมนนวล (รหัส: 8888)");
-            if (pin === "8888") {
-                let table = document.querySelector('#raw-table-container table');
-                if(!table) {
-                    alert("⚠️ ไม่มีข้อมูลต้นฉบับให้แก้ไข กรุณาอัปโหลดไฟล์ Excel อย่างน้อย 1 ครั้งเพื่อเป็นต้นแบบครับ");
-                    return;
-                }
-                
-                let cells = table.querySelectorAll('tbody td, thead th');
-                cells.forEach(cell => {
-                    if (cell.tagName.toLowerCase() === 'td') {
-                        cell.setAttribute('contenteditable', 'true');
-                        cell.removeAttribute('v'); 
-                        cell.removeAttribute('t');
-                        cell.removeAttribute('z');
-                    }
-                });
-
-                let rows = table.querySelectorAll('tr');
-                rows.forEach((row, index) => {
-                    let cell = document.createElement(row.querySelector('th') ? 'th' : 'td');
-                    cell.className = 'action-cell bg-amber-100 border border-amber-300 text-center sticky left-0 z-10 w-28';
-                    
-                    if(row.querySelector('th')) {
-                        cell.innerText = '⚙️ จัดการ';
-                        cell.style.color = '#1e293b';
-                    } else {
-                        cell.setAttribute('contenteditable', 'false'); 
-                        cell.innerHTML = `
-                            <div class="flex justify-center space-x-1">
-                                <button onclick="moveRowUp(this)" class="p-1 bg-white hover:bg-slate-200 rounded shadow-sm transition" title="เลื่อนขึ้น">🔼</button>
-                                <button onclick="moveRowDown(this)" class="p-1 bg-white hover:bg-slate-200 rounded shadow-sm transition" title="เลื่อนลง">🔽</button>
-                                <button onclick="deleteThisRow(this)" class="p-1 bg-rose-100 hover:bg-rose-200 rounded text-rose-600 shadow-sm transition" title="ลบแถวนี้">❌</button>
-                            </div>
-                        `;
-                    }
-                    row.insertBefore(cell, row.firstChild);
-                });
-                
-                document.getElementById('raw-edit-controls').classList.remove('hidden');
-                document.getElementById('btn-edit-raw').classList.add('hidden');
-                alert("🔓 เปิดโหมดแก้ไขแล้ว! คุณสามารถพิมพ์แก้ตัวเลข เลื่อนสลับแถว หรือลบแถวได้เลยครับ");
-            } else if (pin !== null) {
-                alert("❌ รหัสผ่านไม่ถูกต้อง!");
-            }
+            // Retired local editor. All stock edits use the authenticated shared service.
+            alert('ใช้ช่องปรับสต๊อกระหว่างวันและกดเซฟในระบบส่วนกลาง');
         }
 
         window.moveRowUp = function(btn) {
@@ -1301,7 +1258,9 @@
     <link rel="stylesheet" href="stock_cash.css?v=20260911-cash">
     <script src="stock_reservations.js?v=20260914-reservations"></script>
     <script src="stock_cash.js?v=20260914-reservations"></script>
-    <script src="stock_summary.js?v=20261002-physical-equivalents"></script>
+    <script src="stock_sales_preview.js?v=20261002-sales-block"></script>
+    <script src="stock_sales_controller.js?v=20261002-sales-block"></script>
+    <script src="stock_summary.js?v=20261002-sales-block"></script>
     <script src="stock_plan_ui.js?v=20260914-reservations"></script>
     <script src="stock_sales_export.js?v=20260910-daily"></script>
     <script src="stock_shared.js?v=20261002-report-first"></script>
