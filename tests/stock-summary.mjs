@@ -19,6 +19,96 @@ assert.equal(m.total.eq4x8,80,'4x8 uses saved Physical, not baseline or manually
 assert.equal((html.match(/เทียบ 4×8<br><small>หนาเดิม/g)||[]).length,2,'both grouped tables show area equivalent');
 assert.equal((html.match(/เทียบ 4×8<br><small>หนา 2.5 mm/g)||[]).length,2,'both grouped tables show volume equivalent');
 assert.equal((html.match(/<tfoot>/g)||[]).length,2,'both summaries include conversion totals');
+assert.equal(m.total.freeEq4x8,75,'Free equivalents use manually saved Free');
+assert.equal(m.total.freeEq,75,'Free volume equivalent uses manually saved Free');
+assert.equal(m.total.reservedEq4x8,20);assert.equal(m.total.reservedEq,20);
+const near=(actual,expected,message)=>assert(Math.abs(actual-expected)<1e-8,message);
+const shown=(value,digits=2)=>Number(value).toLocaleString('th-TH',{maximumFractionDigits:digits});
+const kpiCards=(markup)=>{
+  const found=[...markup.matchAll(/<div class="ss-kpi ss-kpi-(physical|sold|reserved|free)">/g)];
+  const cards=Object.fromEntries(found.map((match,index)=>[match[1],markup.slice(match.index,found[index+1]?.index??markup.indexOf('<p class="ss-help"',match.index))]));
+  return {order:found.map(match=>match[1]),cards};
+};
+const layoutRate=31.9876;
+const soldSummary={status:'verified',month:'2026-09',capturedAt:'2026-09-09T08:00:00+07:00',totals:{sheet:{qty:17,eq4x8:12.25,eq:9.5,valueTHB:1000,valueUSD:3.25,unpricedQty:2},strip:{qty:9,eq4x8:1.5,eq:.75,valueTHB:200,valueUSD:1.75,unpricedQty:1}}};
+const layoutSource={...data,exchangeRate:layoutRate,soldSummary,rows:[{...row,qty:123,w:'610',l:'1220',t:'3.2'}]};
+const layoutSourceBefore=JSON.stringify(layoutSource);
+const layoutCalculate=(r)=>{const p=r.priceObj,thb=p.price*(p.currency==='USD'?layoutRate:1);return{price:p.price,curr:p.currency,eq:r.qty*Number(r.w)*Number(r.l)/2976800*Number(r.t)/2.5,value:r.qty*thb,freeValue:r.freeQty*thb};};
+const layoutModel=buildModel(layoutSource,layoutCalculate),layoutModelBefore=JSON.stringify(layoutModel),layoutHTML=renderHTML(layoutModel);
+near(layoutModel.total.freeEq4x8,18.75);near(layoutModel.total.freeEq,24);near(layoutModel.total.reservedEq4x8,5);near(layoutModel.total.reservedEq,6.4);
+const unitTHB=2.352*layoutRate;near(layoutModel.total.reservedValue,20*unitTHB,'Reserved money uses FX and saved price');
+assert.equal(layoutModel.total.reservedUnpricedQty,0);assert.equal(layoutModel.total.freeQty,75,'manual Free remains authoritative');
+assert.equal(layoutModel.sold.qty,17);assert.equal(layoutModel.sold.stripQty,9);near(layoutModel.sold.eq4x8,13.75);near(layoutModel.sold.eq,10.25);
+near(layoutModel.sold.value,1200+5*layoutRate,'Sold THB and USD evidence use the displayed FX');assert.equal(layoutModel.sold.unpricedQty,3);
+const {order:cardOrder,cards}=kpiCards(layoutHTML);
+assert.deepEqual(cardOrder,['physical','sold','reserved','free'],'KPI order is Physical, Sold, Reserved, Free');
+assert.equal(Object.keys(cards).length,4,'exactly four KPI cards render');
+for(const id of cardOrder){assert.equal((cards[id].match(/<dt>/g)||[]).length,2,id+' has exactly two equivalent subsets');assert.equal((cards[id].match(/class="ss-kpi-value"/g)||[]).length,1,id+' has exactly one money footer');}
+assert(cards.physical.includes('<strong>123</strong>'));assert(cards.physical.includes('<dd>30.75 <small>แผ่น</small></dd>'));assert(cards.physical.includes('<dd>39.36 <small>แผ่น</small></dd>'));assert(cards.physical.includes('<b>฿ '+shown(123*unitTHB)+'</b>'));
+assert(cards.sold.includes('<strong>17</strong>'));assert(cards.sold.includes('<dd>13.75 <small>แผ่น</small></dd>'));assert(cards.sold.includes('<dd>10.25 <small>แผ่น</small></dd>'));assert(cards.sold.includes('<b>฿ '+shown(1200+5*layoutRate)+'</b>'));assert(cards.sold.includes('ไม้แถบ 9 ชิ้น'));
+assert(cards.reserved.includes('<strong>20</strong>'));assert(cards.reserved.includes('<dd>5 <small>แผ่น</small></dd>'));assert(cards.reserved.includes('<dd>6.4 <small>แผ่น</small></dd>'));assert(cards.reserved.includes('<b>฿ '+shown(20*unitTHB)+'</b>'));
+assert(cards.free.includes('<strong>75</strong>'));assert(cards.free.includes('<dd>18.75 <small>แผ่น</small></dd>'));assert(cards.free.includes('<dd>24 <small>แผ่น</small></dd>'));assert(cards.free.includes('<b>฿ '+shown(75*unitTHB)+'</b>'));
+assert(cards.physical.includes('<span>มูลค่าสต๊อกรวม</span>'));assert(cards.sold.includes('<span>มูลค่าขายเฉพาะส่วนที่มีราคา</span>'));assert(cards.reserved.includes('<span>มูลค่าจอง · ราคาสต๊อกประมาณการ</span>'));assert(cards.free.includes('<span>มูลค่า Free</span>'));
+assert(cards.physical.includes('แผ่น/ชิ้น ณ ยอดที่เซฟล่าสุด'));assert(cards.reserved.includes('แผ่น/ชิ้น จากยอดจองในระบบ'));assert(cards.free.includes('แผ่น/ชิ้น ใช้ค่า Free ที่เซฟไว้'));
+const heroMeta=layoutHTML.match(/<div class="ss-hero-meta">[\s\S]*?<\/div><\/div><\/header>/)?.[0];
+assert(heroMeta?.includes('class="ss-stamp"')&&heroMeta.includes('class="ss-exchange"'),'FX and spec stamp share the upper-right hero group');
+assert(heroMeta.includes('<b>31.9876</b>'),'FX remains the supplied dynamic exchange rate');
+assert(!layoutHTML.includes('class="ss-values"'),'standalone value row is removed');
+assert.equal(JSON.stringify(layoutSource),layoutSourceBefore,'layout model does not mutate source data');
+assert.equal(JSON.stringify(layoutModel),layoutModelBefore,'rendering the KPI layout does not mutate computed totals');
+const absentSold=kpiCards(html).cards.sold;
+assert.equal(m.sold,null);assert(absentSold.includes('<strong>—</strong>'));assert.equal((absentSold.match(/<dd>— <small>แผ่น<\/small><\/dd>/g)||[]).length,2);assert(absentSold.includes('<b>—</b>'));assert(!absentSold.includes('฿ 0'),'missing Sold evidence is unknown, not zero');
+const invalidSold=[{...soldSummary,status:'pending'},{...soldSummary,month:'2026-08'},{...soldSummary,capturedAt:'not-a-date'},{...soldSummary,totals:{...soldSummary.totals,strip:null}},{...soldSummary,totals:{...soldSummary.totals,sheet:{...soldSummary.totals.sheet,qty:-1}}}];
+for(const evidence of invalidSold){const sampleSource={...data,soldSummary:evidence},snapshot=JSON.stringify(sampleSource),sample=buildModel(sampleSource,calculate);assert.equal(sample.sold,null,'unverified/mismatched/invalid Sold evidence stays unknown');assert.equal(JSON.stringify(sampleSource),snapshot,'Sold validation does not mutate evidence');assert(kpiCards(renderHTML(sample)).cards.sold.includes('<b>—</b>'));}
+const unpricedRow={...row,key:'unpriced',priceMissing:true,priceObj:{price:0,currency:'THB'},qty:10,committedQty:7,freeQty:5};
+const allUnpriced=buildModel({...data,rows:[unpricedRow]},calculate),allUnpricedHTML=renderHTML(allUnpriced),allUnpricedReserved=kpiCards(allUnpricedHTML).cards.reserved;
+assert.equal(allUnpriced.total.reservedUnpricedQty,7);assert(allUnpricedReserved.includes('<b>—</b>'),'all-unpriced Reserved money is unknown, not zero');assert(!allUnpricedReserved.includes('฿ 0'));
+assert(allUnpricedHTML.includes('มูลค่ายังไม่ครบ: สเปกปลายทางจากการโยกบางรายการยังไม่มีราคา ไม่ใช่สินค้าราคา 0 บาท'),'missing-price warning remains visible');
+const partialReserved=buildModel({...data,rows:[row,unpricedRow]},calculate),partialReservedCard=kpiCards(renderHTML(partialReserved)).cards.reserved;
+near(partialReserved.total.reservedValue,20*2.352*34);assert.equal(partialReserved.total.reservedUnpricedQty,7);assert(partialReservedCard.includes('<b>฿ '+shown(20*2.352*34)+'</b>'));assert(partialReservedCard.includes('ยังไม่รวมส่วนที่ไม่มีราคา 7 หน่วย'));
+const rawFive={...row,key:'raw-5-F',sku:'RAW5F',grade:'F',t:'5',qty:0,baseQty:141,committedQty:0,freeQty:0,d90:1,d180:2,d270:30,d360:40,dOver:68,rawSource:true};
+const rawQuarter={...row,key:'raw-1.6-AAA',sku:'RAW16AAA',grade:'AAA',w:'610',l:'1220',t:'1.6',qty:0,baseQty:100,committedQty:0,freeQty:0,d90:10,d180:20,d270:30,d360:20,dOver:20,rawSource:true};
+const movedPhysical={...row,key:'derived-5.5-F',sku:'',grade:'F',t:'5.5',qty:141,baseQty:999,committedQty:0,freeQty:141,d90:999,d180:999,d270:999,d360:999,dOver:999,rawSource:false};
+const agingSource={...data,rows:[rawFive,rawQuarter,movedPhysical]},agingSourceBefore=JSON.stringify(agingSource),agingModel=buildModel(agingSource,calculate),agingHTML=renderHTML(agingModel);
+assert.equal(JSON.stringify(agingSource),agingSourceBefore,'Aging aggregation never mutates source rows');
+assert.deepEqual(Array.from(agingModel.aging),[11,22,60,60,88],'five raw mail buckets stay exact');
+assert.equal(agingModel.total.agingBaseQty,241,'Aging base excludes derived/transfer rows');
+assert.equal(agingModel.total.aging90,11);assert.equal(agingModel.total.aging180,22);assert.equal(agingModel.total.agingOver180,208,'>180 is d270 + d360 + dOver without boundary overlap');
+assert.equal(agingModel.total.aging90+agingModel.total.aging180+agingModel.total.agingOver180,agingModel.total.agingBaseQty,'three Aging columns reconcile to raw mail base');
+const gradeF=agingModel.grades.find(([grade])=>grade==='F')[1],thick5=agingModel.thickness.find(([thick])=>thick==='5')[1],thick55=agingModel.thickness.find(([thick])=>thick==='5.5')[1];
+assert.equal(gradeF.qty,141);assert.equal(gradeF.aging90,1);assert.equal(gradeF.aging180,2);assert.equal(gradeF.agingOver180,138,'Aging stays on source 5 mm F while Physical moved to 5.5 mm F');
+assert.equal(thick5.qty,0);assert.equal(thick5.agingOver180,138,'Physical zero does not remove raw Aging');
+assert.equal(thick55.qty,141);assert.equal(thick55.aging90+thick55.aging180+thick55.agingOver180,0,'derived thickness receives no guessed Aging');
+assert.deepEqual(Array.from(agingModel.agingEquivalent),[3.5,7,37.5,45,73],'legacy chart alone uses 4x8 area equivalents');
+assert.deepEqual(Array.from(agingModel.agingEquivalentByThickness,([thick])=>thick),['1.6','5'],'chart legend includes raw-source thicknesses only');
+assert(agingHTML.includes('class="ss-aging-chart"')&&agingHTML.includes('<svg class="ss-aging-svg"'),'dependency-free legacy SVG chart is restored');
+assert.equal((agingHTML.match(/<rect /g)||[]).length,10,'five chart buckets stack both raw thicknesses');
+assert(agingHTML.indexOf('1.6 mm</span>')<agingHTML.indexOf('5.0 mm</span>'),'chart legend sorts source thickness numerically');
+assert(agingHTML.includes('รวม Aging 166 แผ่นเทียบ 1,220 × 2,440 มม.'),'chart states its converted total and unit');
+assert(!/(?:new\s+Chart|chart\.js)/i.test(source),'Aging chart adds no external chart dependency');
+assert(!agingHTML.includes('Physical และ Free รวมการปรับที่กดเซฟแล้ว'),'removed Physical/Free help paragraph stays absent');
+assert(!agingHTML.includes('ยอดเทียบขนาดใช้ Physical ที่เซฟแล้ว'),'removed conversion help paragraph stays absent');
+assert(/\.ss-aging\{padding:12px;/.test(source)&&/\.ss-aging h3\{[^}]*font-size:13px/.test(source),'yellow Aging panel keeps compact padding and heading');
+assert(/\.ss-aging-grid small\{font-size:10px/.test(source)&&/\.ss-aging-grid b\{[^}]*font-size:16px/.test(source),'yellow Aging labels and numbers keep compact sizing');
+assert(/\.ss-aging-svg\{[^}]*height:190px/.test(source),'Aging chart keeps the compact 190px height');
+assert(/\.ss-aging-insights h4\{font-size:10px/.test(source)&&/\.ss-aging-insights span\{[^}]*font-size:9px/.test(source)&&/\.ss-aging-insights b\{[^}]*font-size:10px/.test(source),'Aging insight text keeps compact 10/9px sizing');
+const summaryGroups=[...agingHTML.matchAll(/<section class="ss-group">[\s\S]*?<\/section>/g)].map(match=>match[0]);
+assert.equal(summaryGroups.length,2,'grade and thickness summaries both render');
+for(const group of summaryGroups){
+  assert.equal((group.match(/rowspan="2"/g)||[]).length,7,'10-column table has seven fixed headers');assert.equal((group.match(/colspan="3"/g)||[]).length,1,'three Aging columns share one mail header');
+  assert(group.includes('0–90')&&group.includes('91–180')&&group.includes('&gt;180 วัน'));assert(!group.includes('หน่วยตามเมล (แผ่น/ชิ้น)'));assert(group.includes('Aging เมล = ยอดต้นฉบับก่อนโยก'));
+  const footer=group.match(/<tfoot><tr>([\s\S]*?)<\/tr><\/tfoot>/)?.[1];assert.equal((footer?.match(/<(?:th|td)\b/g)||[]).length,10,'footer has exactly ten cells');
+  assert(footer.includes('>11</td>')&&footer.includes('>22</td>')&&footer.includes('>208</td>'),'footer repeats exact raw Aging totals');
+}
+assert.equal((agingHTML.match(/aria-label="[^"]*10 คอลัมน์ เลื่อนแนวนอนได้"/g)||[]).length,2,'both wide tables expose their scroll region');
+assert(/\.ss-group\{[^}]*min-width:0/.test(source)&&/\.ss-group-scroll\{[^}]*max-width:100%[^}]*overflow-x:auto/.test(source),'wide tables scroll internally without widening the page');
+assert(/\.ss-groups\{[^}]*grid-template-columns:1fr 1fr/.test(source),'normal 1575px desktop keeps both summaries side by side');
+assert(/\.ss-group table\{[^}]*table-layout:fixed[^}]*font-size:11px[^}]*min-width:0/.test(source),'compact table fits its card without a forced wide minimum');
+assert(/\.ss-group th,[^}]*\.ss-group td\{padding:7px 3px\}/.test(source)&&/\.ss-group thead th\{font-size:10px\}/.test(source),'compact cells and headers remain explicitly readable');
+for(const rule of ['nth-child(1){width:7%}','nth-child(2){width:5%}','nth-child(3),[data-aaf-stock-summary] .ss-group thead tr:first-child th:nth-child(4),[data-aaf-stock-summary] .ss-group thead tr:first-child th:nth-child(5){width:11%}','nth-child(6){width:30%}','nth-child(7),[data-aaf-stock-summary] .ss-group thead tr:first-child th:nth-child(8){width:12.5%}'])assert(source.includes(rule),'missing compact column allocation: '+rule);
+assert(!source.includes('min-width:980px'),'desktop tables no longer require horizontal scrolling');
+assert(/@media\(max-width:1450px\)\{[^}]*\.ss-groups\{grid-template-columns:1fr/.test(source),'narrow screens stack the two summary cards');
+assert(/\.ss-group thead small\{font-size:9px/.test(source),'wrapped narrow header text keeps the approved minimum size');
 const conversionCases=[
   [100,'1220','2440','2.5',100,100],
   [100,'1220','2440','3.2',100,128],
