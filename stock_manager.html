@@ -53,11 +53,18 @@
             font-size: 14px; font-weight: 600; color: #0f172a; outline: none; transition: all 0.2s;
         }
         .price-input:focus { border-color: #eab308; box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.2); }
+        /* Keep the workbench DOM for calculations; the page opens on the report. */
+        #stock-management-workbench[hidden] { display: none !important; }
+        #stock-summary > .ss-report-intro,
+        #stock-summary > .ss-status:not(.ss-error) { display: none !important; }
+        #stock-report-access { max-width:1500px; width:100%; margin:0 auto 16px; padding:16px; border:1px solid #fecaca; border-radius:12px; background:#fff7f7; color:#9f1239; }
+        #stock-report-access[hidden] { display:none !important; }
+        #stock-report-access a, #stock-report-access button { display:inline-block; margin:10px 8px 0 0; padding:8px 12px; border-radius:8px; background:#fff; border:1px solid #cbd5e1; color:#334155; }
     </style>
 </head>
 <body class="p-4 md:p-6 min-h-screen flex flex-col">
 
-    <div class="max-w-[1500px] mx-auto w-full flex flex-col space-y-6 pb-20">
+    <div id="stock-management-workbench" hidden aria-hidden="true" class="max-w-[1500px] mx-auto w-full flex flex-col space-y-6 pb-20">
         
         <div class="flex flex-col md:flex-row justify-between items-end border-b border-slate-300 pb-4">
             <div>
@@ -206,7 +213,12 @@
 
     </div>
 
-    <section id="stock-summary" data-aaf-stock-summary class="max-w-[1500px] mx-auto w-full" aria-label="สรุปสต๊อกสำหรับส่งรายงาน">
+    <aside id="stock-report-access" hidden aria-label="สถานะการเชื่อมต่อรายงาน">
+        <p id="stock-report-access-message" role="alert"></p>
+        <button id="stock-report-retry" type="button">ลองโหลดข้อมูลอีกครั้ง</button>
+        <a href="login.html?reauth=1">เข้าสู่ระบบ AAF</a>
+    </aside>
+    <section id="stock-summary" data-aaf-stock-summary class="max-w-[1500px] mx-auto w-full" aria-label="รายงานสต๊อกและติดตามการขาย">
         <p role="status">รายงานภาพยาวจะแสดงเมื่อโหลดข้อมูลส่วนกลางสำเร็จ — ใช้เฉพาะค่าที่บันทึกแล้ว</p>
     </section>
 
@@ -1289,9 +1301,9 @@
     <link rel="stylesheet" href="stock_cash.css?v=20260911-cash">
     <script src="stock_reservations.js?v=20260914-reservations"></script>
     <script src="stock_cash.js?v=20260914-reservations"></script>
-    <script src="stock_summary.js?v=20260911-cash"></script>
+    <script src="stock_summary.js?v=20261002-report-first"></script>
     <script src="stock_plan_ui.js?v=20260914-reservations"></script>
     <script src="stock_sales_export.js?v=20260910-daily"></script>
-    <script src="stock_shared.js?v=20260910-daily"></script>
+    <script src="stock_shared.js?v=20261002-report-first"></script>
 </body>
 </html>
