@@ -10,6 +10,8 @@ const row={key:'1220|2440|2.5|AAA',sku:'AAA12202440025',desc:'Test <img src=x on
 const data={report:{reportDate:'2026-09-08',sourceRowCount:2},rows:[row,{...row,key:'915|1830|1.60|B',sku:'B09151830016',w:'0915',l:'1830',t:'1.60',grade:'B',qty:0,baseQty:0,freeQty:0,committedQty:0,d90:0,d180:0,priceObj:{price:55,currency:'THB'}}],exchangeRate:34,revision:123,updatedAt:'2026-09-08T08:00:00Z',actor:{token:'not-for-report'},permissions:{adjust:true}};
 const before=JSON.stringify(data),m=buildModel(data,calculate),html=renderHTML(m);
 assert.equal(JSON.stringify(data),before,'no source mutations');
+assert(html.includes('<span>02</span><h3>ยอดขายและสต๊อก</h3>')&&html.includes('<span>03</span><h3>รายละเอียดครบทุกสเปก</h3>'),'section02 hosts the original preview and full details move to03');
+assert(html.indexOf('stock-sales-preview-slot')<html.indexOf('<span>03</span>'),'sales preview is above full spec details');
 assert.equal(m.rows[0].t,'1.60','numeric thickness sorting');
 assert.equal(m.total.qty,80);assert.equal(m.total.freeQty,75,'manual Free must not be recalculated as 60');
 assert.equal(m.total.baseQty,100);assert.equal(m.aging.reduce((a,b)=>a+b,0),100,'Aging stays on email baseline');
@@ -94,6 +96,17 @@ assert(/\.ss-aging-svg\{[^}]*height:190px/.test(source),'Aging chart keeps the c
 assert(/\.ss-aging-insights h4\{font-size:10px/.test(source)&&/\.ss-aging-insights span\{[^}]*font-size:9px/.test(source)&&/\.ss-aging-insights b\{[^}]*font-size:10px/.test(source),'Aging insight text keeps compact 10/9px sizing');
 const summaryGroups=[...agingHTML.matchAll(/<section class="ss-group">[\s\S]*?<\/section>/g)].map(match=>match[0]);
 assert.equal(summaryGroups.length,2,'grade and thickness summaries both render');
+assert(!summaryGroups[1].includes('<th scope="row">5.0</th>')&&!summaryGroups[1].includes('<th scope="row">1.6</th>'),'Physical-zero thickness rows are omitted from this summary only');
+assert(summaryGroups[1].includes('<th scope="row">5.5</th>'),'nonzero fractional thickness remains unchanged');
+assert(agingHTML.includes('ความหนา 5 mm')&&agingHTML.includes('รวม Aging 166 แผ่นเทียบ'),'zero display filtering preserves detail and original Aging evidence');
+assert(summaryGroups[0].includes('<th scope="row">AAA</th>'),'grade labels are not formatted as thickness');
+for(const thick of [2,3]){
+  const wholeSource={...data,rows:[{...row,t:String(thick)}]},wholeBefore=JSON.stringify(wholeSource),wholeModel=buildModel(wholeSource,calculate);
+  const wholeHTML=renderHTML(wholeModel),wholeTable=[...wholeHTML.matchAll(/<section class="ss-group">[\s\S]*?<\/section>/g)][1][0];
+  assert(wholeTable.includes('<th scope="row">'+thick+'.0</th>'),'whole thickness follows owner examples 2.0 and 3.0');
+  assert.equal(wholeModel.thickness[0][0],String(thick),'display formatting preserves matching keys');
+  assert.equal(JSON.stringify(wholeSource),wholeBefore,'display formatting preserves data and calculations');
+}
 for(const group of summaryGroups){
   assert.equal((group.match(/rowspan="2"/g)||[]).length,7,'10-column table has seven fixed headers');assert.equal((group.match(/colspan="3"/g)||[]).length,1,'three Aging columns share one mail header');
   assert(group.includes('0–90')&&group.includes('91–180')&&group.includes('&gt;180 วัน'));assert(!group.includes('หน่วยตามเมล (แผ่น/ชิ้น)'));assert(group.includes('Aging เมล = ยอดต้นฉบับก่อนโยก'));
