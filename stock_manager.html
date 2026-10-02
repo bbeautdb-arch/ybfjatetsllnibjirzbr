@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock AAF - ระบบจัดการสต๊อก</title>
+    <meta name="referrer" content="no-referrer">
+    <script>window.AAFStockAccessRequired=true;</script>
+    <script src="stock_access.js?v=20261002-sales-link" onerror="if(location.hash.startsWith('#stock-link='))history.replaceState(null,'',location.pathname+location.search)"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1259,10 +1262,11 @@
     <script src="stock_reservations.js?v=20260914-reservations"></script>
     <script src="stock_cash.js?v=20260914-reservations"></script>
     <script src="stock_sales_preview.js?v=20261002-sales-price-notes"></script>
-    <script src="stock_sales_controller.js?v=20261002-sales-price-notes"></script>
+    <script src="stock_sales_controller.js?v=20261002-sales-link"></script>
     <script src="stock_summary.js?v=20261002-sales-price-notes"></script>
     <script src="stock_plan_ui.js?v=20260914-reservations"></script>
     <script src="stock_sales_export.js?v=20260910-daily"></script>
-    <script src="stock_shared.js?v=20261002-sales-price-notes"></script>
+    <script src="stock_link_manager.js?v=20261002-sales-link"></script>
+    <script src="stock_shared.js?v=20261002-sales-link"></script>
 </body>
 </html>

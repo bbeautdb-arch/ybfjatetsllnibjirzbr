@@ -53,6 +53,7 @@ function runtime(){
     api:window.AAFSalesPreview,fetchCalls,mounts,builds,windowListeners,summaries,draftSyncs,
     slot:()=>new FakeElement('main'),
     setToken(token){user=token?{stockSessionToken:token}:null;},
+    setAccessHelper(helper,required=true){window.AAFStockAccess=helper;window.AAFStockAccessRequired=required;},
     enqueue(value){fetchQueue.push(value);},
     pending(value){fetchQueue.push(value.promise);},
   };
@@ -244,5 +245,15 @@ assert(!source.includes('SYNTHETIC-')&&!source.includes('"salesRows":['));
   const code=html.slice(html.indexOf('const stockSalesDestination'),html.indexOf('async function doLogin'))+'\nresult=loginDestination(role);';
   for(const role of ['admin','sales','stock_viewer','stock_sales']){const c={location:{search:'?next=stock-sales'},URLSearchParams,role};vm.runInNewContext(code,c);assert.equal(c.result,'stock_manager.html?view=sales');}
   for(const search of ['?next=https://evil.example','?next=//evil.example','']){const c={location:{search},URLSearchParams,role:'sales'};vm.runInNewContext(code,c);assert.equal(c.result,'dashboard_home.html');}
+}
+// Capability auth must override owner sessions and force catalog-only editing.
+{
+  const r=runtime(),slot=r.slot();r.setToken('owner');r.setAccessHelper({isShared:()=>true,token:()=> 'shared-link'});r.api.setAccess({salesMode:false,revision:10});
+  r.enqueue({...response('CAPABILITY'),permissions:{pricesAndNotes:true}});await r.api.attach(slot);
+  assertAuthenticated(r.fetchCalls,'shared-link');assert.match(r.fetchCalls[0].url,/view=salesReport/);assert.equal(r.mounts[0].options.priceNotesOnly,true);
+  r.api.invalidate('revoked');assert.equal(r.api.isReadOnly(),true);assert.equal(r.api.setDraftPrice('known',2),false);assert.equal(await r.api.savePrices(),false);
+}
+{
+  const r=runtime();r.setToken('owner');r.setAccessHelper(undefined);await r.api.attach(r.slot());assert.equal(r.fetchCalls.length,0,'failed required bootstrap never uses owner credentials');
 }
 console.log('Stock sales controller auth, sales catalog-only edits, draft reattach, revision CAS, safe login return and token-isolation tests passed.');

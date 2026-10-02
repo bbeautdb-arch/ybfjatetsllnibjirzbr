@@ -5,7 +5,7 @@
   const assetBase=new URL('.',document.currentScript.src);
   let host=null,view=null,viewGeneration=0,session='',catalogRevision=0,pending=null,generation=0,reportSummary=null;
   let readOnly=false,salesMode=false,stockRevision=null,mountedRevision=null,mountedSalesMode=false,loadFailed=false,statusNode=null;
-  const token=()=>{try{const s=JSON.parse(sessionStorage.getItem('aaf_user'));return s?.stockSessionToken||s?.gradeBridgeSessionToken||s?.bridgeSessionToken||'';}catch{return '';}};
+  const token=()=>{if(window.AAFStockAccess)return window.AAFStockAccess.token();if(window.AAFStockAccessRequired)return '';try{const s=JSON.parse(sessionStorage.getItem('aaf_user'));return s?.stockSessionToken||s?.gradeBridgeSessionToken||s?.bridgeSessionToken||'';}catch{return '';}};
   const current=(version,currentHost,auth)=>version===generation&&currentHost===host&&auth===session&&auth===token();
   function publishReportSummary(summary){reportSummary=mountedRevision===stockRevision?summary:null;window.AAFStockSummary?.setSalesSummary?.(reportSummary);}
   function publishPriceDraftChange(change){window.AAFStockSummary?.syncPriceDrafts?.(change);}
@@ -94,7 +94,8 @@
   const sameSessionView=()=>session&&session===token()&&viewGeneration===generation?view:null;
   const editableView=()=>{if(readOnly)return null;const active=sameSessionView(),state=active?.getPriceState?.();return active&&state&&!state.loading&&!state.loadFailed?active:null;};
   window.AAFSalesPreview={
-    setAccess:access=>{const mode=access.salesMode===true;if(mode!==salesMode){salesMode=mode;readOnly=mode;publishReportSummary(null);}stockRevision=access.revision??null;},
+    setAccess:access=>{const mode=window.AAFStockAccess?.isShared()===true||access.salesMode===true;if(mode!==salesMode){salesMode=mode;readOnly=mode;publishReportSummary(null);}stockRevision=access.revision??null;},
+    invalidate:text=>{readOnly=true;loadFailed=true;publishReportSummary(null);if(statusNode){statusNode.hidden=false;message(statusNode,text,true);}},
     isReadOnly:()=>readOnly,
     attach,
     isDirty:()=>!!sameSessionView()?.getPriceState?.().dirty,
