@@ -893,6 +893,12 @@ module.exports = {
     // Display dimensions retain their source order; catalog ownership must not move
     // while a price is edited/cleared, or create a duplicate reversed-axis entry.
     const priceKeyBindings = new Map();
+    const knownPoolKeys = new Map();
+    model.all.stock.rows.forEach(row => {
+      const key = specKey(row), reverse = reversedSpecKey(key);
+      knownPoolKeys.set(key,key);knownPoolKeys.set(reverse,key);
+    });
+    const invalidDraftValues = new Map();
     const freeDisclosures = new Map();
     const on = (element, event, fn) => {element.addEventListener(event, fn); cleanups.push(() => element.removeEventListener(event, fn));};
     function syncFreeDisclosure(id) {
@@ -945,6 +951,7 @@ module.exports = {
       committed = {...copyCatalog(pricing),savedAt:typeof value.savedAt === 'string' && Number.isFinite(Date.parse(value.savedAt)) ? value.savedAt : null};
       committedFx = pricing.fx; hasSavedState = true;
       priceKeyBindings.clear();
+      invalidDraftValues.clear();
       dirty = false; error = ''; return true;
     }
     function payload(catalog, fx = pricing.fx) {
@@ -976,17 +983,60 @@ module.exports = {
       root.querySelectorAll('[data-export-prices]').forEach(node => {node.disabled = storeLoading || storeLoadFailed || !hasSavedState;node.title = hasSavedState ? 'ส่งออกเฉพาะข้อมูลที่เซฟแล้ว ไม่รวมร่างบนจอ' : 'ยังไม่มีข้อมูลที่เซฟให้ส่งออก';});
       updatePersistenceAccess();
     }
-    function markEdited() {dirty = !sameCatalog(pricing,committed); error = ''; saveStatus();}
+    function knownDisplayKey(key) {return typeof key === 'string' ? knownPoolKeys.get(key) || null : null;}
+    function getPriceState() {return {...pricing,...copyCatalog(pricing),dirty,saving,error,loading:storeLoading,loadFailed:storeLoadFailed,invalidKeys:[...invalidDraftValues.keys()]};}
+    function getDraftPrice(key) {
+      if (destroyed || storeLoading || storeLoadFailed) return null;
+      const displayKey = knownDisplayKey(key);if (displayKey === null) return null;
+      const ownerKey = priceKey(displayKey);
+      return {value:invalidDraftValues.has(displayKey) ? invalidDraftValues.get(displayKey) : Object.hasOwn(pricing.prices,ownerKey) ? pricing.prices[ownerKey] : '',currency:currency(pricing.currencies,ownerKey)};
+    }
+    function notifyPriceDraftChange(reason,key = null) {
+      if (destroyed || typeof options.onPriceDraftChange !== 'function') return;
+      const state = getPriceState(), change = {reason,key,draft:key === null ? null : getDraftPrice(key),dirty:state.dirty,saving:state.saving,error:state.error,loading:state.loading,loadFailed:state.loadFailed,invalidKeys:state.invalidKeys};
+      try {options.onPriceDraftChange(change);} catch (cause) {win.console?.error?.('AAF sales preview price draft callback failed',cause);}
+    }
+    const draftValidationError = 'ยังไม่เซฟ · ตรวจราคาให้มากกว่า 0 หรือเว้นว่าง';
+    function recomputeDirty() {dirty = invalidDraftValues.size > 0 || !sameCatalog(pricing,committed);return dirty;}
+    function markEdited() {recomputeDirty();error = invalidDraftValues.size ? draftValidationError : '';saveStatus();}
+    function rejectDraftPrice(displayKey,value,active = null) {
+      if (displayKey !== null) invalidDraftValues.set(displayKey,typeof value === 'string' || typeof value === 'number' ? value : String(value ?? ''));
+      active?.setAttribute?.('aria-invalid','true');
+      recomputeDirty();error = draftValidationError;saveStatus();notifyPriceDraftChange('invalid',displayKey);return false;
+    }
+    function setDraftPrice(key,value,currencyCode) {
+      if (destroyed || storeLoading || storeLoadFailed) return false;
+      const displayKey = knownDisplayKey(key);if (displayKey === null) return false;
+      if (!['string','number'].includes(typeof value)) return rejectDraftPrice(displayKey,value);
+      const blank = typeof value === 'string' && value.trim() === '';
+      const parsed = blank ? null : positive(value);
+      if ((!blank && parsed === null) || (currencyCode !== undefined && !['THB','USD'].includes(currencyCode))) return rejectDraftPrice(displayKey,value);
+      const ownerKey = priceKey(displayKey), hadPrice = Object.hasOwn(pricing.prices,ownerKey);
+      if (blank) {
+        if (hadPrice) pricing.currencies[ownerKey] = currency(pricing.currencies,ownerKey);
+        delete pricing.prices[ownerKey];
+      } else pricing.prices[ownerKey] = parsed;
+      if (currencyCode !== undefined) pricing.currencies[ownerKey] = currencyCode;
+      invalidDraftValues.delete(displayKey);syncInputs();updateFinancialView();markEdited();notifyPriceDraftChange('draft',displayKey);return true;
+    }
+    function setDraftCurrency(key,currencyCode,active = null) {
+      if (destroyed || storeLoading || storeLoadFailed || !['THB','USD'].includes(currencyCode)) return false;
+      const displayKey = knownDisplayKey(key);if (displayKey === null) return false;
+      pricing.currencies[priceKey(displayKey)] = currencyCode;syncInputs(active);updateFinancialView();markEdited();notifyPriceDraftChange('draft',displayKey);return true;
+    }
     async function savePrices() {
-      await ready;
-      if (storeLoading || storeLoadFailed) {error = 'ยังไม่เซฟ · โหลด catalog ไม่สำเร็จ';saveStatus();return false;}
-      if (saving) return;
-      if ([...root.querySelectorAll('[data-free-price]')].some(input => input.validity.badInput || input.getAttribute('aria-invalid') === 'true')) {error = 'ยังไม่เซฟ · ตรวจราคาให้มากกว่า 0 หรือเว้นว่าง'; saveStatus(); return;}
+      const loaded = await ready;
+      if (destroyed || loaded === false || storeLoading || storeLoadFailed) {error = 'ยังไม่เซฟ · โหลด catalog ไม่สำเร็จ';saveStatus();notifyPriceDraftChange('save-blocked');return false;}
+      if (saving) return false;
+      if (invalidDraftValues.size || [...root.querySelectorAll('[data-free-price]')].some(input => input.validity.badInput || input.getAttribute('aria-invalid') === 'true')) {error = 'ยังไม่เซฟ · ตรวจราคาให้มากกว่า 0 หรือเว้นว่าง';saveStatus();notifyPriceDraftChange('save-blocked');return false;}
       const snapshot = {...copyCatalog(pricing),savedAt:new Date().toISOString()};
-      saving = true; error = ''; saveStatus();
-      try {await enqueue(() => payload(snapshot),value => {committed = snapshot;committedFx = positive(value.privateContent.fx);hasSavedState = true;dirty = !sameCatalog(pricing,committed);});notifyReportSummary('saved');}
+      saving = true; error = ''; saveStatus();notifyPriceDraftChange('save-start');
+      let saved = false;
+      try {await enqueue(() => payload(snapshot),value => {committed = snapshot;committedFx = positive(value.privateContent.fx);hasSavedState = true;recomputeDirty();});saved = true;}
       catch (cause) {error = cause?.code === 'state-too-large' ? 'ยังไม่เซฟ · ราคาและหมายเหตุรวมเกิน 16 KB กรุณาย่อหมายเหตุ' : 'เซฟไม่สำเร็จ · ราคาและหมายเหตุยังไม่ถูกบันทึก กรุณากดใหม่';}
       finally {saving = false; saveStatus();}
+      if (saved) notifyReportSummary('saved');
+      notifyPriceDraftChange(saved ? 'saved' : 'save-failed');return saved;
     }
     function saveFx() {
       if (storeLoading || storeLoadFailed) return;
@@ -1014,10 +1064,10 @@ module.exports = {
       const fx = root.querySelector('[data-fx]');
       if (fx && fx !== active) fx.value = pricing.fx ?? '';
       root.querySelectorAll('[data-free-price]').forEach(input => {
-        const key = priceKey(input.dataset.freePrice);
+        const displayKey = knownDisplayKey(input.dataset.freePrice), key = priceKey(displayKey || input.dataset.freePrice), invalid = displayKey !== null && invalidDraftValues.has(displayKey);
         input.setAttribute('aria-label',input.dataset.priceLabel+' '+(currency(pricing.currencies,key) === 'USD' ? 'USD' : 'บาท')+'ต่อ'+unitName(input.dataset.unit));
         // Preserve the focused raw string (e.g. "2." or "0.05") and its caret.
-        if (input !== active) {input.value = pricing.prices[key] ?? ''; input.setAttribute('aria-invalid','false');}
+        if (input !== active) {input.value = invalid ? invalidDraftValues.get(displayKey) : pricing.prices[key] ?? ''; input.setAttribute('aria-invalid',String(invalid));}
       });
       root.querySelectorAll('[data-free-currency]').forEach(input => {if (input !== active) input.value = currency(pricing.currencies,priceKey(input.dataset.freeCurrency));});
       root.querySelectorAll('[data-thickness-note]').forEach(input => {if (input !== active) input.value = pricing.notesByThickness[input.dataset.thicknessNote] || '';});
@@ -1052,22 +1102,76 @@ module.exports = {
       const owns = key => Object.hasOwn(committed.prices,key) || Object.hasOwn(committed.currencies,key);
       return owns(displayKey) ? displayKey : owns(reverse) ? reverse : displayKey;
     }
-    function inventoryReport(field) {
-      const rows = model.all.stock.rows, quantities = reportQuantities(rows,row => row[field]);
+    function inventoryReport(field, rows = model.all.stock.rows) {
+      const quantities = reportQuantities(rows,row => row[field]), unpricedSpecs = [];
       const unpricedByUnit = reportUnits(), missingFxByUnit = reportUnits();
       let knownValueTHB = 0, pricedSpecCount = 0, valuedSpecCount = 0, totalSpecCount = 0, missingFxSpecCount = 0;
       rows.forEach(row => {
         const qty = Number(row[field]);if (!(qty > 0)) return;
         totalSpecCount++;
         const key = committedPriceKey(specKey(row)), price = positive(committed.prices[key]);
-        if (price === null) {addReportUnit(unpricedByUnit,row.unit,qty);return;}
+        if (price === null) {addReportUnit(unpricedByUnit,row.unit,qty);unpricedSpecs.push({key:specKey(row),t:row.t,grade:row.grade,w:row.w,l:row.l,unit:row.unit,qty});return;}
         pricedSpecCount++;
         const code = currency(committed.currencies,key), fx = code === 'USD' ? positive(committedFx) : 1;
         if (fx === null) {missingFxSpecCount++;addReportUnit(missingFxByUnit,row.unit,qty);return;}
         knownValueTHB += qty*price*fx;valuedSpecCount++;
       });
       const complete = valuedSpecCount === totalSpecCount;
-      return {...quantities,valueTHB:complete ? knownValueTHB : null,knownValueTHB,coverage:{complete,pricedSpecCount,valuedSpecCount,totalSpecCount,missingFxSpecCount,unpricedByUnit,missingFxByUnit}};
+      return {...quantities,valueTHB:complete ? knownValueTHB : null,knownValueTHB,unpricedSpecs,coverage:{complete,pricedSpecCount,valuedSpecCount,totalSpecCount,missingFxSpecCount,unpricedByUnit,missingFxByUnit}};
+    }
+    // Project the existing readiness allocation, never reserve a second time or
+    // value stock with invoice money. Reject stale/incomplete readiness evidence.
+    function inventoryPartition() {
+      try {
+        const keyOf = host.AafAllModel.exactSpecKey, epsilon = 1e-7;
+        const near = (a,b) => {if (!Number.isFinite(a)||!Number.isFinite(b)||Math.abs(a-b)>epsilon) throw new Error('allocation mismatch');};
+        const rows = model.all.stock.rows.map(row => ({...row,soldStock:0,otherStock:0,soldShortage:0,otherShortage:0,soldDemand:0,otherDemand:0}));
+        const pools = new Map(rows.map(row => [keyOf(row),row])), remaining = new Map(rows.map(row => [keyOf(row),row.physical]));
+        const statusOrder = host.AafAllModel.constants.STATUS_ORDER;
+        const allocations = model.allocationRows.map((row,index) => ({row,index})).filter(({row}) => row.status !== 'loaded');
+        allocations.sort((a,b) => {
+          const stage=statusOrder.indexOf(a.row.status)-statusOrder.indexOf(b.row.status);if(stage)return stage;
+          const ready=row=>String(row.productStatus||'').trim().replace(/\s+/g,' ')==='พร้อมโหลด'?0:1;
+          if(a.row.status==='forecast'&&ready(a.row)!==ready(b.row))return ready(a.row)-ready(b.row);
+          return a.row.sourceIndex-b.row.sourceIndex||a.index-b.index;
+        });
+        const seen = new Set(), reservedStatusPools = new Map();
+        allocations.forEach(({row}) => {
+          const parts=options.readiness?.byAllocationId?.[row.id]?.parts, key=keyOf(row), pool=pools.get(key);
+          if(seen.has(row.id)||!pool||!Array.isArray(parts)||parts.length!==1)throw new Error('missing allocation');
+          seen.add(row.id);const part=parts[0], available=remaining.get(key), allocated=Math.min(row.qty,available);
+          if(part.allocationId!==row.id||part.key!==key||keyOf(part)!==key)throw new Error('stale allocation');
+          near(part.requested,row.qty);near(part.availableBefore,available);near(part.allocated,allocated);
+          near(part.shortage,row.qty-allocated);near(part.remaining,available-allocated);
+          const prefix=row.status==='paid'?'sold':'other';
+          pool[prefix+'Stock']+=part.allocated;pool[prefix+'Shortage']+=part.shortage;pool[prefix+'Demand']+=part.requested;
+          if (prefix === 'other') {
+            if (!reservedStatusPools.has(row.status)) reservedStatusPools.set(row.status,new Map());
+            const statusPool = reservedStatusPools.get(row.status);
+            if (!statusPool.has(key)) statusPool.set(key,{...pool,statusStock:0,statusShortage:0,statusDemand:0});
+            const statusRow = statusPool.get(key);statusRow.statusStock+=part.allocated;statusRow.statusShortage+=part.shortage;statusRow.statusDemand+=part.requested;
+          }
+          remaining.set(key,part.remaining);
+        });
+        rows.forEach(row => {
+          near(row.soldStock+row.otherStock+row.free,row.physical);
+          near(row.soldDemand+row.otherDemand,row.reserved);
+          near(row.soldShortage+row.otherShortage,row.shortage);
+          const statusRows = [...reservedStatusPools.values()].map(pool => pool.get(keyOf(row))).filter(Boolean);
+          near(statusRows.reduce((sum,item) => sum+item.statusStock,0),row.otherStock);
+          near(statusRows.reduce((sum,item) => sum+item.statusShortage,0),row.otherShortage);
+          near(statusRows.reduce((sum,item) => sum+item.statusDemand,0),row.otherDemand);
+        });
+        const withProductionSpecs = (field,report) => ({...report,productionSpecs:rows.filter(row => row[field] > 0).map(row => ({key:specKey(row),t:row.t,grade:row.grade,w:row.w,l:row.l,unit:row.unit,qty:row[field]}))});
+        const byStatus = Object.fromEntries([...reservedStatusPools].map(([status,pool]) => {
+          const statusRows = [...pool.values()];
+          const withStatusProductionSpecs = (field,report) => ({...report,productionSpecs:statusRows.filter(row => row[field] > 0).map(row => ({key:specKey(row),t:row.t,grade:row.grade,w:row.w,l:row.l,unit:row.unit,qty:row[field]}))});
+          return [status,{inStock:inventoryReport('statusStock',statusRows),toProduce:withStatusProductionSpecs('statusShortage',inventoryReport('statusShortage',statusRows)),demand:inventoryReport('statusDemand',statusRows)}];
+        }));
+        return {status:'verified',basis:'committed-stock-catalog',sold:{inStock:inventoryReport('soldStock',rows),toProduce:withProductionSpecs('soldShortage',inventoryReport('soldShortage',rows)),demand:inventoryReport('soldDemand',rows)},reserved:{inStock:inventoryReport('otherStock',rows),toProduce:withProductionSpecs('otherShortage',inventoryReport('otherShortage',rows)),demand:inventoryReport('otherDemand',rows),byStatus}};
+      } catch {
+        return {status:'unavailable',reason:'ยอดจัดสรรไม่ตรงกับข้อมูลหัวข้อ 02 · ยังไม่แสดงตัวเลขแยกกลุ่ม'};
+      }
     }
     function soldReport(rows) {
       const quantities = reportQuantities(rows,row => row.qty), byCurrency = {};
@@ -1085,7 +1189,7 @@ module.exports = {
     function getReportSummary() {
       const loadedRows = model.salesRows.filter(row => row.status === 'loaded');
       const paidUnloadedRows = model.salesRows.filter(row => row.status === 'paid');
-      return {version:1,catalog:{hasSavedCatalog:hasSavedState,fxThbPerUsd:positive(committedFx),savedAt:committed.savedAt || null},physical:inventoryReport('physical'),reserved:inventoryReport('reserved'),free:inventoryReport('free'),sold:{...soldReport([...loadedRows,...paidUnloadedRows]),loaded:soldReport(loadedRows),paidUnloaded:soldReport(paidUnloadedRows)}};
+      return {version:2,catalog:{hasSavedCatalog:hasSavedState,fxThbPerUsd:positive(committedFx),savedAt:committed.savedAt || null},partition:inventoryPartition(),physical:inventoryReport('physical'),reserved:inventoryReport('reserved'),free:inventoryReport('free'),sold:{...soldReport([...loadedRows,...paidUnloadedRows]),loaded:soldReport(loadedRows),paidUnloaded:soldReport(paidUnloadedRows)}};
     }
     function notifyReportSummary(reason) {
       if (destroyed) return;
@@ -1210,8 +1314,8 @@ module.exports = {
     function freeMarkup(inventory, scopeId, thicknesses) {
       const rows = inventory.rows.filter(row => row.free > 0);
       const controls = saveToolbar();
-      if (!rows.length) return controls+thicknessNotesMarkup(thicknesses || inventory.rows.map(row => row.t),scopeId)+'<span class="sp-empty">ไม่มี Free คงเหลือ</span>';
-      return controls+'<div class="sp-table-scroll"><table class="sp-stock-table sp-free-table"><caption>ราคาต่อแผ่นจริง / ชิ้นแถบ · เลือกบาทหรือ USD · เว้นว่าง = ยังไม่ทราบราคา · หมายเหตุใช้ร่วมกันในความหนาเดียวกัน'+historicalSourceMarkup(rows)+'</caption><thead><tr><th scope="col">หนา (มม.)</th><th scope="col">เกรด</th><th scope="col">ขนาด (มม.)</th><th scope="col">Free</th><th scope="col">ราคาต่อหน่วย</th><th scope="col">หมายเหตุ</th><th scope="col">มูลค่าโดยประมาณ (บาท)</th></tr></thead><tbody>'+rows.map(row => {
+      if (!rows.length) return controls+thicknessNotesMarkup(thicknesses || inventory.rows.map(row => row.t),scopeId)+'<span class="sp-empty">ไม่มีสเปกที่มี Free มากกว่า 0</span>';
+      return controls+'<div class="sp-table-scroll"><table class="sp-stock-table sp-free-table"><caption>เฉพาะสเปกที่มี Free มากกว่า 0 · ราคาต่อแผ่นจริง / ชิ้นแถบ · เลือกบาทหรือ USD · เว้นว่าง = ยังไม่ทราบราคา'+historicalSourceMarkup(rows)+'</caption><thead><tr><th scope="col">หนา (มม.)</th><th scope="col">เกรด</th><th scope="col">ขนาด (มม.)</th><th scope="col">Free</th><th scope="col">ราคาต่อหน่วย</th><th scope="col">หมายเหตุ</th><th scope="col">มูลค่า Free โดยประมาณ (บาท)</th></tr></thead><tbody>'+rows.map(row => {
         const key = specKey(row), label = 'ราคาประเมิน '+thick(row.t)+' มม. '+row.grade+' '+row.w+' × '+row.l;
         const noteId = scopeId+'-note-'+encodeURIComponent(key).replaceAll('%','_');
         return '<tr><td>'+esc(thick(row.t))+'</td><td>'+esc(row.grade)+'</td><td>'+fmt(row.w)+' × '+fmt(row.l)+'</td><td>'+fmt(row.free)+' '+esc(unitName(row.unit))+'</td><td><div class="sp-price-controls"><input class="sp-number-input" type="number" min="0.0000001" step="any" inputmode="decimal" placeholder="ใส่ราคา" data-unit="'+esc(row.unit)+'" data-price-label="'+esc(label)+'" data-free-price="'+esc(key)+'"><select class="sp-currency-select cursor-interaction" aria-label="สกุลเงิน '+esc(label)+'" data-free-currency="'+esc(key)+'"><option value="THB">บาท</option><option value="USD">USD</option></select></div>'+historicalPriceMarkup(key)+'</td><td class="sp-free-note-cell"><textarea id="'+esc(noteId)+'" class="sp-thickness-note" rows="2" data-thickness-note="'+esc(thicknessKey(row.t))+'" aria-label="หมายเหตุความหนา '+esc(thick(row.t))+' มม. '+esc(row.grade)+' '+row.w+' × '+row.l+'" placeholder="ใส่หมายเหตุความหนานี้"></textarea></td><td class="sp-free-value-cell" data-free-row-value="'+esc(key)+'"></td></tr>';
@@ -1404,7 +1508,7 @@ module.exports = {
       const valuations = new Map();
       const getValuation = id => {if (!valuations.has(id)) valuations.set(id,valuation(scopes.get(id).inventory.rows)); return valuations.get(id);};
       root.querySelectorAll('[data-free-value]').forEach(node => {const value = getValuation(node.dataset.freeValue);node.textContent = value.value !== null ? bahtText(value.value) : value.valued ? bahtText(value.partial)+' (บางส่วน)' : value.missingFx ? 'รออัตราแลกเปลี่ยน' : 'รอใส่ราคา';});
-      root.querySelectorAll('[data-free-coverage]').forEach(node => {const value = getValuation(node.dataset.freeCoverage);node.textContent = 'ใส่ราคาแล้ว '+value.priced+' / '+value.total+' สเปก'+(value.missingFx ? ' · รออัตรา USD '+value.missingFx+' สเปก' : '')+(value.value === null ? ' · ยังไม่ใช่มูลค่ารวม' : '');});
+      root.querySelectorAll('[data-free-coverage]').forEach(node => {const value = getValuation(node.dataset.freeCoverage);node.textContent = 'ความครบมูลค่า Free · ใส่ราคาแล้ว '+value.priced+' / '+value.total+' สเปก'+(value.missingFx ? ' · รออัตรา USD '+value.missingFx+' สเปก' : '')+(value.value === null ? ' · ยังไม่ใช่มูลค่ารวม' : '');});
       root.querySelectorAll('[data-free-row-value]').forEach(node => {const key = node.dataset.freeRowValue, value = rowValue(rowLookup.get(key));node.textContent = positive(pricing.prices[priceKey(key)]) === null ? 'รอใส่ราคา' : value === null ? 'รออัตราแลกเปลี่ยน' : bahtText(value,2);});
       root.querySelector('[data-fx-status]').textContent = pricing.fx === null ? 'กรอกอัตรามากกว่า 0 เพื่อคำนวณเงินบาท' : pricing.fx === fxReference.rate ? 'ใช้อัตราอ้างอิง · ไม่ใช่เรทสดอัตโนมัติ' : 'ใช้อัตราที่กรอกเอง · ไม่ใช่อัตรารับเงินจริง';
     }
@@ -1444,15 +1548,17 @@ module.exports = {
       if (input.matches('[data-fx]')) {pricing.fx = positive(input.value);input.setAttribute('aria-invalid',String(pricing.fx === null));updateFinancialView();saveFx();return;}
       if (input.matches('[data-thickness-note]')) {const key = thicknessKey(input.dataset.thicknessNote);if (key === null) return;if (input.value === '') delete pricing.notesByThickness[key];else pricing.notesByThickness[key] = input.value;syncInputs(input);markEdited();return;}
       if (!input.matches('[data-free-price]')) return;
-      const value = positive(input.value);input.setAttribute('aria-invalid',String(input.validity.badInput || (input.value !== '' && value === null)));
-      const key = priceKey(input.dataset.freePrice);
-      if (value === null) {
-        if (Object.hasOwn(pricing.prices,key)) pricing.currencies[key] = currency(pricing.currencies,key);
-        delete pricing.prices[key];
-      } else pricing.prices[key] = value;
-      syncInputs(input);updateFinancialView();markEdited();
+      const displayKey = knownDisplayKey(input.dataset.freePrice);
+      if (input.validity.badInput) {rejectDraftPrice(displayKey,input.value,input);return;}
+      const blank = input.value === '', value = blank ? null : positive(input.value);
+      if (!blank && value === null) {rejectDraftPrice(displayKey,input.value,input);return;}
+      if (displayKey === null) return;
+      const key = priceKey(displayKey), hadPrice = Object.hasOwn(pricing.prices,key);
+      if (blank) {if (hadPrice) pricing.currencies[key] = currency(pricing.currencies,key);delete pricing.prices[key];}
+      else pricing.prices[key] = value;
+      invalidDraftValues.delete(displayKey);input.setAttribute('aria-invalid','false');syncInputs(input);updateFinancialView();markEdited();notifyPriceDraftChange('draft',displayKey);
     });
-    on(root,'change',event => {const input = event.target;if (storeLoading || storeLoadFailed || !input.matches('[data-free-currency]')) return;pricing.currencies[priceKey(input.dataset.freeCurrency)] = input.value === 'USD' ? 'USD' : 'THB';syncInputs(input);updateFinancialView();markEdited();});
+    on(root,'change',event => {const input = event.target;if (storeLoading || storeLoadFailed || !input.matches('[data-free-currency]')) return;setDraftCurrency(input.dataset.freeCurrency,input.value === 'USD' ? 'USD' : 'THB',input);});
     on(root,'click',event => {
       const save = event.target.closest('[data-save-prices]');if (save) {savePrices();return;}
       const exporter = event.target.closest('[data-export-prices]');if (exporter) {exportSaved(exporter);return;}
@@ -1463,15 +1569,16 @@ module.exports = {
       }
     });
     if (!externalStore) on(win,'openai:set_globals',event => {
-      if (event.detail?.globals?.widgetState && !writeCount && !queuedWrites && !writeFailed && !dirty && !saving && !error && readState(event.detail.globals.widgetState)) {syncInputs();updateFinancialView();saveStatus();}
+      if (event.detail?.globals?.widgetState && !writeCount && !queuedWrites && !writeFailed && !dirty && !saving && !error && readState(event.detail.globals.widgetState)) {syncInputs();updateFinancialView();saveStatus();notifyPriceDraftChange('load');}
     });
     ready = Promise.resolve(ready).then(result => {
-      if (destroyed || result === false || storeLoadFailed) return false;
-      notifyReportSummary('ready');return true;
+      if (destroyed) return false;
+      if (result === false || storeLoadFailed) {notifyPriceDraftChange('load-failed');return false;}
+      notifyReportSummary('ready');notifyPriceDraftChange('load');return true;
     });
     // Mounting never writes state; changes are handled only by explicit interactions.
     function destroy() {destroyed = true;cleanups.forEach(fn => fn());}
-    return {destroy,ready,getPriceState:() => ({...pricing,...copyCatalog(pricing),dirty,saving}),getReportSummary,savePrices,exportSaved};
+    return {destroy,ready,getPriceState,getDraftPrice,setDraftPrice,getReportSummary,savePrices,exportSaved};
   }
   host.mountAllThickness = mountAllThickness;
   if (typeof module !== 'undefined' && module.exports) module.exports = mountAllThickness;

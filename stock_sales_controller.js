@@ -3,10 +3,11 @@
   'use strict';
   const API='https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/stock';
   const assetBase=new URL('.',document.currentScript.src);
-  let host=null,view=null,session='',catalogRevision=0,pending=null,generation=0,reportSummary=null;
+  let host=null,view=null,viewGeneration=0,session='',catalogRevision=0,pending=null,generation=0,reportSummary=null;
   const token=()=>{try{const s=JSON.parse(sessionStorage.getItem('aaf_user'));return s?.stockSessionToken||s?.gradeBridgeSessionToken||s?.bridgeSessionToken||'';}catch{return '';}};
   const current=(version,currentHost,auth)=>version===generation&&currentHost===host&&auth===session&&auth===token();
   function publishReportSummary(summary){reportSummary=summary;window.AAFStockSummary?.setSalesSummary?.(summary);}
+  function publishPriceDraftChange(change){window.AAFStockSummary?.syncPriceDrafts?.(change);}
   async function request(body=null,catalogOnly=false){
     const auth=token();if(!auth)throw new Error('กรุณาเข้าสู่ระบบ AAF ก่อนดูยอดขาย');
     const response=await fetch(API+(body?'':'?view=salesPreview'+(catalogOnly?'&catalogOnly=1':'')),{method:body?'POST':'GET',cache:'no-store',headers:{Authorization:'Bearer '+auth,...(body?{'Content-Type':'text/plain;charset=UTF-8'}:{})},...(body?{body:JSON.stringify(body)}:{})});
@@ -17,7 +18,7 @@
   function shell(){
     host=element('section',{id:'stock-sales-preview-host'});host.setAttribute('aria-label','พรีวิวฝ่ายขายและสต๊อกเดิม');
     // Native open shadow root preserves CSS isolation, unlike an origin-changing iframe.
-    const shadow=host.attachShadow({mode:'open'}),css=element('link',{rel:'stylesheet',href:new URL('stock_sales_preview.css?v=20261002-sales-block',assetBase).href});
+    const shadow=host.attachShadow({mode:'open'}),css=element('link',{rel:'stylesheet',href:new URL('stock_sales_preview.css?v=20261002-stock-partition-prices',assetBase).href});
     const base=element('style',{},':host{display:block;background:#fff;color:#172b42;font-family:Prompt,Arial,sans-serif}*{box-sizing:border-box}.preview-state{padding:12px;font-size:13px}.preview-import{padding:18px;border:1px solid #d4dee7;border-radius:10px;background:#f8fafc;font-size:14px}.preview-import input{display:block;margin:10px 0;max-width:100%}.preview-import button{border:0;border-radius:8px;padding:10px 14px;background:#0d7669;color:#fff;font:inherit;cursor:pointer}.preview-import button:disabled{opacity:.5}');
     const state=element('p',{className:'preview-state'},'กำลังโหลดพรีวิวฝ่ายขายและราคาที่เซฟไว้…');state.setAttribute('role','status');
     const content=element('div',{id:'sales-preview-content'});shadow.append(css,base,state,content);return {state,content};
@@ -63,9 +64,9 @@
     }};
     // Both grouping and financial arithmetic remain in the original model/view.
     const model=window.AafAllModel.buildModel(p.salesRows,p.stockRows,p.modelOptions);
-    const mountedView=window.mountAllThickness(root,model,{...p.options,store,persistenceLabel:'เก็บราคา สกุลเงิน และหมายเหตุในระบบ · ไม่เปลี่ยนยอดสต๊อกหรือใบขาย',onReportSummary:summary=>{if(current(version,currentHost,auth))publishReportSummary(summary);}});view=mountedView;
-    if(mountedView.ready&&(await mountedView.ready)===false){mountedView.destroy();if(view===mountedView)view=null;throw new Error('โหลดราคาที่เซฟไว้ไม่สำเร็จ · ยังไม่แสดงยอดสรุป');}
-    if(!current(version,currentHost,auth)){mountedView.destroy();if(view===mountedView)view=null;return;}
+    const mountedView=window.mountAllThickness(root,model,{...p.options,store,persistenceLabel:'เก็บราคา สกุลเงิน และหมายเหตุในระบบ · ไม่เปลี่ยนยอดสต๊อกหรือใบขาย',onReportSummary:summary=>{if(current(version,currentHost,auth)&&view===mountedView)publishReportSummary(summary);},onPriceDraftChange:change=>{if(current(version,currentHost,auth)&&view===mountedView)publishPriceDraftChange(change);}});view=mountedView;viewGeneration=version;
+    if(mountedView.ready&&(await mountedView.ready)===false){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}throw new Error('โหลดราคาที่เซฟไว้ไม่สำเร็จ · ยังไม่แสดงยอดสรุป');}
+    if(!current(version,currentHost,auth)){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}return;}
     if(mountedView.getReportSummary)publishReportSummary(mountedView.getReportSummary());
     message(state,'');state.hidden=true;
   }
@@ -73,9 +74,20 @@
     if(!slot)return;
     const auth=token();
     if(host&&session===auth){slot.replaceChildren(host);return pending;}
-    if(view)view.destroy();view=null;session=auth;publishReportSummary(null);const version=++generation,{state,content}=shell(),currentHost=host;slot.replaceChildren(currentHost);
+    if(view)view.destroy();view=null;viewGeneration=0;session=auth;publishReportSummary(null);const version=++generation,{state,content}=shell(),currentHost=host;slot.replaceChildren(currentHost);
     pending=request().then(data=>current(version,currentHost,auth)?mount(data,content,state,version,currentHost,auth):undefined).catch(e=>{if(current(version,currentHost,auth))message(state,e.message,true);});return pending;
   }
-  window.AAFSalesPreview={attach,isDirty:()=>!!view?.getPriceState().dirty,isSaving:()=>!!view?.getPriceState().saving,getReportSummary:()=>session===token()?reportSummary:null};
+  const sameSessionView=()=>session&&session===token()&&viewGeneration===generation?view:null;
+  const editableView=()=>{const active=sameSessionView(),state=active?.getPriceState?.();return active&&state&&!state.loading&&!state.loadFailed?active:null;};
+  window.AAFSalesPreview={
+    attach,
+    isDirty:()=>!!sameSessionView()?.getPriceState?.().dirty,
+    isSaving:()=>!!sameSessionView()?.getPriceState?.().saving,
+    getReportSummary:()=>session===token()?reportSummary:null,
+    getPriceState:()=>sameSessionView()?.getPriceState?.() || null,
+    getDraftPrice:key=>editableView()?.getDraftPrice?.(key) || null,
+    setDraftPrice:(key,value,currency)=>editableView()?.setDraftPrice?.(key,value,currency) === true,
+    savePrices:async()=>{const active=editableView(),version=generation,auth=session;if(!active?.savePrices)return false;try{const saved=await active.savePrices();return saved===true&&active===sameSessionView()&&version===generation&&auth===session&&auth===token();}catch{return false;}},
+  };
   window.addEventListener('beforeunload',event=>{if(view?.getPriceState().dirty||view?.getPriceState().saving){event.preventDefault();event.returnValue='';}});
 })();

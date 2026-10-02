@@ -48,6 +48,7 @@
 #sales-stock-preview-16 .sp-number-input{width:112px;max-width:100%;padding:5px 7px;border:1px solid var(--sp-line);border-radius:5px;background:var(--sp-surface);color:var(--sp-text);font:inherit;text-align:right;font-variant-numeric:tabular-nums}
 #sales-stock-preview-16 .sp-number-input[aria-invalid="true"]{border-color:var(--sp-shortage)}
 #sales-stock-preview-16 .sp-price-controls{display:flex;align-items:center;gap:5px}
+#sales-stock-preview-16 .sp-free-table .sp-price-controls{flex-wrap:wrap}
 #sales-stock-preview-16 .sp-currency-select{padding:5px 6px;border:1px solid var(--sp-line);border-radius:5px;background:var(--sp-surface);color:var(--sp-text);font:inherit;min-width:71px}
 #sales-stock-preview-16 .sp-save-prices{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:10px}
 #sales-stock-preview-16 .sp-save-prices button{padding:6px 12px;border:1px solid var(--sp-line);border-radius:5px;background:var(--sp-text);color:var(--sp-surface);font:inherit;font-weight:500}

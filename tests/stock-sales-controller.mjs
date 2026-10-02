@@ -26,16 +26,16 @@ function descendants(root){return[root,...root.children.flatMap(descendants),...
 function find(root,predicate){return descendants(root).find(predicate);}
 
 function runtime(){
-  const fetchQueue=[],fetchCalls=[],mounts=[],builds=[],windowListeners={},summaries=[];
+  const fetchQueue=[],fetchCalls=[],mounts=[],builds=[],windowListeners={},summaries=[],draftSyncs=[];
   let user=null;
   const sessionStorage={getItem:key=>key==='aaf_user'&&user?JSON.stringify(user):null};
   const document={currentScript:{src:'https://public.example/assets/stock_sales_controller.js'},createElement:tag=>new FakeElement(tag)};
   const window={
-    AAFStockSummary:{setSalesSummary(value){summaries.push(value);}},
+    AAFStockSummary:{setSalesSummary(value){summaries.push(value);},syncPriceDrafts(value){draftSyncs.push(value);}},
     AafAllModel:{buildModel(salesRows,stockRows,modelOptions){const model={salesRows,stockRows,modelOptions};builds.push(model);return model;}},
     mountAllThickness(root,model,options){
-      const state={dirty:false,saving:false};
-      const controller={ready:Promise.resolve(),destroyed:false,destroy(){this.destroyed=true;},getPriceState(){return state;},getReportSummary(){return {label:options.metadata.monthLabel,saved:true};}};
+      const state={dirty:false,saving:false,loading:false,loadFailed:false,error:'',invalidKeys:[]},drafts=new Map();
+      const controller={ready:Promise.resolve(),destroyed:false,saveResult:true,saveCalls:0,destroy(){this.destroyed=true;},getPriceState(){return state;},getDraftPrice(key){return drafts.get(key)||null;},setDraftPrice(key,value,currency='THB'){drafts.set(key,{value,currency});state.dirty=true;return true;},async savePrices(){this.saveCalls++;return this.saveResult;},getReportSummary(){return {label:options.metadata.monthLabel,saved:true};}};
       mounts.push({root,model,options,state,controller});return controller;
     },
     addEventListener(name,fn){windowListeners[name]=fn;},
@@ -50,7 +50,7 @@ function runtime(){
   const context=vm.createContext({window,document,sessionStorage,fetch,URL,JSON,Promise,Error,console});
   vm.runInContext(source,context,{filename:'stock_sales_controller.js'});
   return{
-    api:window.AAFSalesPreview,fetchCalls,mounts,builds,windowListeners,summaries,
+    api:window.AAFSalesPreview,fetchCalls,mounts,builds,windowListeners,summaries,draftSyncs,
     slot:()=>new FakeElement('main'),
     setToken(token){user=token?{stockSessionToken:token}:null;},
     enqueue(value){fetchQueue.push(value);},
@@ -74,6 +74,7 @@ assert(!source.includes('SYNTHETIC-')&&!source.includes('"salesRows":['));
   await r.api.attach(slot);
   assert.equal(r.fetchCalls.length,0,'missing session never starts a private request');
   assert.match(find(slot,node=>node.className==='preview-state').textContent,/เข้าสู่ระบบ/);
+  assert.equal(r.api.getPriceState(),null);assert.equal(r.api.getDraftPrice('known'),null);assert.equal(r.api.setDraftPrice('known',2,'THB'),false);assert.equal(await r.api.savePrices(),false);
 }
 
 // Initial attach mounts exactly once, never writes, uses the open shadow CSS, and reattach preserves the live draft.
@@ -83,9 +84,17 @@ assert(!source.includes('SYNTHETIC-')&&!source.includes('"salesRows":['));
   assert.equal(r.mounts.length,1);assert.equal(r.fetchCalls.length,1);assertAuthenticated(r.fetchCalls,'token-A');
   const host=first.children[0];assert.equal(host.shadowMode,'open');
   const stylesheet=find(host,node=>node.tagName==='LINK');
-  assert.equal(stylesheet.rel,'stylesheet');assert.equal(stylesheet.href,'https://public.example/assets/stock_sales_preview.css?v=20261002-sales-block');
+  assert.equal(stylesheet.rel,'stylesheet');assert.equal(stylesheet.href,'https://public.example/assets/stock_sales_preview.css?v=20261002-stock-partition-prices');
   assert.equal(r.mounts[0].root.id,'sales-stock-preview-16');
   assert.equal(r.fetchCalls.filter(call=>call.init.method==='POST').length,0,'initial mount never writes a catalog');
+  assert.equal(r.api.getPriceState().loading,false);assert.equal(r.api.getPriceState().loadFailed,false);
+  assert.equal(r.api.setDraftPrice('known',2.75,'USD'),true);assert.equal(r.api.getDraftPrice('known').value,2.75);assert.equal(r.api.getDraftPrice('known').currency,'USD');
+  assert.equal(await r.api.savePrices(),true);assert.equal(r.mounts[0].controller.saveCalls,1);
+  r.mounts[0].controller.saveResult=false;assert.equal(await r.api.savePrices(),false,'view save failure is returned to the report button');
+  const syncBefore=r.draftSyncs.length;r.mounts[0].options.onPriceDraftChange({reason:'draft',key:'known'});
+  assert.equal(r.draftSyncs.length,syncBefore+1);assert.equal(r.draftSyncs.at(-1).reason,'draft');
+  r.mounts[0].state.loading=true;assert.equal(r.api.setDraftPrice('known',3,'THB'),false);assert.equal(r.api.getDraftPrice('known'),null);assert.equal(await r.api.savePrices(),false);r.mounts[0].state.loading=false;
+  r.mounts[0].state.loadFailed=true;r.mounts[0].state.error='load failed';assert.equal(r.api.getPriceState().error,'load failed');assert.equal(r.api.setDraftPrice('known',3,'THB'),false);r.mounts[0].state.loadFailed=false;
   r.mounts[0].state.dirty=true;
   await r.api.attach(second);
   assert.equal(r.mounts.length,1,'same-session reattach reuses the existing view');
@@ -95,9 +104,19 @@ assert(!source.includes('SYNTHETIC-')&&!source.includes('"salesRows":['));
   r.mounts[0].options.onReportSummary({label:'SAVED',saved:true});
   assert.deepEqual(r.api.getReportSummary(),{label:'SAVED',saved:true});
   assert.equal(r.summaries.at(-1).label,'SAVED');
-  r.setToken('token-B');assert.equal(r.api.getReportSummary(),null,'changed token never returns prior catalog summary');
+  r.setToken('token-B');assert.equal(r.api.getReportSummary(),null,'changed token never returns prior catalog summary');assert.equal(r.api.getPriceState(),null);assert.equal(r.api.setDraftPrice('known',4,'THB'),false);
+  const staleSyncCount=r.draftSyncs.length;r.mounts[0].options.onPriceDraftChange({reason:'draft',key:'known'});assert.equal(r.draftSyncs.length,staleSyncCount,'late old-token price callback cannot repaint report inputs');
   r.mounts[0].options.onReportSummary({label:'STALE',saved:true});
   assert.equal(r.summaries.at(-1).label,'SAVED','late old-token callback cannot repaint top KPIs');
+}
+
+// A public save that finishes after a token/view switch is never acknowledged by the replacement session.
+{
+  const r=runtime(),slot=r.slot(),gate=deferred();r.setToken('public-save-old');r.enqueue(response('PUBLIC-OLD',{catalogRevision:4,revision:50}));await r.api.attach(slot);
+  const oldController=r.mounts[0].controller;oldController.savePrices=()=>gate.promise;
+  const saving=r.api.savePrices();r.setToken('public-save-new');r.enqueue(response('PUBLIC-NEW',{catalogRevision:8,revision:60}));await r.api.attach(slot);
+  gate.resolve(true);assert.equal(await saving,false,'old view save result fails closed after session replacement');
+  assert.equal(r.api.getPriceState().loadFailed,false);assert.equal(r.builds.at(-1).salesRows[0].id,'sale-PUBLIC-NEW');
 }
 
 // Save reads the latest global revision, performs CAS on the mounted catalog revision, and rejects stale catalogs before POST.
