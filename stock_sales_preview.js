@@ -73,6 +73,7 @@ const EXACT_LOADED_PRODUCT_VALUES = new Set([
 const SOURCE_STATUS_MAP = new Map([
   ['โหลดแล้ว', 'loaded'],
   ['LOADED', 'loaded'],
+  ['ออก INV', 'loaded'],
   ['เปิด PI', 'pi'],
   ['PI', 'pi'],
   ['มีเรือ', 'vessel'],
@@ -301,10 +302,10 @@ function sourceStatus(value) {
 
 function classifyStatus(row, paidOverrideRefs, paidPaymentValues) {
   const product = upperText(row.productStatus);
-  const productWasProvided = product !== '';
-  const loaded = productWasProvided
-    ? EXACT_LOADED_PRODUCT_VALUES.has(product)
-    : sourceStatus(row.sourceStatus) === 'loaded';
+  // Page09 and the reservation API classify an issued invoice as loaded even
+  // when an older per-product selector still says ready. Preserve both fields.
+  const loaded = EXACT_LOADED_PRODUCT_VALUES.has(product)
+    || sourceStatus(row.sourceStatus) === 'loaded';
 
   if (loaded) return 'loaded';
   if (!row.isDeposit && (paidOverrideRefs.has(row.ref) || paidPaymentValues.has(normalizedText(row.payment)))) {
