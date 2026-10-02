@@ -5,6 +5,7 @@
   const assetBase=new URL('.',document.currentScript.src);
   let host=null,view=null,viewGeneration=0,session='',catalogRevision=0,pending=null,generation=0,reportSummary=null;
   let readOnly=false,salesMode=false,stockRevision=null,mountedRevision=null,mountedSalesMode=false,loadFailed=false,statusNode=null;
+  let fxTimer=null;
   const token=()=>{if(window.AAFStockAccess)return window.AAFStockAccess.token();if(window.AAFStockAccessRequired)return '';try{const s=JSON.parse(sessionStorage.getItem('aaf_user'));return s?.stockSessionToken||s?.gradeBridgeSessionToken||s?.bridgeSessionToken||'';}catch{return '';}};
   const current=(version,currentHost,auth)=>version===generation&&currentHost===host&&auth===session&&auth===token();
   function publishReportSummary(summary){reportSummary=mountedRevision===stockRevision?summary:null;window.AAFStockSummary?.setSalesSummary?.(reportSummary);}
@@ -14,6 +15,26 @@
     const auth=token();if(!auth)throw new Error('กรุณาเข้าสู่ระบบ AAF ก่อนดูยอดขาย');
     const response=await fetch(API+(body?'':'?view='+(salesMode?'salesReport':'salesPreview')+(catalogOnly?'&catalogOnly=1':'')),{method:body?'POST':'GET',cache:'no-store',headers:{Authorization:'Bearer '+auth,...(body?{'Content-Type':'text/plain;charset=UTF-8'}:{})},...(body?{body:JSON.stringify(body)}:{})});
     const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'โหลดพรีวิวไม่สำเร็จ');return data;
+  }
+  function startAutomaticFx(active,version,currentHost,auth){
+    if(typeof active.setAutomaticFx!=='function')return;
+    let busy=false;
+    const safe=()=>{const price=active.getPriceState?.();return !loadFailed&&!readOnly&&current(version,currentHost,auth)&&view===active&&!price?.dirty&&!price?.saving&&!document.activeElement?.matches?.('input,textarea,select')&&!currentHost.shadowRoot?.activeElement?.matches?.('input,textarea,select');};
+    const refresh=async()=>{
+      // Do not rebuild summary cards under a price/notes draft or its focused input.
+      if(busy||!safe()||document.visibilityState==='hidden')return;
+      busy=true;
+      try{
+        const response=await fetch(API+'?view=exchangeRate',{cache:'no-store',headers:{Authorization:'Bearer '+auth}});
+        const data=await response.json();
+        if(!response.ok||!data.ok)throw new Error('โหลดเรทไม่สำเร็จ');
+        if(safe())active.setAutomaticFx(data.exchangeRate);
+      }catch{
+        if(safe())active.setAutomaticFx({status:'unavailable'});
+      }finally{busy=false;}
+    };
+    refresh();
+    fxTimer=window.setInterval?.(refresh,30*60*1000);
   }
   function message(node,text,error=false){node.textContent=text;node.style.color=error?'#b42332':'#52657a';}
   function element(tag,props={},text=''){const el=document.createElement(tag);Object.assign(el,props);if(text)el.textContent=text;return el;}
@@ -73,10 +94,11 @@
     }};
     // Both grouping and financial arithmetic remain in the original model/view.
     const model=window.AafAllModel.buildModel(p.salesRows,p.stockRows,p.modelOptions);
-    const mountedView=window.mountAllThickness(root,model,{...p.options,readOnly,priceNotesOnly:salesMode,store,persistenceLabel:salesMode?'ฝ่ายขาย · เซฟราคาและหมายเหตุร่วมกับเจ้าของ · ไม่แก้ยอดสต๊อก':'เก็บราคา สกุลเงิน และหมายเหตุในระบบ · ไม่เปลี่ยนยอดสต๊อกหรือใบขาย',onReportSummary:summary=>{if(current(version,currentHost,auth)&&view===mountedView)publishReportSummary(summary);},onPriceDraftChange:change=>{if(current(version,currentHost,auth)&&view===mountedView)publishPriceDraftChange(change);}});view=mountedView;viewGeneration=version;
+    const mountedView=window.mountAllThickness(root,model,{...p.options,automaticFx:true,fxReference:{...p.options?.fxReference,url:'https://www.bot.or.th/th/statistics/exchange-rate.html',sourceLabel:'ธปท. · อัตราซื้อเงินโอน USD รายวัน'},readOnly,priceNotesOnly:salesMode,store,persistenceLabel:salesMode?'ฝ่ายขาย · เซฟราคาและหมายเหตุร่วมกับเจ้าของ · ไม่แก้ยอดสต๊อก':'เก็บราคา สกุลเงิน และหมายเหตุในระบบ · ไม่เปลี่ยนยอดสต๊อกหรือใบขาย',onReportSummary:summary=>{if(current(version,currentHost,auth)&&view===mountedView)publishReportSummary(summary);},onPriceDraftChange:change=>{if(current(version,currentHost,auth)&&view===mountedView)publishPriceDraftChange(change);}});view=mountedView;viewGeneration=version;
     if(mountedView.ready&&(await mountedView.ready)===false){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}throw new Error('โหลดราคาที่เซฟไว้ไม่สำเร็จ · ยังไม่แสดงยอดสรุป');}
     if(!current(version,currentHost,auth)){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}return;}
     if(mountedView.getReportSummary)publishReportSummary(mountedView.getReportSummary());
+    startAutomaticFx(mountedView,version,currentHost,auth);
     message(state,salesMode?'ฝ่ายขาย · แก้ราคาและหมายเหตุได้ · สต๊อก '+data.stockReportDate+' · ข้อมูลฝ่ายขาย '+data.salesReportDate:'');state.hidden=!salesMode;
   }
   function attach(slot){
@@ -88,6 +110,7 @@
       slot.replaceChildren(host);return pending;
     }
     mountedRevision=stockRevision;mountedSalesMode=salesMode;loadFailed=false;
+    if(fxTimer!==null)window.clearInterval?.(fxTimer);fxTimer=null;
     if(view)view.destroy();view=null;viewGeneration=0;session=auth;publishReportSummary(null);const version=++generation,{state,content}=shell(),currentHost=host;slot.replaceChildren(currentHost);
     pending=request().then(data=>current(version,currentHost,auth)?mount(data,content,state,version,currentHost,auth):undefined).catch(e=>{if(current(version,currentHost,auth)){loadFailed=true;message(state,e.message,true);}});return pending;
   }
@@ -95,7 +118,7 @@
   const editableView=()=>{if(readOnly)return null;const active=sameSessionView(),state=active?.getPriceState?.();return active&&state&&!state.loading&&!state.loadFailed?active:null;};
   window.AAFSalesPreview={
     setAccess:access=>{const mode=window.AAFStockAccess?.isShared()===true||access.salesMode===true;if(mode!==salesMode){salesMode=mode;readOnly=mode;publishReportSummary(null);}stockRevision=access.revision??null;},
-    invalidate:text=>{readOnly=true;loadFailed=true;publishReportSummary(null);if(statusNode){statusNode.hidden=false;message(statusNode,text,true);}},
+    invalidate:text=>{readOnly=true;loadFailed=true;if(fxTimer!==null)window.clearInterval?.(fxTimer);fxTimer=null;publishReportSummary(null);if(statusNode){statusNode.hidden=false;message(statusNode,text,true);}},
     isReadOnly:()=>readOnly,
     attach,
     isDirty:()=>!!sameSessionView()?.getPriceState?.().dirty,
