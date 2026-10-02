@@ -115,21 +115,21 @@
     }).join('')}${specs.length?'<div class="ss-gap-actions"><button type="button" data-stock-gap-save disabled>เซฟราคาและหมายเหตุทั้งหมด</button><span data-stock-gap-status role="status">รอเชื่อมชุดราคาหัวข้อ 02</span></div><small>กรอกครั้งเดียว ใช้ราคาประเมินสต๊อกชุดเดียวกันทุกกล่อง · ยอดสรุปเปลี่ยนหลังเซฟสำเร็จ</small>':'<small>ยังไม่รวมในมูลค่า · รออัตราแลกเปลี่ยน</small>'}</details>`;
   }
   function partitionKpiHTML(summary){
-    const p=summary.partition,verified=p?.status==='verified';
+    const p=summary.partition,verified=p?.status==='verified',firmOnly=p?.reservationPolicy==='aaf-firm-only-20261003-v1';
     const equivalents=b=>`<dl class="ss-physical-equivalents"><div><dt>เทียบ 4×8 · ความหนาเดิม</dt><dd>${display(b?.eq4x8)} <small>แผ่น</small></dd></div><div><dt>เทียบ 4×8 · หนา 2.5 มม.</dt><dd>${display(b?.eq2_5)} <small>แผ่น</small></dd></div></dl>`;
     const production=(b,group)=>{
       const specs=b?.productionSpecs||[];
       const details=specs.length?`<details class="ss-production-details"><summary>ดูรายการต้องผลิต · ${specs.length} สเปก</summary><table><thead><tr><th>หนา (มม.)</th><th>เกรด</th><th>ขนาด (มม.)</th><th>จำนวน</th></tr></thead><tbody>${specs.map(r=>`<tr><td>${esc(thicknessLabel(r.t))}</td><td>${esc(r.grade)}</td><td>${number(r.w)} × ${number(r.l)}</td><td>${number(r.qty)} ${r.unit==='strip'?'ชิ้น':'แผ่น'}</td></tr>`).join('')}</tbody><tfoot><tr><th colspan="3">รวมต้องผลิต</th><td>${quantityText(b.byUnit)}</td></tr></tfoot></table></details>`:'';
       return `<div class="ss-outside-stock"><span>ต้องผลิตเพิ่ม · นอกสต๊อกจริง</span><b>${quantityText(b?.byUnit)}</b><div>${reportMoney(b)}</div>${details}${priceCoverage(b,group)}</div>`;
     };
-    const definitions=[['physical','สต๊อกจริง · Physical','ทั้งหมดในโรงงาน',summary.physical],['sold','ขายแล้วทั้งหมด','รับเงินแล้ว / โหลดแล้ว · นับครั้งเดียว',verified?p.sold.inStock:null],['reserved','ยอดจองอื่น · มีของรองรับ','PI / มีเรือ / เจรจา / Forecast · ไม่รวมขายแล้ว',verified?p.reserved.inStock:null],['free','พร้อมขาย · Free','มีในสต๊อก · ยังไม่ถูกจัดสรร',summary.free]];
+    const definitions=[['physical','สต๊อกจริง · Physical','ทั้งหมดในโรงงาน',summary.physical],['sold','ขายแล้วทั้งหมด','รับเงินแล้ว / โหลดแล้ว · นับครั้งเดียว',verified?p.sold.inStock:null],['reserved','ยอดจองอื่น · มีของรองรับ',firmOnly?'PI / มีเรือ · ไม่รวมขายแล้ว':'PI / มีเรือ / เจรจา / Forecast · ไม่รวมขายแล้ว',verified?p.reserved.inStock:null],['free','พร้อมขาย · Free','มีในสต๊อก · ยังไม่ถูกจัดสรร',summary.free]];
     const cards=definitions.map(([id,label,note,b])=>{
       const units=(id==='sold'?summary.sold:b)?.byUnit;
       let detail='';
       if(id==='physical'&&verified)detail=`<div class="ss-stock-equation"><b>สต๊อกจริง = ขายแล้วที่มีของ + จองอื่นที่มีของ + Free</b><span>ตรวจยอดตรงกัน · ใช้ราคาสต๊อกที่เซฟชุดเดียวกัน</span><small>ไม่รวมของที่ต้องผลิตเพิ่ม หรือที่โหลดออกแล้ว</small></div>`;
       if(id==='sold')detail=production(verified?p.sold.toProduce:null,'sold-production')+`<details class="ss-commercial"><summary>มูลค่าใบขายทั้งหมด · ไม่ใช่มูลค่าสต๊อก</summary><div>รับเงินแล้ว · ยังไม่โหลด <b>${quantityText(summary.sold?.paidUnloaded?.byUnit)}</b></div><div>มูลค่าใบขายทั้งหมด <b>${reportMoney(summary.sold)}</b></div><small>ใช้ราคาในใบขาย รวมส่วนต้องผลิต · ไม่บวกกับมูลค่าสต๊อกด้านบน</small></details>`;
       if(id==='reserved')detail=production(verified?p.reserved.toProduce:null,'reserved-production')+`<small class="ss-demand-note">ยอดสั่งจองอื่นทั้งหมด ${quantityText(verified?p.reserved.demand.byUnit:null)} · รวมส่วนต้องผลิต</small>`;
-      const stages=[['pi','เปิด PI แล้ว'],['vessel','มีเรือแล้ว'],['negotiate','เจรจา'],['forecast','Forecast']];
+      const stages=[['pi','เปิด PI แล้ว'],['vessel','มีเรือแล้ว'],['negotiate','เจรจา'],['forecast','Forecast']].filter(([status])=>!firmOnly||!['negotiate','forecast'].includes(status));
       if(verified&&Object.values(p.reserved.byStatus?.unknown?.inStock?.byUnit||{}).some(q=>q>0))stages.push(['unknown','สถานะอื่น / ยังไม่ระบุ']);
       const reservationSplit=`<div class="ss-sold-quantity-split"><small>แยกเฉพาะที่มีของรองรับ</small>${stages.map(([status,title])=>`<div><span>${title}</span><b>${quantityText(verified?p.reserved.byStatus?.[status]?.inStock?.byUnit:null)}</b></div>`).join('')}</div><div class="ss-sold-equivalents">${equivalents(b)}</div>`;
       const split=id==='sold'?`<div class="ss-sold-quantity-split"><div><span>มีของในสต๊อก</span><b>${quantityText(verified?p.sold.inStock.byUnit:null)}</b></div><div><span>ต้องผลิตเพิ่ม</span><b>${quantityText(verified?p.sold.toProduce.byUnit:null)}</b></div><div><span>โหลดออกแล้ว</span><b>${quantityText(summary.sold?.loaded?.byUnit)}</b></div></div><div class="ss-sold-equivalents">${equivalents(summary.sold)}</div>`:id==='reserved'?reservationSplit:equivalents(b);
