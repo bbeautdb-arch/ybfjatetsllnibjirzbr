@@ -20,7 +20,8 @@
   const token=()=>window.AAFStockAccess?.token()||'';
   const can=k=>!salesLink&&!!shared?.permissions?.[k];
   const isOwner=()=>can('adjust');
-  const banner=(message,error=false)=>{const n=$('shared-message');if(n){n.textContent=message;n.style.color=error?'#be123c':'#047857';}const access=$('stock-report-access');if(access){access.hidden=!error;$('stock-report-access-message').textContent=error?message:'';}};
+  const banner=(message,error=false)=>{for(const id of ['shared-message','stock-owner-message']){const n=$(id);if(n){n.textContent=message;n.style.color=error?'#be123c':'#047857';}}const access=$('stock-report-access');if(access){access.hidden=!error;$('stock-report-access-message').textContent=error?message:'';}};
+  const previewPending=()=>!!(window.AAFSalesPreview?.isDirty?.()||window.AAFSalesPreview?.isSaving?.());
   const css=document.createElement('style');css.textContent=`
     [hidden]{display:none!important}
     #shared-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
@@ -34,12 +35,14 @@
     #stock-table-foot td{padding:12px 10px;font-weight:700}#stock-table-head th{padding:12px 10px;border-right:1px solid #cbd5e1}
     #shared-report{background:white;border:1px solid #cbd5e1;border-radius:14px;padding:20px;margin:16px 0}
     #shared-message{white-space:normal;font-size:14px}#stock-user{font-size:14px;color:#475569}
+    #stock-owner-tools{max-width:1500px;width:100%;margin:0 auto 12px;padding:10px 14px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;color:#475569}
+    #stock-owner-message{flex-basis:100%;white-space:normal}
     .stock-readonly{background:#f8fafc}.shared-number{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
   `;document.head.append(css);
   async function request(body=null,day=null){
     if(body&&salesLink)throw new Error('หน้านี้แก้ได้เฉพาะราคาและหมายเหตุในหัวข้อ 02');
     const res=await fetch(API+(day?'?day='+encodeURIComponent(day):''),{method:body?'POST':'GET',cache:'no-store',headers:{'Authorization':'Bearer '+token(),...(body?{'Content-Type':'text/plain;charset=UTF-8'}:{})},...(body?{body:JSON.stringify(body)}:{})});
-    const data=await res.json();if(!res.ok||!data.ok){const e=new Error(data.error||'ติดต่อฐานข้อมูลไม่ได้');e.status=res.status;if(capability&&res.status===401){$('stock-summary').hidden=true;window.AAFSalesPreview?.invalidate?.(e.message);}throw e;}return data;
+    const data=await res.json();if(!res.ok||!data.ok){const e=new Error(data.error||'ติดต่อฐานข้อมูลไม่ได้');e.status=res.status;if(res.status===401||res.status===403){if($('stock-owner-tools'))$('stock-owner-tools').hidden=true;if(capability){$('stock-summary').hidden=true;window.AAFSalesPreview?.invalidate?.(e.message);}}throw e;}return data;
   }
   function header(){
     let cols=['ลำดับ','สเปกสินค้า (W x L x T)','เกรด'];if(isOwner())cols.push('ปรับสต๊อกระหว่างวัน');
@@ -69,6 +72,8 @@
     $('followup-permission').hidden=!isOwner();
     if(isOwner()){$('followup-editor').innerHTML='<option value="">ยังไม่กำหนดผู้ลงติดตาม</option>'+(data.salesUsers||[]).map(u=>'<option value="'+esc(u.username)+'">'+esc(u.name+' ('+u.username+')')+'</option>').join('');$('followup-editor').value=data.followupEditors?.[0]||'';}
     $('btn-open-auto-mail-import').hidden=!isOwner();$('btn-sync-price').hidden=!isOwner();
+    $('stock-owner-tools').hidden=!(isOwner()&&can('import'));
+    $('stock-owner-state').textContent=(user?.name||'')+' · เจ้าของบัญชี · รายงาน '+(data.report?.reportDate||'—')+' · รุ่นข้อมูล '+data.revision+' · '+data.rows.length+' สเปก';
     const file=document.querySelector('input[type=file]');if(file)file.closest('label').hidden=!isOwner();
     const hasPortal=!capability&&['admin','sales'].includes(session?.role);
     $('stock-nav-home').hidden=!hasPortal;$('stock-nav-sales').hidden=!hasPortal;
@@ -81,7 +86,7 @@
     // Compatibility for existing sales screens; never used as authoritative read.
     if(data.report&&!capability)try{localStorage.setItem('fullInventoryData',JSON.stringify(data.rows));localStorage.setItem('stockPriceDB',JSON.stringify(priceDB));localStorage.setItem('exchangeRate_USD_THB',String(globalExchangeRate));localStorage.setItem('stockImportMeta',JSON.stringify({...data.report,importedAt:data.importedAt,sender:data.report.source?.sender,subject:data.report.source?.subject,sourceType:data.report.source?.type}));}catch{}
   }
-  async function save(body){if(busy)return false;if(dirty&&(body.action==='import'||body.action==='applySellablePlan'||body.action==='enableSellableRules'||body.action==='commercial'&&Object.keys(body.values).length>1)){banner('มีร่างที่ยังไม่เซฟ กรุณาบันทึกให้ครบหรือกดโหลดล่าสุดก่อนเปลี่ยนข้อมูลทั้งชุด',true);return false;}busy=true;document.querySelectorAll('[data-save],[data-save-price],[data-reset],[data-draft],[data-price],[data-currency]').forEach(b=>b.disabled=true);
+  async function save(body){if(busy)return false;if(body.action==='import'&&previewPending()){banner('มีราคา/หมายเหตุในหัวข้อ 02 ที่ยังไม่เซฟหรือกำลังบันทึก กรุณาเซฟให้เสร็จก่อนนำเข้าเมล',true);return false;}if(dirty&&(body.action==='import'||body.action==='applySellablePlan'||body.action==='enableSellableRules'||body.action==='commercial'&&Object.keys(body.values).length>1)){banner('มีร่างที่ยังไม่เซฟ กรุณาบันทึกให้ครบหรือกดโหลดล่าสุดก่อนเปลี่ยนข้อมูลทั้งชุด',true);return false;}busy=true;document.querySelectorAll('[data-save],[data-save-price],[data-reset],[data-draft],[data-price],[data-currency]').forEach(b=>b.disabled=true);
     try{const data=await request({...body,expectedRevision:shared.revision,reportDate:shared.report?.reportDate});
       if(body.action==='edit')drafts.delete(draftId(body.field,body.key));
       if(body.action==='commercial')for(const key of Object.keys(body.values)){drafts.delete(draftId('price',key));drafts.delete(draftId('currency',key));}
@@ -96,7 +101,7 @@
     return {version:1,parserVersion:'stock-shared-migration-v1',reportDate:meta.reportDate,sourceRowCount:meta.sourceRowCount||base.reduce((n,r)=>n+Math.max(1,r.sku.split(',').filter(Boolean).length),0),source:{type,sender:meta.sender||'usermail@ace-energy.co.th',subject:meta.subject||'FYI-AAF :: รายงาน Aging Time สินค้าคงเหลือ',receivedAt:meta.receivedAt||meta.importedAt},expectedTotal:meta.expectedTotal??meta.totalQty??base.reduce((n,r)=>n+r.qty,0),expectedGradeTotals:{...Object.fromEntries(Object.keys(grades).map(g=>[g,0])),...(meta.expectedGradeTotals??meta.gradeTotals??grades)},checksum:'sha256:'+digest,rows:base};
   }
   window.importAutoMailSnapshotFromText=async()=>{if(!can('import'))return;let s;try{s=JSON.parse($('auto-mail-json-input').value);}catch{return banner('JSON ไม่ถูกต้อง',true);}if(await save({action:'import',snapshot:s})){closeAutoMailImport();alert('อัปเดตสต๊อกส่วนกลางสำเร็จ\n'+s.reportDate+'\n'+fmt(s.expectedTotal)+' แผ่น');}};
-  window.openAutoMailImport=()=>{if(can('import')){$('auto-mail-json-input').value='';$('auto-mail-import-modal').classList.remove('hidden');}};
+  window.openAutoMailImport=()=>{if(busy||!can('import'))return;if(dirty||previewPending())return banner('มีราคา/หมายเหตุที่ยังไม่เซฟหรือกำลังบันทึก กรุณาเซฟให้เสร็จก่อนนำเข้าเมล',true);$('auto-mail-json-input').value='';$('auto-mail-import-modal').classList.remove('hidden');};
   window.applyAutoStockSnapshot=()=>false;window.rollbackStockImport=()=>banner('ไม่ย้อนรายงานเก่าอัตโนมัติ เพื่อป้องกันข้อมูลระหว่างวันหาย',true);
   window.editRawTable=()=>banner('ใช้ช่องปรับสต๊อกระหว่างวันและกดเซฟในตารางด้านบน');window.saveRawTable=()=>{};
   window.updateExchangeRate=value=>save({action:'exchangeRate',value:Number(value)});
@@ -137,7 +142,7 @@
   };
   async function loadReport(){reportData=null;reportDataDay=null;$('download-stock-report').disabled=true;try{const day=$('report-day').value;const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const loaded=day===today?await request():await request(null,day);if($('report-day').value!==day)return;reportData=loaded;reportDataDay=day;$('report-summary').textContent=`${reportData.rows.length} สเปก · Physical ${fmt(reportData.rows.reduce((s,r)=>s+r.qty,0))} แผ่น · Free ${fmt(reportData.rows.reduce((s,r)=>s+r.freeQty,0))} แผ่น · บันทึกล่าสุด ${dateText(reportData.updatedAt)}`;$('download-stock-report').disabled=!reportData.report;}catch(e){$('report-summary').textContent=e.message;}}
   function openReport(){$('shared-report').hidden=false;loadReport();$('shared-report').scrollIntoView({behavior:'smooth'});}
-  async function refresh(){if(busy)return;if(dirty&&!confirm('มีข้อมูลยังไม่เซฟ โหลดล่าสุดจะทิ้งร่างที่พิมพ์ ยืนยันหรือไม่?'))return;try{const fresh=await request();drafts.clear();dirty=false;accept(fresh);banner('โหลดข้อมูลส่วนกลางล่าสุดแล้ว');}catch(e){banner(e.message,true);}}
+  async function refresh(){if(busy)return;if(previewPending())return banner('มีราคา/หมายเหตุในหัวข้อ 02 ที่ยังไม่เซฟหรือกำลังบันทึก กรุณาเซฟให้เสร็จก่อนโหลดล่าสุด',true);if(dirty&&!confirm('มีข้อมูลยังไม่เซฟ โหลดล่าสุดจะทิ้งร่างที่พิมพ์ ยืนยันหรือไม่?'))return;busy=true;const beforeDrafts=JSON.stringify([...drafts]);try{const fresh=await request();if(previewPending()||JSON.stringify([...drafts])!==beforeDrafts)return banner('มีร่างเปลี่ยนระหว่างโหลด จึงเก็บร่างเดิมไว้ กรุณาเซฟก่อนโหลดอีกครั้ง',true);drafts.clear();dirty=false;accept(fresh);banner('โหลดข้อมูลส่วนกลางล่าสุดแล้ว');}catch(e){banner(e.message,true);}finally{busy=false;}}
   window.onload=async()=>{
     if(!window.AAFStockAccess){banner('โหลดระบบสิทธิ์ไม่ครบ · ยังไม่อ่านหรือบันทึกข้อมูล กรุณาเปิดลิงก์ใหม่อีกครั้ง',true);return;}
     if(salesLink)document.querySelectorAll('a[href="login.html?reauth=1"]').forEach(a=>a.href=LOGIN);
@@ -146,6 +151,10 @@
     const links=document.querySelectorAll('a[href="dashboard_home.html"],a[href="sales_analytics.html"]');links.forEach(a=>a.id=a.getAttribute('href')==='dashboard_home.html'?'stock-nav-home':'stock-nav-sales');
     const bar=document.createElement('div');bar.id='shared-toolbar';bar.innerHTML='<span id="stock-user"></span><button class="shared-btn shared-secondary" id="reload-shared">โหลดล่าสุด</button><button class="shared-btn" id="open-stock-report">รายงานประจำวัน / Excel</button><button class="shared-btn shared-secondary" id="stock-logout">ออกจากระบบ</button><span id="shared-message" role="status"></span>';
     $('auto-stock-panel').before(bar);
+    // Keep the report-first layout; expose only the existing owner import flow.
+    const ownerTools=document.createElement('section');ownerTools.id='stock-owner-tools';ownerTools.hidden=true;ownerTools.setAttribute('aria-label','จัดการรายงานเมล · เฉพาะเจ้าของ');
+    ownerTools.innerHTML='<span id="stock-owner-state"></span><button type="button" class="shared-btn shared-secondary" id="stock-owner-reload">โหลดล่าสุด</button><span id="stock-owner-message" role="status"></span>';
+    $('stock-report-access').before(ownerTools);ownerTools.insertBefore($('btn-open-auto-mail-import'),$('stock-owner-message'));$('stock-owner-reload').onclick=refresh;
     window.AAFStockPlanUI?.setup(bar);
     const permission=document.createElement('div');permission.id='followup-permission';permission.hidden=true;permission.style.cssText='margin:10px 0;padding:12px;background:#eef2ff;border-radius:8px;font-size:14px';permission.innerHTML='<label>ผู้มีสิทธิ์ลงการติดตามยอดขาย <select id="followup-editor" class="filter-select"></select></label> <button class="shared-btn" id="save-followup-editor">เซฟสิทธิ์</button><span style="margin-left:8px;color:#64748b">แก้ได้เฉพาะติดตามยอดขาย · วีดูและดาวน์โหลดเท่านั้น</span>';bar.after(permission);
     $('save-followup-editor').onclick=()=>save({action:'assignFollowup',username:$('followup-editor').value||null});
@@ -173,7 +182,7 @@
         await save({action:'import',snapshot:await snapshotFromRows(initialRows,initialMeta),commercial,exchangeRate:initialRate});
       }
       if(location.hash==='#report'&&!capability)openReport();
-      setInterval(async()=>{if(busy||dirty||document.hidden)return;try{const fresh=await request();if(fresh.revision!==shared.revision){accept(fresh);banner('มีข้อมูลใหม่ · '+dateText(fresh.updatedAt));}}catch(e){banner(e.status===401?e.message:'ขาดการเชื่อมต่อ ข้อมูลบนจอเป็นค่าที่โหลดครั้งล่าสุด',true);}},15000);
+      setInterval(async()=>{if(busy||dirty||previewPending()||document.hidden)return;try{const fresh=await request();if(!busy&&!dirty&&!previewPending()&&fresh.revision>shared.revision){accept(fresh);banner('มีข้อมูลใหม่ · '+dateText(fresh.updatedAt));}}catch(e){banner(e.status===401?e.message:'ขาดการเชื่อมต่อ ข้อมูลบนจอเป็นค่าที่โหลดครั้งล่าสุด',true);}},15000);
     }catch(e){banner(e.message,true);if(e.status===401&&!capability){const a=document.createElement('a');a.href=LOGIN;a.className='shared-btn';a.textContent='เข้าสู่ระบบอีกครั้ง';bar.append(a);}}
     document.addEventListener('input',e=>{const x=e.target;if(x.matches('[data-draft],[data-price],[data-currency]')){drafts.set(draftId(x.dataset.draft||(x.dataset.price?'price':'currency'),x.dataset.key||x.dataset.price||x.dataset.currency),x.value);dirty=true;}});
     document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||!shared)return;const key=b.dataset.key;
