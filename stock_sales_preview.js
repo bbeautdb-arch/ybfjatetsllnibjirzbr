@@ -45,6 +45,7 @@ const FINANCE_STAGE_ORDER = Object.freeze([
   'opportunity',
   'credit',
   'unknown',
+  'unreserved',
 ]);
 
 const STATUS_META = Object.freeze({
@@ -318,7 +319,11 @@ function financeTermBucket(row) {
   return row.term;
 }
 
-function financeStage(row) {
+function financeStage(row, firmOnly = false) {
+  // Final paid/loaded precedence has already been resolved. Keep unknown net
+  // deposits unknown; this changes grouping, never their amount or receipts.
+  if (firmOnly && row.status === 'vessel') return 'opportunity';
+  if (firmOnly && ['negotiate','forecast'].includes(row.status)) return 'unreserved';
   // Only proven net TT receivables at PI/vessel stage enter follow-up. The
   // deposit remains a separately reported receipt, never part of this amount.
   if (row.isDeposit && row.financeTerm === 'TT'
@@ -412,7 +417,7 @@ function buildStock(stockRows, reservationRows) {
     });
   });
 
-  reservationRows.filter(row => row.status !== 'loaded').forEach(row => {
+  reservationRows.filter(row => row.status !== 'loaded' && row.reservesStock !== false).forEach(row => {
     const key = exactSpecKey(row);
     if (!specs.has(key)) {
       specs.set(key, {
@@ -715,6 +720,7 @@ function buildModel(salesRows = [], stockRows = [], opts = {}) {
 
   const options = {
     strict: opts.strict === true,
+    reservationPolicy: opts.reservationPolicy || null,
     mix: validateMix(opts.mix || DEFAULT_MIX),
     gradeOrder: Array.isArray(opts.gradeOrder)
       ? opts.gradeOrder.map(normalizeGrade).filter(Boolean)
@@ -739,7 +745,8 @@ function buildModel(salesRows = [], stockRows = [], opts = {}) {
   normalizedSales.forEach(row => {
     row.status = classifyStatus(row, options.paidOverrideRefs, options.paidPaymentValues);
     row.financeTerm = financeTermBucket(row);
-    row.financeStage = financeStage(row);
+    row.reservesStock = row.status !== 'loaded' && !(options.reservationPolicy === 'aaf-firm-only-20261003-v1' && ['negotiate','forecast'].includes(row.status));
+    row.financeStage = financeStage(row, options.reservationPolicy === 'aaf-firm-only-20261003-v1');
   });
 
   const allocations = allocateRows(normalizedSales, options.mix);
@@ -774,6 +781,7 @@ function buildModel(salesRows = [], stockRows = [], opts = {}) {
 
   return {
     version: 1,
+    reservationPolicy: options.reservationPolicy,
     meta: {
       sourceSalesRowCount: salesRows.length,
       sourceStockRowCount: stockRows.length,
@@ -1157,7 +1165,7 @@ module.exports = {
         const rows = model.all.stock.rows.map(row => ({...row,soldStock:0,otherStock:0,soldShortage:0,otherShortage:0,soldDemand:0,otherDemand:0}));
         const pools = new Map(rows.map(row => [keyOf(row),row])), remaining = new Map(rows.map(row => [keyOf(row),row.physical]));
         const statusOrder = host.AafAllModel.constants.STATUS_ORDER;
-        const allocations = model.allocationRows.map((row,index) => ({row,index})).filter(({row}) => row.status !== 'loaded');
+        const allocations = model.allocationRows.map((row,index) => ({row,index})).filter(({row}) => row.status !== 'loaded' && row.reservesStock !== false);
         allocations.sort((a,b) => {
           const stage=statusOrder.indexOf(a.row.status)-statusOrder.indexOf(b.row.status);if(stage)return stage;
           const ready=row=>String(row.productStatus||'').trim().replace(/\s+/g,' ')==='พร้อมโหลด'?0:1;
@@ -1197,7 +1205,7 @@ module.exports = {
           const withStatusProductionSpecs = (field,report) => ({...report,productionSpecs:statusRows.filter(row => row[field] > 0).map(row => ({key:specKey(row),t:row.t,grade:row.grade,w:row.w,l:row.l,unit:row.unit,qty:row[field]}))});
           return [status,{inStock:inventoryReport('statusStock',statusRows),toProduce:withStatusProductionSpecs('statusShortage',inventoryReport('statusShortage',statusRows)),demand:inventoryReport('statusDemand',statusRows)}];
         }));
-        return {status:'verified',basis:'committed-stock-catalog',sold:{inStock:inventoryReport('soldStock',rows),toProduce:withProductionSpecs('soldShortage',inventoryReport('soldShortage',rows)),demand:inventoryReport('soldDemand',rows)},reserved:{inStock:inventoryReport('otherStock',rows),toProduce:withProductionSpecs('otherShortage',inventoryReport('otherShortage',rows)),demand:inventoryReport('otherDemand',rows),byStatus}};
+        return {status:'verified',reservationPolicy:model.reservationPolicy,basis:'committed-stock-catalog',sold:{inStock:inventoryReport('soldStock',rows),toProduce:withProductionSpecs('soldShortage',inventoryReport('soldShortage',rows)),demand:inventoryReport('soldDemand',rows)},reserved:{inStock:inventoryReport('otherStock',rows),toProduce:withProductionSpecs('otherShortage',inventoryReport('otherShortage',rows)),demand:inventoryReport('otherDemand',rows),byStatus}};
       } catch {
         return {status:'unavailable',reason:'ยอดจัดสรรไม่ตรงกับข้อมูลหัวข้อ 02 · ยังไม่แสดงตัวเลขแยกกลุ่ม'};
       }
@@ -1452,9 +1460,10 @@ module.exports = {
     function financeMarkup(id, view) {
       function list(bucket, label) {return '<details class="sp-finance-subset"><summary class="cursor-interaction">'+label+'</summary><div data-finance-list="'+id+'|'+bucket+'"></div></details>';}
       function termSplit(bucket) {return '<dl class="sp-payment-split" aria-label="TT LC แยกกัน"><div><dt>TT · เงินสดที่จะเข้า</dt><dd data-finance-term="'+id+'|'+bucket+'|TT"></dd></div><div><dt>LC · เงินรอเก็บ</dt><dd data-finance-term="'+id+'|'+bucket+'|LC"></dd></div><div data-term-unknown="'+id+'|'+bucket+'"><dt>ยังไม่ระบุ TT / LC</dt><dd data-finance-term="'+id+'|'+bucket+'|unknown"></dd></div></dl>';}
-      return '<div class="sp-finance-grid"><section class="sp-finance-block"><h3>ได้เงินแล้ว</h3><strong class="sp-finance-value" data-finance-amount="'+id+'|received"></strong>'+receiptBreakdownMarkup(id)+'<span class="sp-finance-description">TT · โหลดแล้ว + เก็บเงินแล้ว</span><details class="sp-finance-subset"><summary class="cursor-interaction">โหลดแล้ว · รอเก็บ LC <span data-finance-amount="'+id+'|loadedLc"></span></summary><div data-finance-list="'+id+'|loadedLc"></div><small>ไม่รวมในยอดได้เงินแล้ว</small></details>'+list('received','ดูรายการได้เงินแล้ว')+'</section><section class="sp-finance-block"><h3>ตามเก็บเงิน <span class="sp-confidence">80%</span></h3><strong class="sp-finance-value" data-finance-amount="'+id+'|followup"></strong>'+termSplit('followup')+'<span class="sp-finance-description">เปิด PI · มีเรือแล้ว · LC ยังไม่โหลด</span>'+list('followup','ดูรายการที่ต้องตาม')+'</section><section class="sp-finance-block"><h3>อยู่ระหว่างขาย <span class="sp-confidence">40%</span></h3><strong class="sp-finance-value" data-finance-amount="'+id+'|opportunity"></strong>'+termSplit('opportunity')+'<span class="sp-finance-description">เจรจา · Forecast</span>'+list('opportunity','ดูรายการโอกาสขาย')+'</section><section class="sp-finance-block"><h3>เพิ่มยอดขายจาก Free</h3><strong class="sp-finance-value" data-free-value="'+id+'-g-all"></strong><span class="sp-finance-description" data-free-coverage="'+id+'-g-all"></span><button class="sp-price-link cursor-interaction" type="button" data-open-free="'+id+'-g-all">ใส่ราคาประเมินรายขนาด ↓</button></section></div><div class="sp-finance-note">≈ มูลค่ารายการตามสถานะ ไม่ใช่ยอดเงินจริงเข้าบัญชี</div>'+(view.finance.stages.unknown.rows.length ? '<div class="sp-finance-unknown"><details><summary class="cursor-interaction">รอยืนยันสถานะรับเงิน <span data-finance-amount="'+id+'|unknown"></span></summary><div data-finance-list="'+id+'|unknown"></div></details></div>' : '');
+      return '<div class="sp-finance-grid"><section class="sp-finance-block"><h3>ได้เงินแล้ว</h3><strong class="sp-finance-value" data-finance-amount="'+id+'|received"></strong>'+receiptBreakdownMarkup(id)+'<span class="sp-finance-description">TT · โหลดแล้ว + เก็บเงินแล้ว</span><details class="sp-finance-subset"><summary class="cursor-interaction">โหลดแล้ว · รอเก็บ LC <span data-finance-amount="'+id+'|loadedLc"></span></summary><div data-finance-list="'+id+'|loadedLc"></div><small>ไม่รวมในยอดได้เงินแล้ว</small></details>'+list('received','ดูรายการได้เงินแล้ว')+'</section><section class="sp-finance-block"><h3>ตามเก็บเงิน <span class="sp-confidence">80%</span></h3><strong class="sp-finance-value" data-finance-amount="'+id+'|followup"></strong>'+termSplit('followup')+'<span class="sp-finance-description">'+(model.reservationPolicy === 'aaf-firm-only-20261003-v1' ? 'เปิด PI · LC ยังไม่โหลด' : 'เปิด PI · มีเรือแล้ว · LC ยังไม่โหลด')+'</span>'+list('followup','ดูรายการที่ต้องตาม')+'</section><section class="sp-finance-block"><h3>อยู่ระหว่างขาย <span class="sp-confidence">40%</span></h3><strong class="sp-finance-value" data-finance-amount="'+id+'|opportunity"></strong>'+termSplit('opportunity')+'<span class="sp-finance-description">'+(model.reservationPolicy === 'aaf-firm-only-20261003-v1' ? 'มีเรือแล้ว' : 'เจรจา · Forecast')+'</span>'+list('opportunity','ดูรายการโอกาสขาย')+'</section><section class="sp-finance-block"><h3>เพิ่มยอดขายจาก Free</h3><strong class="sp-finance-value" data-free-value="'+id+'-g-all"></strong><span class="sp-finance-description" data-free-coverage="'+id+'-g-all"></span><button class="sp-price-link cursor-interaction" type="button" data-open-free="'+id+'-g-all">ใส่ราคาประเมินรายขนาด ↓</button></section></div><div class="sp-finance-note">≈ มูลค่ารายการตามสถานะ ไม่ใช่ยอดเงินจริงเข้าบัญชี</div>'+(view.finance.stages.unknown.rows.length ? '<div class="sp-finance-unknown"><details><summary class="cursor-interaction">รอยืนยันสถานะรับเงิน <span data-finance-amount="'+id+'|unknown"></span></summary><div data-finance-list="'+id+'|unknown"></div></details></div>' : '');
     }
     function receivedLoadingMarkup(row) {
+      if (row.reservesStock === false && row.status !== 'loaded') return '<span class="sp-empty">ไม่กันสต๊อก · คงไว้ใน Free</span>';
       if (row.status === 'loaded') return '<span class="sp-load-status sp-load-status-loaded" data-load-status="loaded" aria-label="สถานะการโหลด: โหลดแล้ว">โหลดแล้ว</span>';
       const readiness = options.readiness?.byAllocationId?.[row.id] || options.readiness?.byRowId?.[row.id];
       const needsProduction = Boolean(readiness && Object.values(readiness.shortageByUnit).some(value => value > 1e-7));
@@ -1643,3 +1652,4 @@ module.exports = {
   host.AAFSalesPreviewBuildModel = buildModel;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
+
