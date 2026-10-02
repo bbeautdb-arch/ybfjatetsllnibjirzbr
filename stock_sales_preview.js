@@ -849,6 +849,8 @@ module.exports = {
 (function (host) {
   'use strict';
   function mountAllThickness(root, model, options = {}) {
+    const readOnly = options.readOnly === true;
+    const priceNotesOnly = options.priceNotesOnly === true;
     if (!root || !model) throw new Error('Missing preview root or verified model');
     const doc = root.ownerDocument;
     const win = doc.defaultView || host;
@@ -958,23 +960,25 @@ module.exports = {
       return {modelContent:{scope:'AAF preview price catalog',fxThbPerUsd:fx,freePriceUnit:'THB or USD per actual sheet or strip piece',freeValueCurrency:'THB'},privateContent:{version:3,context:pricingContext,fx,...copyCatalog(catalog),savedAt:catalog.savedAt || null}};
     }
     function enqueue(build, success = () => {}) {
+      if (readOnly) return Promise.reject(new Error('รายงานนี้ดูอย่างเดียว'));
       queuedWrites++;
       const write = queue.catch(() => {}).then(async () => {
         writeCount++;
         try {
           const value = build();
           if (new TextEncoder().encode(JSON.stringify(value)).byteLength >= 16*1024) {const cause = new Error('ข้อมูลราคาและหมายเหตุเกินขอบเขตบันทึก');cause.code = 'state-too-large';throw cause;}
-          await persistSavedState(value);
-          success(value); writeFailed = false;
+          const confirmed = await persistSavedState(value);
+          success(priceNotesOnly && confirmed?.privateContent ? confirmed : value); writeFailed = false;
         } catch (cause) {writeFailed = true; throw cause;}
         finally {writeCount--; queuedWrites--;}
       });
       queue = write; return write;
     }
     function updatePersistenceAccess() {
-      const blocked = storeLoading || storeLoadFailed;
+      const blocked = readOnly || storeLoading || storeLoadFailed;
       root.setAttribute('aria-busy',String(storeLoading));
-      root.querySelectorAll('[data-fx],[data-thickness-note],[data-free-price],[data-free-currency]').forEach(node => {node.disabled = blocked;});
+      root.querySelectorAll('[data-fx],[data-thickness-note],[data-free-price],[data-free-currency]').forEach(node => {node.disabled = blocked;if(readOnly){node.setAttribute('aria-readonly','true');node.placeholder='';}});
+      if(priceNotesOnly)root.querySelectorAll('[data-fx]').forEach(node=>{node.disabled=true;node.setAttribute('aria-readonly','true');node.title='อัตราแลกเปลี่ยนกำหนดโดยเจ้าของ';});
     }
     function saveStatus() {
       const label = storeLoading ? 'กำลังโหลดราคาและหมายเหตุ…' : saving ? 'กำลังเซฟ…' : error || (dirty ? 'แก้ไขแล้ว · ยังไม่เซฟ' : committed.savedAt ? 'เซฟแล้ว '+new Date(committed.savedAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : 'กดเซฟเพื่อเก็บราคาและหมายเหตุ');
@@ -984,7 +988,7 @@ module.exports = {
       updatePersistenceAccess();
     }
     function knownDisplayKey(key) {return typeof key === 'string' ? knownPoolKeys.get(key) || null : null;}
-    function getPriceState() {return {...pricing,...copyCatalog(pricing),dirty,saving,error,loading:storeLoading,loadFailed:storeLoadFailed,invalidKeys:[...invalidDraftValues.keys()]};}
+    function getPriceState() {return {...pricing,...copyCatalog(pricing),readOnly,dirty,saving,error,loading:storeLoading,loadFailed:storeLoadFailed,invalidKeys:[...invalidDraftValues.keys()]};}
     function getDraftPrice(key) {
       if (destroyed || storeLoading || storeLoadFailed) return null;
       const displayKey = knownDisplayKey(key);if (displayKey === null) return null;
@@ -1005,6 +1009,7 @@ module.exports = {
       recomputeDirty();error = draftValidationError;saveStatus();notifyPriceDraftChange('invalid',displayKey);return false;
     }
     function setDraftPrice(key,value,currencyCode) {
+      if (readOnly) return false;
       if (destroyed || storeLoading || storeLoadFailed) return false;
       const displayKey = knownDisplayKey(key);if (displayKey === null) return false;
       if (!['string','number'].includes(typeof value)) return rejectDraftPrice(displayKey,value);
@@ -1020,11 +1025,13 @@ module.exports = {
       invalidDraftValues.delete(displayKey);syncInputs();updateFinancialView();markEdited();notifyPriceDraftChange('draft',displayKey);return true;
     }
     function setDraftCurrency(key,currencyCode,active = null) {
+      if (readOnly) return false;
       if (destroyed || storeLoading || storeLoadFailed || !['THB','USD'].includes(currencyCode)) return false;
       const displayKey = knownDisplayKey(key);if (displayKey === null) return false;
       pricing.currencies[priceKey(displayKey)] = currencyCode;syncInputs(active);updateFinancialView();markEdited();notifyPriceDraftChange('draft',displayKey);return true;
     }
     async function savePrices() {
+      if (readOnly) return false;
       const loaded = await ready;
       if (destroyed || loaded === false || storeLoading || storeLoadFailed) {error = 'ยังไม่เซฟ · โหลด catalog ไม่สำเร็จ';saveStatus();notifyPriceDraftChange('save-blocked');return false;}
       if (saving) return false;
@@ -1032,18 +1039,20 @@ module.exports = {
       const snapshot = {...copyCatalog(pricing),savedAt:new Date().toISOString()};
       saving = true; error = ''; saveStatus();notifyPriceDraftChange('save-start');
       let saved = false;
-      try {await enqueue(() => payload(snapshot),value => {committed = snapshot;committedFx = positive(value.privateContent.fx);hasSavedState = true;recomputeDirty();});saved = true;}
+      try {await enqueue(() => payload(snapshot),value => {committed = {...snapshot,savedAt:value.privateContent.savedAt};committedFx = positive(value.privateContent.fx);hasSavedState = true;recomputeDirty();});saved = true;}
       catch (cause) {error = cause?.code === 'state-too-large' ? 'ยังไม่เซฟ · ราคาและหมายเหตุรวมเกิน 16 KB กรุณาย่อหมายเหตุ' : 'เซฟไม่สำเร็จ · ราคาและหมายเหตุยังไม่ถูกบันทึก กรุณากดใหม่';}
       finally {saving = false; saveStatus();}
       if (saved) notifyReportSummary('saved');
       notifyPriceDraftChange(saved ? 'saved' : 'save-failed');return saved;
     }
     function saveFx() {
+      if (readOnly || priceNotesOnly) return;
       if (storeLoading || storeLoadFailed) return;
       // Only the committed catalog accompanies FX autosaves. Price/note drafts are never saved implicitly.
       enqueue(() => payload(committed),value => {committedFx = positive(value.privateContent.fx);hasSavedState = true;if (error === 'บันทึกอัตราไม่สำเร็จ · กรุณาลองใหม่') {error = ''; saveStatus();}}).then(() => notifyReportSummary('saved')).catch(() => {error = 'บันทึกอัตราไม่สำเร็จ · กรุณาลองใหม่'; saveStatus();});
     }
     function exportSaved(button = null) {
+      if (readOnly) return null;
       if (!hasSavedState) {error = 'ยังไม่มีราคาและหมายเหตุที่เซฟให้ส่งออก';saveStatus();return null;}
       const state = payload(committed,committedFx), json = JSON.stringify(state,null,2);
       if (typeof options.onExport === 'function') options.onExport({state:JSON.parse(JSON.stringify(state)),json,filename:'aaf-sales-preview-price-catalog-v3.json'});
@@ -1277,7 +1286,7 @@ module.exports = {
       if (!rows.length) return '<span class="sp-empty">ไม่มีรายการในกลุ่มนี้</span>';
       return '<div class="sp-table-scroll"><table class="sp-table"><thead><tr><th scope="col">ลูกค้า</th><th class="sp-qty" scope="col">จำนวน</th><th class="sp-grade-cell" scope="col">เกรด</th><th class="sp-thickness" scope="col">หนา (มม.)</th><th class="sp-size" scope="col">ขนาด (มม.)</th><th class="sp-equivalent" scope="col">แผ่นเทียบ<br>4×8 @2.5</th><th class="sp-payment" scope="col">สถานะการรับเงิน</th><th class="sp-money" scope="col">มูลค่ารายการ<br>โดยประมาณ</th></tr></thead><tbody>'+rows.map(row => '<tr><td><span class="sp-customer-name"><span class="sp-term">'+esc(row.term === 'unknown' ? '—' : row.term === 'credit' ? 'เครดิต' : row.term)+'</span><span class="sp-term-divider" aria-hidden="true">—</span><span>'+esc(row.customer)+'</span></span>'+rowProvenance(row)+'</td><td class="sp-qty"><strong>'+fmt(row.qty)+'</strong><small class="sp-unit-break">'+esc(unitName(row.unit))+'</small></td><td class="sp-grade-cell">'+esc(row.grade === 'mix' ? 'AAA+B' : row.grade)+'</td><td class="sp-thickness">'+esc(thick(row.t))+'</td><td class="sp-size">'+fmt(row.w)+' × '+fmt(row.l)+'</td><td class="sp-equivalent">'+esc(rowEquivalent(row))+'</td><td class="sp-payment"><span class="sp-payment-label">'+esc(paymentText(row))+'</span></td><td class="sp-money">'+esc(rowMoneyText(row))+'</td></tr>').join('')+'</tbody></table></div>';
     }
-    function saveToolbar() {return '<div class="sp-save-prices"><button type="button" class="cursor-interaction" data-save-prices aria-label="เซฟราคาและหมายเหตุทุกความหนา">เซฟราคาและหมายเหตุ</button><button type="button" class="cursor-interaction" data-export-prices aria-label="ส่งออก JSON ราคาและหมายเหตุที่เซฟแล้ว">Export JSON ที่เซฟแล้ว</button><span class="sp-save-status" data-save-price-status role="status" aria-live="polite"></span><span class="sp-save-scope">'+esc(options.persistenceLabel || 'เก็บราคา สกุลเงิน และหมายเหตุในพรีวิว Codex นี้ · ไม่แก้สต๊อกหรือข้อมูลส่วนกลาง')+' · Export ไม่รวมร่างที่ยังไม่เซฟ</span><div class="sp-export-panel" data-export-panel hidden style="flex-basis:100%;width:100%"><label class="sp-thickness-note-label">JSON สำหรับย้าย catalog ที่เซฟแล้ว<textarea class="sp-thickness-note" rows="8" readonly data-export-json aria-label="JSON ราคาและหมายเหตุที่เซฟแล้ว"></textarea></label><button type="button" class="cursor-interaction" data-copy-export-json>คัดลอก JSON</button><span class="sp-save-status" data-export-copy-status role="status" aria-live="polite">เลือกข้อความแล้วคัดลอกได้ทันที</span></div></div>';}
+    function saveToolbar() {if(readOnly)return '<p class="sp-save-scope">ดูอย่างเดียว · ใช้ราคาและหมายเหตุที่เจ้าของบันทึกไว้</p>';return '<div class="sp-save-prices"><button type="button" class="cursor-interaction" data-save-prices aria-label="เซฟราคาและหมายเหตุทุกความหนา">เซฟราคาและหมายเหตุ</button><button type="button" class="cursor-interaction" data-export-prices aria-label="ส่งออก JSON ราคาและหมายเหตุที่เซฟแล้ว">Export JSON ที่เซฟแล้ว</button><span class="sp-save-status" data-save-price-status role="status" aria-live="polite"></span><span class="sp-save-scope">'+esc(options.persistenceLabel || 'เก็บราคา สกุลเงิน และหมายเหตุในพรีวิว Codex นี้ · ไม่แก้สต๊อกหรือข้อมูลส่วนกลาง')+' · Export ไม่รวมร่างที่ยังไม่เซฟ</span><div class="sp-export-panel" data-export-panel hidden style="flex-basis:100%;width:100%"><label class="sp-thickness-note-label">JSON สำหรับย้าย catalog ที่เซฟแล้ว<textarea class="sp-thickness-note" rows="8" readonly data-export-json aria-label="JSON ราคาและหมายเหตุที่เซฟแล้ว"></textarea></label><button type="button" class="cursor-interaction" data-copy-export-json>คัดลอก JSON</button><span class="sp-save-status" data-export-copy-status role="status" aria-live="polite">เลือกข้อความแล้วคัดลอกได้ทันที</span></div></div>';}
     function thicknessNotesMarkup(thicknesses, scopeId) {
       const keys = [...new Set(thicknesses.map(thicknessKey).filter(key => key !== null))].sort((a,b) => Number(a)-Number(b));
       const fields = '<div class="sp-free-notes">'+keys.map(key => {
@@ -1544,8 +1553,9 @@ module.exports = {
     syncInputs();updateFinancialView();saveStatus();
     on(root,'input',event => {
       const input = event.target;
+      if (readOnly) return;
       if (storeLoading || storeLoadFailed) return;
-      if (input.matches('[data-fx]')) {pricing.fx = positive(input.value);input.setAttribute('aria-invalid',String(pricing.fx === null));updateFinancialView();saveFx();return;}
+      if (input.matches('[data-fx]')) {if(priceNotesOnly)return;pricing.fx = positive(input.value);input.setAttribute('aria-invalid',String(pricing.fx === null));updateFinancialView();saveFx();return;}
       if (input.matches('[data-thickness-note]')) {const key = thicknessKey(input.dataset.thicknessNote);if (key === null) return;if (input.value === '') delete pricing.notesByThickness[key];else pricing.notesByThickness[key] = input.value;syncInputs(input);markEdited();return;}
       if (!input.matches('[data-free-price]')) return;
       const displayKey = knownDisplayKey(input.dataset.freePrice);
@@ -1558,7 +1568,7 @@ module.exports = {
       else pricing.prices[key] = value;
       invalidDraftValues.delete(displayKey);input.setAttribute('aria-invalid','false');syncInputs(input);updateFinancialView();markEdited();notifyPriceDraftChange('draft',displayKey);
     });
-    on(root,'change',event => {const input = event.target;if (storeLoading || storeLoadFailed || !input.matches('[data-free-currency]')) return;setDraftCurrency(input.dataset.freeCurrency,input.value === 'USD' ? 'USD' : 'THB',input);});
+    on(root,'change',event => {const input = event.target;if (readOnly || storeLoading || storeLoadFailed || !input.matches('[data-free-currency]')) return;setDraftCurrency(input.dataset.freeCurrency,input.value === 'USD' ? 'USD' : 'THB',input);});
     on(root,'click',event => {
       const save = event.target.closest('[data-save-prices]');if (save) {savePrices();return;}
       const exporter = event.target.closest('[data-export-prices]');if (exporter) {exportSaved(exporter);return;}

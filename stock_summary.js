@@ -106,6 +106,7 @@
   function priceCoverage(b,group=''){
     if(!b)return '';
     const specs=b.unpricedSpecs||[],fx=b.coverage?.missingFxSpecCount||0;
+    if(window.AAFSalesPreview?.isReadOnly?.()===true&&specs.length)return `<details class="ss-price-gaps"><summary>ยังไม่มีราคา ${specs.length} สเปก${fx?' · ขาดเรท '+fx+' สเปก':''}</summary>${specs.map(r=>`<div class="ss-gap-spec"><span>${esc(thicknessLabel(r.t)+' '+r.grade+' · '+number(r.w)+' × '+number(r.l))}</span><b>${number(r.qty)} ${r.unit==='strip'?'ชิ้น':'แผ่น'}</b></div>`).join('')}<small>รอเจ้าของบันทึกราคา · ยังไม่รวมรายการนี้ในมูลค่า</small></details>`;
     if(!specs.length&&!fx)return b.coverage?.complete?'<small>ราคาครบทุกสเปกในกลุ่มนี้</small>':'<small>มูลค่ายังไม่ครบ · ไม่ตีรายการที่ไม่มีราคาเป็นศูนย์</small>';
     return `<details class="ss-price-gaps" data-stock-gap-group="${esc(group)}"><summary>ยังไม่มีราคา ${specs.length} สเปก${fx?' · ขาดเรท '+fx+' สเปก':''}</summary>${specs.map(r=>{
       const key=r.key||[r.t,r.grade,r.w,r.l,r.unit].join('|'),unit=r.unit==='strip'?'ชิ้น':'แผ่น';
@@ -167,7 +168,7 @@
   function syncPriceDrafts(){
     if(!root)return;
     const bridge=window.AAFSalesPreview,state=bridge?.getPriceState?.();
-    const blocked=!state||state.loading||state.loadFailed||state.saving;
+    const blocked=!state||state.readOnly||state.loading||state.loadFailed||state.saving;
     const exactKey=key=>{const [t,g,w,l,u]=String(key).split('|');return [Number(t),g,...[Number(w),Number(l)].sort((a,b)=>a-b),u].join('|');};
     root.querySelectorAll('[data-stock-price-row]').forEach(row=>{
       const draft=bridge?.getDraftPrice?.(row.dataset.stockPriceRow),input=row.querySelector('[data-stock-gap-price]'),select=row.querySelector('[data-stock-gap-currency]');

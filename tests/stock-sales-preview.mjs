@@ -377,6 +377,32 @@ assert.equal(Object.keys(saved.privateContent.prices).length,96);
   app.destroy();
 }
 
-console.log('Stock sales preview public asset, formula parity, 96-key catalog preservation, committed-only export and fail-closed persistence tests passed.');
+// Read-only uses the identical arithmetic, but even programmatic edits never write.
+{
+  const editable=harness(),readonly=harness(),writes=[];
+  const store={load:()=>clone(saved),setWidgetState:async value=>writes.push(value)};
+  const ownerView=api.mount(editable.root,model,{fxReference:{rate:33.3901}},store);
+  const readerView=api.mount(readonly.root,model,{readOnly:true,fxReference:{rate:33.3901}},store);
+  await ownerView.ready;await readerView.ready;
+  assert.deepEqual(readerView.getReportSummary(),ownerView.getReportSummary());
+  assert(readonly.root.querySelectorAll('[data-fx],[data-free-price],[data-free-currency],[data-thickness-note]').every(node=>node.disabled));
+  assert.equal(readonly.root.querySelectorAll('[data-save-prices],[data-export-prices]').length,0);
+  assert.equal(readerView.setDraftPrice(visibleKey,999,'THB'),false);
+  assert.equal(await readerView.savePrices(),false);assert.equal(readerView.exportSaved(),null);
+  const fx=readonly.find('[data-fx]');fx.value='99';readonly.listeners.input({target:fx});
+  assert.equal(readerView.getPriceState().fx,saved.privateContent.fx);
+  assert.equal(writes.length,0);ownerView.destroy();readerView.destroy();
+}
+{
+  const h=harness(),writes=[];
+  const app=api.mount(h.root,model,{priceNotesOnly:true,fxReference:{rate:33.3901}},{load:()=>clone(saved),setWidgetState:async value=>writes.push(value)});
+  await app.ready;assert(h.root.querySelectorAll('[data-fx]').every(node=>node.disabled));
+  assert(h.root.querySelectorAll('[data-free-price],[data-thickness-note]').every(node=>!node.disabled));
+  const fx=h.find('[data-fx]');fx.value='99';h.listeners.input({target:fx});assert.equal(app.getPriceState().fx,saved.privateContent.fx);
+  assert(app.setDraftPrice(visibleKey,2.75,'USD'));const note=h.find('[data-thickness-note]');note.value='sales note';h.listeners.input({target:note});
+  assert.equal(await app.savePrices(),true);assert.equal(writes.length,1);assert.equal(writes[0].privateContent.fx,saved.privateContent.fx);
+  assert.equal(writes[0].privateContent.notesByThickness[note.dataset.thicknessNote],'sales note');app.destroy();
+}
+console.log('Stock sales preview role permissions, parity, catalog preservation and fail-closed persistence tests passed.');
 
 export {harness,sale};
