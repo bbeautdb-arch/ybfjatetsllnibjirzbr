@@ -212,4 +212,37 @@ assert(!source.includes('SYNTHETIC-')&&!source.includes('"salesRows":['));
   assert.equal(r.builds[0].salesRows[0].id,'sale-NEW');assert.equal(slot.children[0],newHost);assert.equal(r.api.isDirty(),true,'late prior-token response cannot replace active lifecycle state');
 }
 
-console.log('Stock sales controller auth, shadow CSS, draft reattach, revision CAS, one-time import/readback and token-isolation tests passed.');
+// Sales mode is server-authorized, edits only the shared catalog and preserves dirty drafts across stock polls.
+{
+  const r=runtime(),slot=r.slot();r.setToken('staff');r.api.setAccess({salesMode:true,revision:10});
+  r.enqueue({...response('STAFF'),permissions:{pricesAndNotes:true},stockReportDate:'2026-10-01',salesReportDate:'2026-10-01'});
+  await r.api.attach(slot);assert.match(r.fetchCalls[0].url,/view=salesReport/);assert.equal(r.mounts[0].options.priceNotesOnly,true);
+  assert.equal(r.api.setDraftPrice('known',2.5,'THB'),true);
+  r.api.setAccess({salesMode:true,revision:11});await r.api.attach(slot);assert.equal(r.mounts.length,1,'central update does not discard a pending sales edit');
+  const next=canonicalState(2.5);r.enqueue({ok:true,catalogRevision:1,revision:11});r.enqueue({ok:true,catalogRevision:2,revision:12,widgetState:{privateContent:next.privateContent}});
+  await r.mounts[0].options.store.setWidgetState(next);
+  const body=JSON.parse(r.fetchCalls.at(-1).init.body);assert.equal(body.action,'saveSalesReport');assert.deepEqual(body.prices,next.privateContent.prices);
+  assert(!('fx' in body)&&!('widgetState' in body)&&!('modelContent' in body));
+}
+{
+  const r=runtime(),slot=r.slot();r.setToken('staff-retry');r.api.setAccess({salesMode:true,revision:10});
+  r.enqueue({ok:false,httpOk:false,error:'retry'});await r.api.attach(slot);assert.equal(r.mounts.length,0);
+  r.enqueue({...response('RETRY'),permissions:{pricesAndNotes:true}});await r.api.attach(slot);assert.equal(r.mounts.length,1,'failed report can retry at the same revision');
+}
+{
+  const r=runtime(),slot=r.slot();r.setToken('no-permission');r.api.setAccess({salesMode:true,revision:10});r.enqueue(response('DENIED'));
+  await r.api.attach(slot);assert.equal(r.mounts.length,0);assert.equal(r.api.setDraftPrice('known',9),false);
+}
+{
+  const r=runtime(),slot=r.slot();r.setToken('owner-refresh');r.api.setAccess({salesMode:false,revision:1});r.enqueue(response('FIRST'));await r.api.attach(slot);
+  r.api.setAccess({salesMode:false,revision:2});r.enqueue(response('UPDATED'));await r.api.attach(slot);assert.equal(r.mounts.length,2,'owner reloads updated shared prices when no draft is pending');
+  r.mounts[1].state.dirty=true;r.api.setAccess({salesMode:false,revision:3});await r.api.attach(slot);assert.equal(r.mounts.length,2,'owner draft is retained on another user save');
+}
+// Fixed login return routes never accept external URLs or grant a role.
+{
+  const html=fs.readFileSync(new URL('../login.html',import.meta.url),'utf8');
+  const code=html.slice(html.indexOf('const stockSalesDestination'),html.indexOf('async function doLogin'))+'\nresult=loginDestination(role);';
+  for(const role of ['admin','sales','stock_viewer','stock_sales']){const c={location:{search:'?next=stock-sales'},URLSearchParams,role};vm.runInNewContext(code,c);assert.equal(c.result,'stock_manager.html?view=sales');}
+  for(const search of ['?next=https://evil.example','?next=//evil.example','']){const c={location:{search},URLSearchParams,role:'sales'};vm.runInNewContext(code,c);assert.equal(c.result,'dashboard_home.html');}
+}
+console.log('Stock sales controller auth, sales catalog-only edits, draft reattach, revision CAS, safe login return and token-isolation tests passed.');

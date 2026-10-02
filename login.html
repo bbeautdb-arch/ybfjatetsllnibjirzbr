@@ -168,6 +168,11 @@ function detectDevice() {
 }
 
 function logAttempt() {}
+// Only a fixed local destination is accepted; never redirect to an arbitrary URL.
+const stockSalesDestination = new URLSearchParams(location.search).get('next') === 'stock-sales';
+const loginDestination = role => stockSalesDestination && ['admin','sales','stock_viewer','stock_sales'].includes(role)
+  ? 'stock_manager.html?view=sales'
+  : role === 'stock_viewer' ? 'stock_manager.html' : role === 'purchase_material' ? 'production_plan.html' : 'dashboard_home.html';
 
 async function doLogin() {
   if(document.getElementById('btn-login').disabled)return;
@@ -231,7 +236,7 @@ async function doLogin() {
     authSource: authSource,
   }));
 
-  const target = found.role === 'stock_viewer' ? 'stock_manager.html' : found.role === 'purchase_material' ? 'production_plan.html' : 'dashboard_home.html';
+  const target = loginDestination(found.role);
   setTimeout(()=>{ window.location.href = target; }, 300);
 }
 
@@ -240,7 +245,7 @@ const sess = sessionStorage.getItem('aaf_user');
 if(sess){
   try{
     const parsed = JSON.parse(sess);
-    window.location.href = parsed.role === 'stock_viewer' ? 'stock_manager.html' : parsed.role === 'purchase_material' ? 'production_plan.html' : 'dashboard_home.html';
+    window.location.href = loginDestination(parsed.role);
   }catch(e){
     sessionStorage.removeItem('aaf_user');
   }
