@@ -162,7 +162,8 @@
       cards.querySelectorAll('[data-stock-gap-group]').forEach(node=>{node.open=opened.has(node.dataset.stockGapGroup);});
     }
     const fx=root?.querySelector('.ss-exchange b');if(fx)fx.textContent=summary?.catalog?.fxThbPerUsd?number(summary.catalog.fxThbPerUsd,4):'—';
-    const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=summary?'อ้างอิงหัวข้อ 02 · ใช้ราคาและเรทที่เซฟแล้ว':'รอข้อมูลจากหัวข้อ 02 · ยังไม่แสดงยอดจากชุดอื่น';
+    const fxInfo=root?.querySelector('.ss-exchange small');if(fxInfo)fxInfo.textContent=summary?.catalog?.fxStatus||'บาท / 1 USD';
+    const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=summary?(summary.catalog?.automaticFx?'อ้างอิงหัวข้อ 02 · ราคาที่เซฟแล้ว + เรท ธปท. อัตโนมัติ':'อ้างอิงหัวข้อ 02 · ใช้ราคาและเรทที่เซฟแล้ว'):'รอข้อมูลจากหัวข้อ 02 · ยังไม่แสดงยอดจากชุดอื่น';
     syncPriceDrafts();
   }
   function syncPriceDrafts(){
@@ -202,9 +203,9 @@
     const t=m.total,overrides=m.rows.filter(r=>r.physicalAt||r.freeAt).length,followed=m.rows.filter(r=>String(r.followup).trim()).length;
     let index=0;
     return `<article class="ss-sheet">
-      <header class="ss-hero"><div><div class="ss-eyebrow">AAF / STOCK & SALES FOLLOW-UP</div><h2>รายงานสต๊อกและติดตามการขาย</h2><p>อ้างอิงรายงานเมล ${esc(reportDay(m.reportDate))}</p></div><div class="ss-hero-meta"><div class="ss-stamp">ข้อมูลที่บันทึกแล้ว<br><b>ครบ ${number(m.rows.length)} สเปก</b><br>ทุกเกรด · ทุกขนาด</div><div class="ss-exchange"><span>อัตราแลกเปลี่ยน · หัวข้อ 02</span><b>${m.salesSummary?.catalog?.fxThbPerUsd?number(m.salesSummary.catalog.fxThbPerUsd,4):'—'}</b><small>บาท / 1 USD</small></div></div></header>
+      <header class="ss-hero"><div><div class="ss-eyebrow">AAF / STOCK & SALES FOLLOW-UP</div><h2>รายงานสต๊อกและติดตามการขาย</h2><p>อ้างอิงรายงานเมล ${esc(reportDay(m.reportDate))}</p></div><div class="ss-hero-meta"><div class="ss-stamp">ข้อมูลที่บันทึกแล้ว<br><b>ครบ ${number(m.rows.length)} สเปก</b><br>ทุกเกรด · ทุกขนาด</div><div class="ss-exchange"><span>อัตราแลกเปลี่ยน · หัวข้อ 02</span><b>${m.salesSummary?.catalog?.fxThbPerUsd?number(m.salesSummary.catalog.fxThbPerUsd,4):'—'}</b><small>${esc(m.salesSummary?.catalog?.fxStatus||'บาท / 1 USD')}</small></div></div></header>
       <div class="ss-content"><div class="ss-context"><span>ข้อมูลส่วนกลางล่าสุด <b>${esc(when(m.updatedAt))}</b></span><span>เวลาไทย (UTC+7) · ภาพรวมทั้งชุด ไม่ใช้ตัวกรองในหน้าสต๊อก</span></div>
-      <p class="ss-sales-summary-source" role="status">${m.salesSummary?'อ้างอิงหัวข้อ 02 · ใช้ราคาและเรทที่เซฟแล้ว':'รอข้อมูลจากหัวข้อ 02 · ยังไม่แสดงยอดจากชุดอื่น'}</p>
+      <p class="ss-sales-summary-source" role="status">${m.salesSummary?(m.salesSummary.catalog?.automaticFx?'อ้างอิงหัวข้อ 02 · ราคาที่เซฟแล้ว + เรท ธปท. อัตโนมัติ':'อ้างอิงหัวข้อ 02 · ใช้ราคาและเรทที่เซฟแล้ว'):'รอข้อมูลจากหัวข้อ 02 · ยังไม่แสดงยอดจากชุดอื่น'}</p>
       <div class="ss-kpis">${kpiHTML(m.salesSummary)}</div>
       <div class="ss-section-title"><span>01</span><h3>ภาพรวมแยกเกรดและความหนา</h3></div>
       <div class="ss-groups">${groupTable('แยกตามเกรด',m.grades,'เกรด',t)}${groupTable('แยกตามความหนา',m.thickness.filter(([,totals])=>totals.qty>0).map(([thick,totals])=>[thicknessLabel(thick),totals]),'หนา (mm)',t)}</div>
@@ -238,7 +239,7 @@
     [data-aaf-stock-summary] .ss-hero-meta{display:flex;gap:12px;align-items:stretch;flex-shrink:0;flex-wrap:wrap;max-width:100%}
     [data-aaf-stock-summary] .ss-exchange{border:1px solid #60798d;border-radius:10px;padding:14px 18px;text-align:right;color:#cee1ef;display:flex;flex-direction:column;justify-content:center;font-size:12px}
     [data-aaf-stock-summary] .ss-exchange b{font-size:24px;color:white;font-variant-numeric:tabular-nums}
-    [data-aaf-stock-summary] .ss-exchange small{font-size:11px}
+    [data-aaf-stock-summary] .ss-exchange small{font-size:11px;max-width:230px;line-height:1.5}
     [data-aaf-stock-summary] .ss-content{padding:24px 28px}
     [data-aaf-stock-summary] .ss-context{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:12px;color:#52657a;margin-bottom:20px}
     [data-aaf-stock-summary] .ss-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}

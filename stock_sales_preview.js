@@ -886,6 +886,25 @@ module.exports = {
     let pricing = {fx:positive(fxReference.rate), prices:{}, currencies:{},notesByThickness:{}};
     let committed = {prices:{},currencies:{},notesByThickness:{},savedAt:null};
     let committedFx = pricing.fx, hasSavedState = false;
+    const automaticFx = options.automaticFx === true;
+    let autoFx = null;
+    // Automatic FX is a valuation input, never a price/catalog write.
+    const effectiveFx = (saved = false) => automaticFx ? positive(autoFx?.rate) ?? positive(committedFx) : positive(saved ? committedFx : pricing.fx);
+    function fxStatusText() {
+      if (!automaticFx) return pricing.fx === null ? 'กรอกอัตรามากกว่า 0 เพื่อคำนวณเงินบาท' : pricing.fx === fxReference.rate ? 'ใช้อัตราอ้างอิง · ไม่ใช่เรทสดอัตโนมัติ' : 'ใช้อัตราที่กรอกเอง · ไม่ใช่อัตรารับเงินจริง';
+      const savedDate=committedFx===fxReference.rate?fxReference.date:null;
+      const dateValue=autoFx?.date||savedDate;
+      const date = dateValue ? new Date(dateValue+'T12:00:00+07:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric',timeZone:'Asia/Bangkok'}) : 'ไม่ทราบวันที่';
+      if (!autoFx) return 'กำลังตรวจเรทอัตโนมัติ · ใช้เรทเดิม '+date;
+      return (autoFx.status === 'current' ? 'อัตโนมัติ · ธปท. ซื้อเงินโอน · ' : autoFx.status === 'stale' ? 'เรทต้นทางเกิน 7 วัน · คงเรทเดิม · ' : 'ดึงเรทล่าสุดไม่สำเร็จ · คงเรทเดิม · ')+date+' · อัตรารายวัน ไม่ใช่เรทระหว่างวัน';
+    }
+    function setAutomaticFx(value) {
+      if (!automaticFx || destroyed || storeLoading || storeLoadFailed || dirty || saving) return false;
+      const valid = value && typeof value.rate==='number' && positive(value.rate) !== null && value.rate <= 1000 && /^\d{4}-\d{2}-\d{2}$/.test(value.date || '') && Number.isFinite(Date.parse(value.date)) && new Date(value.date).toISOString().slice(0,10)===value.date && value.date<=new Date(Date.now()+7*60*60*1000).toISOString().slice(0,10) && value.basis === 'BOT_USD_THB_BUYING_TRANSFER';
+      if (valid && (!autoFx?.date || value.date >= autoFx.date)) autoFx = {...value};
+      else autoFx = {...autoFx,status:'unavailable'};
+      syncInputs();updateFinancialView();saveStatus();notifyReportSummary('exchange-rate');return true;
+    }
     let dirty = false, saving = false, error = '', writeCount = 0, queuedWrites = 0, writeFailed = false;
     let storeLoading = false, storeLoadFailed = false;
     let queue = Promise.resolve();
@@ -978,7 +997,7 @@ module.exports = {
       const blocked = readOnly || storeLoading || storeLoadFailed;
       root.setAttribute('aria-busy',String(storeLoading));
       root.querySelectorAll('[data-fx],[data-thickness-note],[data-free-price],[data-free-currency]').forEach(node => {node.disabled = blocked;if(readOnly){node.setAttribute('aria-readonly','true');node.placeholder='';}});
-      if(priceNotesOnly)root.querySelectorAll('[data-fx]').forEach(node=>{node.disabled=true;node.setAttribute('aria-readonly','true');node.title='อัตราแลกเปลี่ยนกำหนดโดยเจ้าของ';});
+      if(priceNotesOnly || automaticFx)root.querySelectorAll('[data-fx]').forEach(node=>{node.disabled=true;node.setAttribute('aria-readonly','true');node.title=automaticFx?'อัปเดตอัตโนมัติจาก ธปท.':'อัตราแลกเปลี่ยนกำหนดโดยเจ้าของ';});
     }
     function saveStatus() {
       const label = storeLoading ? 'กำลังโหลดราคาและหมายเหตุ…' : saving ? 'กำลังเซฟ…' : error || (dirty ? 'แก้ไขแล้ว · ยังไม่เซฟ' : committed.savedAt ? 'เซฟแล้ว '+new Date(committed.savedAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : 'กดเซฟเพื่อเก็บราคาและหมายเหตุ');
@@ -1046,7 +1065,7 @@ module.exports = {
       notifyPriceDraftChange(saved ? 'saved' : 'save-failed');return saved;
     }
     function saveFx() {
-      if (readOnly || priceNotesOnly) return;
+      if (readOnly || priceNotesOnly || automaticFx) return;
       if (storeLoading || storeLoadFailed) return;
       // Only the committed catalog accompanies FX autosaves. Price/note drafts are never saved implicitly.
       enqueue(() => payload(committed),value => {committedFx = positive(value.privateContent.fx);hasSavedState = true;if (error === 'บันทึกอัตราไม่สำเร็จ · กรุณาลองใหม่') {error = ''; saveStatus();}}).then(() => notifyReportSummary('saved')).catch(() => {error = 'บันทึกอัตราไม่สำเร็จ · กรุณาลองใหม่'; saveStatus();});
@@ -1071,7 +1090,7 @@ module.exports = {
     }
     function syncInputs(active = doc.activeElement) {
       const fx = root.querySelector('[data-fx]');
-      if (fx && fx !== active) fx.value = pricing.fx ?? '';
+      if (fx && fx !== active) fx.value = effectiveFx() ?? '';
       root.querySelectorAll('[data-free-price]').forEach(input => {
         const displayKey = knownDisplayKey(input.dataset.freePrice), key = priceKey(displayKey || input.dataset.freePrice), invalid = displayKey !== null && invalidDraftValues.has(displayKey);
         input.setAttribute('aria-label',input.dataset.priceLabel+' '+(currency(pricing.currencies,key) === 'USD' ? 'USD' : 'บาท')+'ต่อ'+unitName(input.dataset.unit));
@@ -1084,7 +1103,7 @@ module.exports = {
     function rowValue(row) {
       if (!row) return null;
       const key = priceKey(specKey(row)), price = positive(pricing.prices[key]);
-      const fx = currency(pricing.currencies,key) === 'USD' ? positive(pricing.fx) : 1;
+      const fx = currency(pricing.currencies,key) === 'USD' ? effectiveFx() : 1;
       return price !== null && fx !== null ? row.free*price*fx : null;
     }
     function valuation(rows) {
@@ -1092,7 +1111,7 @@ module.exports = {
       const priced = available.filter(row => positive(pricing.prices[priceKey(specKey(row))]) !== null);
       const values = priced.map(rowValue).filter(value => value !== null);
       const partial = values.reduce((sum,value) => sum+value,0);
-      return {value:values.length === available.length ? partial : null, partial,priced:priced.length,valued:values.length,total:available.length,missingFx:priced.filter(row => currency(pricing.currencies,priceKey(specKey(row))) === 'USD' && positive(pricing.fx) === null).length};
+      return {value:values.length === available.length ? partial : null, partial,priced:priced.length,valued:values.length,total:available.length,missingFx:priced.filter(row => currency(pricing.currencies,priceKey(specKey(row))) === 'USD' && effectiveFx() === null).length};
     }
     const reportUnits = () => ({sheet:0,strip:0});
     const addReportUnit = (target,unit,value) => {if (Object.hasOwn(target,unit)) target[unit] += value;};
@@ -1121,7 +1140,7 @@ module.exports = {
         const key = committedPriceKey(specKey(row)), price = positive(committed.prices[key]);
         if (price === null) {addReportUnit(unpricedByUnit,row.unit,qty);unpricedSpecs.push({key:specKey(row),t:row.t,grade:row.grade,w:row.w,l:row.l,unit:row.unit,qty});return;}
         pricedSpecCount++;
-        const code = currency(committed.currencies,key), fx = code === 'USD' ? positive(committedFx) : 1;
+        const code = currency(committed.currencies,key), fx = code === 'USD' ? effectiveFx(true) : 1;
         if (fx === null) {missingFxSpecCount++;addReportUnit(missingFxByUnit,row.unit,qty);return;}
         knownValueTHB += qty*price*fx;valuedSpecCount++;
       });
@@ -1189,7 +1208,7 @@ module.exports = {
         if (!Number.isFinite(row.amount) || !row.currency) {unknownRowCount++;return;}
         byCurrency[row.currency] = (byCurrency[row.currency] || 0)+row.amount;
         if (row.currency === 'THB') {knownValueTHB += row.amount;knownRowCount++;return;}
-        if (row.currency === 'USD' && positive(committedFx) !== null) {knownValueTHB += row.amount*committedFx;knownRowCount++;return;}
+        if (row.currency === 'USD' && effectiveFx(true) !== null) {knownValueTHB += row.amount*effectiveFx(true);knownRowCount++;return;}
         missingFxRowCount++;
       });
       const complete = unknownRowCount === 0 && missingFxRowCount === 0;
@@ -1198,7 +1217,7 @@ module.exports = {
     function getReportSummary() {
       const loadedRows = model.salesRows.filter(row => row.status === 'loaded');
       const paidUnloadedRows = model.salesRows.filter(row => row.status === 'paid');
-      return {version:2,catalog:{hasSavedCatalog:hasSavedState,fxThbPerUsd:positive(committedFx),savedAt:committed.savedAt || null},partition:inventoryPartition(),physical:inventoryReport('physical'),reserved:inventoryReport('reserved'),free:inventoryReport('free'),sold:{...soldReport([...loadedRows,...paidUnloadedRows]),loaded:soldReport(loadedRows),paidUnloaded:soldReport(paidUnloadedRows)}};
+      return {version:2,catalog:{hasSavedCatalog:hasSavedState,fxThbPerUsd:effectiveFx(true),savedAt:committed.savedAt || null,...(automaticFx?{automaticFx:true,fxStatus:fxStatusText(),fxDate:autoFx?.date||null}:{})},partition:inventoryPartition(),physical:inventoryReport('physical'),reserved:inventoryReport('reserved'),free:inventoryReport('free'),sold:{...soldReport([...loadedRows,...paidUnloadedRows]),loaded:soldReport(loadedRows),paidUnloaded:soldReport(paidUnloadedRows)}};
     }
     function notifyReportSummary(reason) {
       if (destroyed) return;
@@ -1236,13 +1255,13 @@ module.exports = {
       let known = 0, hasKnown = false, unknownCurrency = 0;
       Object.entries(money?.byCurrency || {}).forEach(([code,amount]) => {
         if (code === 'THB') {known += amount; hasKnown = true;}
-        else if (code === 'USD' && positive(pricing.fx) !== null) {known += amount*pricing.fx; hasKnown = true;}
+        else if (code === 'USD' && effectiveFx() !== null) {known += amount*effectiveFx(); hasKnown = true;}
         else unknownCurrency++;
       });
       if (!money?.totalRows) return bahtText(0,decimals);
       const qualifiers = [];
       if (money.unknownRows) qualifiers.push('ยังไม่รวม '+money.unknownRows+' บรรทัดที่รอมูลค่า');
-      if (unknownCurrency) qualifiers.push(positive(pricing.fx) === null ? 'รออัตราแลกเปลี่ยน' : 'มีสกุลเงินที่ยังไม่แปลง');
+      if (unknownCurrency) qualifiers.push(effectiveFx() === null ? 'รออัตราแลกเปลี่ยน' : 'มีสกุลเงินที่ยังไม่แปลง');
       return (hasKnown ? bahtText(known,decimals) : 'รอมูลค่า')+(qualifiers.length ? ' · '+qualifiers.join(' · ') : '');
     }
     const equivalentText = totals => {
@@ -1519,7 +1538,7 @@ module.exports = {
       root.querySelectorAll('[data-free-value]').forEach(node => {const value = getValuation(node.dataset.freeValue);node.textContent = value.value !== null ? bahtText(value.value) : value.valued ? bahtText(value.partial)+' (บางส่วน)' : value.missingFx ? 'รออัตราแลกเปลี่ยน' : 'รอใส่ราคา';});
       root.querySelectorAll('[data-free-coverage]').forEach(node => {const value = getValuation(node.dataset.freeCoverage);node.textContent = 'ความครบมูลค่า Free · ใส่ราคาแล้ว '+value.priced+' / '+value.total+' สเปก'+(value.missingFx ? ' · รออัตรา USD '+value.missingFx+' สเปก' : '')+(value.value === null ? ' · ยังไม่ใช่มูลค่ารวม' : '');});
       root.querySelectorAll('[data-free-row-value]').forEach(node => {const key = node.dataset.freeRowValue, value = rowValue(rowLookup.get(key));node.textContent = positive(pricing.prices[priceKey(key)]) === null ? 'รอใส่ราคา' : value === null ? 'รออัตราแลกเปลี่ยน' : bahtText(value,2);});
-      root.querySelector('[data-fx-status]').textContent = pricing.fx === null ? 'กรอกอัตรามากกว่า 0 เพื่อคำนวณเงินบาท' : pricing.fx === fxReference.rate ? 'ใช้อัตราอ้างอิง · ไม่ใช่เรทสดอัตโนมัติ' : 'ใช้อัตราที่กรอกเอง · ไม่ใช่อัตรารับเงินจริง';
+      root.querySelector('[data-fx-status]').textContent = fxStatusText();
     }
 
     let destroyed = false, ready = Promise.resolve();
@@ -1555,7 +1574,7 @@ module.exports = {
       const input = event.target;
       if (readOnly) return;
       if (storeLoading || storeLoadFailed) return;
-      if (input.matches('[data-fx]')) {if(priceNotesOnly)return;pricing.fx = positive(input.value);input.setAttribute('aria-invalid',String(pricing.fx === null));updateFinancialView();saveFx();return;}
+      if (input.matches('[data-fx]')) {if(priceNotesOnly || automaticFx)return;pricing.fx = positive(input.value);input.setAttribute('aria-invalid',String(pricing.fx === null));updateFinancialView();saveFx();return;}
       if (input.matches('[data-thickness-note]')) {const key = thicknessKey(input.dataset.thicknessNote);if (key === null) return;if (input.value === '') delete pricing.notesByThickness[key];else pricing.notesByThickness[key] = input.value;syncInputs(input);markEdited();return;}
       if (!input.matches('[data-free-price]')) return;
       const displayKey = knownDisplayKey(input.dataset.freePrice);
@@ -1588,7 +1607,7 @@ module.exports = {
     });
     // Mounting never writes state; changes are handled only by explicit interactions.
     function destroy() {destroyed = true;cleanups.forEach(fn => fn());}
-    return {destroy,ready,getPriceState,getDraftPrice,setDraftPrice,getReportSummary,savePrices,exportSaved};
+    return {destroy,ready,getPriceState,getDraftPrice,setDraftPrice,getReportSummary,savePrices,exportSaved,setAutomaticFx};
   }
   host.mountAllThickness = mountAllThickness;
   if (typeof module !== 'undefined' && module.exports) module.exports = mountAllThickness;
