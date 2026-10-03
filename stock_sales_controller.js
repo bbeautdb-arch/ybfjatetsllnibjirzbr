@@ -8,6 +8,11 @@
   let fxTimer=null;
   const token=()=>{if(window.AAFStockAccess)return window.AAFStockAccess.token();if(window.AAFStockAccessRequired)return '';try{const s=JSON.parse(sessionStorage.getItem('aaf_user'));return s?.stockSessionToken||s?.gradeBridgeSessionToken||s?.bridgeSessionToken||'';}catch{return '';}};
   const current=(version,currentHost,auth)=>version===generation&&currentHost===host&&auth===session&&auth===token();
+  const sameSavedValue=(a,b)=>{
+    if(a===b)return true;
+    if(!a||!b||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)!==Array.isArray(b))return false;
+    const keys=Object.keys(a);return keys.length===Object.keys(b).length&&keys.every(key=>Object.hasOwn(b,key)&&sameSavedValue(a[key],b[key]));
+  };
   function publishReportSummary(summary){reportSummary=mountedRevision===stockRevision?summary:null;window.AAFStockSummary?.setSalesSummary?.(reportSummary);}
   function publishPriceDraftChange(change){window.AAFStockSummary?.syncPriceDrafts?.(change);}
   async function request(body=null,catalogOnly=false){
@@ -72,7 +77,7 @@
           if(fresh.catalogRevision!==0)throw new Error('มีราคาในระบบแล้ว จึงไม่ได้นำเข้าทับ');
           const result=await request({action:'importSalesPreview',expectedRevision:fresh.revision,expectedCatalogRevision:0,widgetState});
           if(!current(version,currentHost,auth))return;
-          if(JSON.stringify(result.widgetState)!==JSON.stringify(widgetState))throw new Error('ข้อมูลหลังนำเข้าไม่ตรง กรุณาตรวจสอบ');
+          if(!sameSavedValue(result.widgetState,widgetState))throw new Error('ข้อมูลหลังนำเข้าไม่ตรง กรุณาตรวจสอบ');
           await mount({...data,...result},content,state,version,currentHost,auth);
         }catch(e){message(feedback,e.message,true);button.disabled=false;}
       });
@@ -86,10 +91,10 @@
       if(!current(version,currentHost,auth))throw new Error('เซสชันเปลี่ยนแล้ว · ยังไม่ได้เซฟ');
       if(latest.catalogRevision!==mountedCatalogRevision)throw new Error('มีราคาใหม่จากอีกหน้า ยังไม่ได้ทับข้อมูล');
       const p=value.privateContent;
-      const saved=await request(salesMode?{action:'saveSalesReport',expectedRevision:latest.revision,expectedCatalogRevision:mountedCatalogRevision,prices:p.prices,currencies:p.currencies,notesByThickness:p.notesByThickness,savedAt:p.savedAt}:{action:'saveSalesPreview',expectedRevision:latest.revision,expectedCatalogRevision:mountedCatalogRevision,widgetState:value});
+      const saved=await request(salesMode?{action:'saveSalesReport',expectedRevision:latest.revision,expectedCatalogRevision:mountedCatalogRevision,prices:p.prices,currencies:p.currencies,notesByThickness:p.notesByThickness,notesBySpec:p.notesBySpec,savedAt:p.savedAt}:{action:'saveSalesPreview',expectedRevision:latest.revision,expectedCatalogRevision:mountedCatalogRevision,widgetState:value});
       if(!current(version,currentHost,auth))throw new Error('เซสชันเปลี่ยนแล้ว · เซฟแล้วแต่ไม่ได้นำมาทับหน้าใหม่');
       const expected=salesMode?{...value.privateContent,savedAt:saved.widgetState?.privateContent?.savedAt}:value;
-      if(JSON.stringify(salesMode?saved.widgetState?.privateContent:saved.widgetState)!==JSON.stringify(expected))throw new Error('ข้อมูลที่อ่านกลับไม่ตรงกับที่เซฟ');
+      if(!sameSavedValue(salesMode?saved.widgetState?.privateContent:saved.widgetState,expected))throw new Error('ข้อมูลที่อ่านกลับไม่ตรงกับที่เซฟ');
       mountedCatalogRevision=saved.catalogRevision;catalogRevision=saved.catalogRevision;store.widgetState=saved.widgetState;return saved.widgetState;
     }};
     // Both grouping and financial arithmetic remain in the original model/view.
