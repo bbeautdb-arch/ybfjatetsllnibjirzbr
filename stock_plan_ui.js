@@ -12,6 +12,8 @@
     const rows=data.rows.filter(r=>mode==='short'?r.productionQty>0:mode==='free'?r.freeQty>0:mode==='unreserved'?r.freeQty>0&&r.committedQty===0:true).slice().sort((a,b)=>a.t-b.t||a.grade.localeCompare(b.grade)||a.w-b.w||a.l-b.l);
     document.getElementById('plan-state').textContent=p?`บันทึกส่วนกลางแล้ว · เมล ${data.report.reportDate} · ข้อมูลขาย ${p.month} · ${p.source.rowCount} รายการ · ${new Date(p.appliedAt).toLocaleString('th-TH')}${p.needsSalesRefresh?' · รออัปเดตแผนขายของรายงานวันนี้':''}`:data.sellableRules==='aaf-sellable-20260910-v2'?'บันทึกกติกาโยกรอบเช้าแล้ว · ยอดจองเดิมยังอยู่ · รอแผนหน้า 09 รอบ 13:30':'ยังไม่ได้บันทึกกติกาโยกในระบบกลาง';
     document.getElementById('plan-open').hidden=!data.permissions.adjust;
+    const ownerPlanTools=document.getElementById('stock-owner-plan-tools');
+    if(ownerPlanTools)ownerPlanTools.hidden=!data.permissions.adjust;
     for(const id of ['plan-enable','plan-sales-export'])document.getElementById(id).hidden=!data.permissions.adjust;
     document.getElementById('plan-enable').disabled=morningSubmitting||data.stockWorkflowVersion!==1||data.sellableRules==='aaf-sellable-20260910-v2';
     document.getElementById('plan-sales-export').disabled=data.stockWorkflowVersion!==1||data.sellableRules!=='aaf-sellable-20260910-v2';
@@ -32,6 +34,14 @@
     style.textContent+='#plan-reservation-state{padding:12px 16px;margin:12px 0;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc}#plan-reservation-state .reservation-totals{display:flex;gap:20px;flex-wrap:wrap}#plan-reservation-state .reservation-totals>p{width:100%;margin:0}#sellable-plan .reservation-breakdown{line-height:1.65;text-align:left;min-width:155px;margin-top:7px}#sellable-plan .reservation-payment{color:#92400e}';
     const morning=document.createElement('div');morning.innerHTML='<button class="shared-btn" id="plan-enable" hidden>บันทึกกติกาโยกรอบเช้า (คงยอดจอง)</button> <button class="shared-btn shared-secondary" id="plan-sales-export" hidden>Excel ส่งฝ่ายขาย · ก่อนหักจอง</button><p id="morning-plan-state" style="white-space:pre-wrap"></p>';
     section.insertBefore(morning,document.getElementById('plan-open'));
+    // Retain the exact owner controls when the duplicate report is hidden.
+    // Move, rather than clone, so existing IDs, permissions and handlers remain authoritative.
+    const ownerTools=document.getElementById('stock-owner-tools');
+    if(ownerTools){
+      const ownerPlanTools=document.createElement('details');ownerPlanTools.id='stock-owner-plan-tools';ownerPlanTools.hidden=true;
+      const summary=document.createElement('summary');summary.textContent='เครื่องมือยอดจองและส่งออก · เฉพาะเจ้าของ';
+      ownerPlanTools.append(summary,morning,document.getElementById('plan-open'));ownerTools.append(ownerPlanTools);
+    }
     morningDialog=document.createElement('dialog');morningDialog.id='morning-confirm-dialog';
     morningDialog.setAttribute('aria-labelledby','morning-confirm-title');morningDialog.setAttribute('aria-describedby','morning-confirm-review');
     morningDialog.innerHTML='<h2 id="morning-confirm-title">ยืนยันกติกาโยกรอบเช้า</h2><p id="morning-confirm-review" style="white-space:pre-wrap"></p><p id="morning-confirm-state" role="status" aria-live="polite"></p><button type="button" id="morning-confirm-cancel" class="shared-btn shared-secondary" autofocus>ยกเลิก</button> <button type="button" id="morning-confirm-submit" class="shared-btn">ยืนยันและบันทึกกติกา</button>';
