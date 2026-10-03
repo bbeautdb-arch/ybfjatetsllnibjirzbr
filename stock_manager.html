@@ -60,6 +60,13 @@
         #stock-management-workbench[hidden] { display: none !important; }
         #stock-summary > .ss-report-intro,
         #stock-summary > .ss-status:not(.ss-error) { display: none !important; }
+        /* Owner-requested presentation-only hide: duplicated reports already appear above.
+           Keep their DOM, data, calculations and handlers; do not hide standalone PNG exports. */
+        #sellable-plan,
+        #stock-summary > #stock-cash,
+        #stock-summary > .ss-tools:has(> .cash-download) { display: none !important; }
+        #stock-owner-plan-tools { width:100%; }
+        #stock-owner-plan-tools > summary { cursor:pointer; padding:6px 0; }
         #stock-report-access { max-width:1500px; width:100%; margin:0 auto 16px; padding:16px; border:1px solid #fecaca; border-radius:12px; background:#fff7f7; color:#9f1239; }
         #stock-report-access[hidden] { display:none !important; }
         #stock-report-access a, #stock-report-access button { display:inline-block; margin:10px 8px 0 0; padding:8px 12px; border-radius:8px; background:#fff; border:1px solid #cbd5e1; color:#334155; }
@@ -1264,7 +1271,7 @@
     <script src="stock_sales_preview.js?v=20261003-firm-only"></script>
     <script src="stock_sales_controller.js?v=20261003-bot-auto-fx"></script>
     <script src="stock_summary.js?v=20261003-firm-only"></script>
-    <script src="stock_plan_ui.js?v=20260914-reservations"></script>
+    <script src="stock_plan_ui.js?v=20261004-hide-duplicate-reports"></script>
     <script src="stock_sales_export.js?v=20260910-daily"></script>
     <script src="stock_link_manager.js?v=20261003-until-revoked"></script>
     <script src="stock_shared.js?v=20261003-owner-mail-import"></script>
