@@ -891,9 +891,9 @@ module.exports = {
     const specKey = row => [row.t,row.grade,row.w,row.l,row.unit].join('|');
     const currency = (catalog, key) => catalog[key] === 'USD' ? 'USD' : 'THB';
     const thicknessKey = value => positive(value) === null ? null : String(Number(value));
-    const copyCatalog = value => ({prices:{...value.prices},currencies:{...value.currencies},notesByThickness:{...value.notesByThickness}});
-    let pricing = {fx:positive(fxReference.rate), prices:{}, currencies:{},notesByThickness:{}};
-    let committed = {prices:{},currencies:{},notesByThickness:{},savedAt:null};
+    const copyCatalog = value => ({prices:{...value.prices},currencies:{...value.currencies},notesByThickness:{...value.notesByThickness},notesBySpec:{...value.notesBySpec}});
+    let pricing = {fx:positive(fxReference.rate), prices:{}, currencies:{},notesByThickness:{},notesBySpec:{}};
+    let committed = {prices:{},currencies:{},notesByThickness:{},notesBySpec:{},savedAt:null};
     let committedFx = pricing.fx, hasSavedState = false;
     const automaticFx = options.automaticFx === true;
     let autoFx = null;
@@ -924,9 +924,11 @@ module.exports = {
     // while a price is edited/cleared, or create a duplicate reversed-axis entry.
     const priceKeyBindings = new Map();
     const knownPoolKeys = new Map();
+    const knownNoteKeys = new Set();
     model.all.stock.rows.forEach(row => {
       const key = specKey(row), reverse = reversedSpecKey(key);
       knownPoolKeys.set(key,key);knownPoolKeys.set(reverse,key);
+      knownNoteKeys.add(canonicalNoteKey(key));
     });
     const invalidDraftValues = new Map();
     const freeDisclosures = new Map();
@@ -953,6 +955,11 @@ module.exports = {
       const [t,grade,w,l,unit] = key.split('|');
       return [t,grade,l,w,unit].join('|');
     }
+    function canonicalNoteKey(key) {
+      if (!validKey(key)) return null;
+      const [t,grade,w,l,unit] = key.split('|');
+      return [Number(t),grade,Math.min(Number(w),Number(l)),Math.max(Number(w),Number(l)),unit].join('|');
+    }
     function priceKey(displayKey) {
       if (!priceKeyBindings.has(displayKey)) {
         const reverse = reversedSpecKey(displayKey);
@@ -965,19 +972,24 @@ module.exports = {
     }
     function sameCatalog(a, b) {
       const keys = new Set([...Object.keys(a.prices),...Object.keys(b.prices),...Object.keys(a.currencies),...Object.keys(b.currencies)]);
-      const notes = new Set([...Object.keys(a.notesByThickness || {}),...Object.keys(b.notesByThickness || {})]);
-      return [...keys].every(key => a.prices[key] === b.prices[key] && currency(a.currencies,key) === currency(b.currencies,key)) && [...notes].every(key => (a.notesByThickness?.[key] || '') === (b.notesByThickness?.[key] || ''));
+      const sameNotes = name => [...new Set([...Object.keys(a[name] || {}),...Object.keys(b[name] || {})])].every(key => a[name]?.[key] === b[name]?.[key]);
+      return [...keys].every(key => a.prices[key] === b.prices[key] && currency(a.currencies,key) === currency(b.currencies,key)) && sameNotes('notesByThickness') && sameNotes('notesBySpec');
     }
     function readState(saved) {
       const value = saved?.privateContent;
       const legacy = value && [1,2].includes(value.version) && /^\d{4}-\d{2}-\d{2}\|[\d.]+\|(THB-)?per-sheet$/.test(value.context || '');
       if (!value || !(legacy || (value.version === 3 && value.context === pricingContext))) return false;
-      pricing = {fx:positive(value.fx),prices:{},currencies:{},notesByThickness:{}};
+      const thicknessNotes = value.notesByThickness === undefined ? {} : value.notesByThickness;
+      const specNotes = value.notesBySpec === undefined ? {} : value.notesBySpec;
+      const stringMap = map => map !== null && typeof map === 'object' && !Array.isArray(map) && Object.values(map).every(note => typeof note === 'string');
+      // Never silently drop or guess the destination of saved notes. Invalid
+      // spec-note catalogs fail closed, while legacy text/keys stay untouched.
+      if (!stringMap(thicknessNotes) || !stringMap(specNotes) || !Object.keys(specNotes).every(key => canonicalNoteKey(key) === key)) return false;
+      pricing = {fx:positive(value.fx),prices:{},currencies:{},notesByThickness:{...thicknessNotes},notesBySpec:{...specNotes}};
       // Keep the complete saved catalog, including specs absent from this snapshot.
       Object.entries(value.prices || {}).forEach(([key,price]) => {if (validKey(key) && positive(price) !== null) pricing.prices[key] = Number(price);});
       if (value.version >= 2) Object.entries(value.currencies || {}).forEach(([key,value]) => {if (validKey(key) && ['THB','USD'].includes(value)) pricing.currencies[key] = value;});
-      // Notes belong to a thickness, not to one grade/spec or one snapshot.
-      Object.entries(value.notesByThickness || {}).forEach(([key,note]) => {const normalized = thicknessKey(key);if (normalized !== null && typeof note === 'string' && note !== '') pricing.notesByThickness[normalized] = note;});
+      // Preserve legacy shared notes read-only and retain spec notes for absent stock.
       committed = {...copyCatalog(pricing),savedAt:typeof value.savedAt === 'string' && Number.isFinite(Date.parse(value.savedAt)) ? value.savedAt : null};
       committedFx = pricing.fx; hasSavedState = true;
       priceKeyBindings.clear();
@@ -1005,7 +1017,7 @@ module.exports = {
     function updatePersistenceAccess() {
       const blocked = readOnly || storeLoading || storeLoadFailed;
       root.setAttribute('aria-busy',String(storeLoading));
-      root.querySelectorAll('[data-fx],[data-thickness-note],[data-free-price],[data-free-currency]').forEach(node => {node.disabled = blocked;if(readOnly){node.setAttribute('aria-readonly','true');node.placeholder='';}});
+      root.querySelectorAll('[data-fx],[data-spec-note],[data-free-price],[data-free-currency]').forEach(node => {node.disabled = blocked;if(readOnly){node.setAttribute('aria-readonly','true');node.placeholder='';}});
       if(priceNotesOnly || automaticFx)root.querySelectorAll('[data-fx]').forEach(node=>{node.disabled=true;node.setAttribute('aria-readonly','true');node.title=automaticFx?'อัปเดตอัตโนมัติจาก ธปท.':'อัตราแลกเปลี่ยนกำหนดโดยเจ้าของ';});
     }
     function saveStatus() {
@@ -1107,7 +1119,11 @@ module.exports = {
         if (input !== active) {input.value = invalid ? invalidDraftValues.get(displayKey) : pricing.prices[key] ?? ''; input.setAttribute('aria-invalid',String(invalid));}
       });
       root.querySelectorAll('[data-free-currency]').forEach(input => {if (input !== active) input.value = currency(pricing.currencies,priceKey(input.dataset.freeCurrency));});
-      root.querySelectorAll('[data-thickness-note]').forEach(input => {if (input !== active) input.value = pricing.notesByThickness[input.dataset.thicknessNote] || '';});
+      root.querySelectorAll('[data-spec-note]').forEach(input => {if (input !== active) input.value = pricing.notesBySpec[input.dataset.specNote] ?? '';});
+      root.querySelectorAll('[data-legacy-thickness-notes]').forEach(node => {
+        const keys = Object.keys(pricing.notesByThickness).filter(key => node.dataset.legacyThicknessNotes === '*' || node.dataset.legacyThicknessNotes.split('|').includes(thicknessKey(key))).sort((a,b) => Number(a)-Number(b));
+        node.innerHTML = keys.length ? keys.map(key => '<div><strong>'+esc(thicknessKey(key) === null ? key : thick(key)+' มม.')+'</strong><p style="white-space:pre-wrap">'+esc(pricing.notesByThickness[key])+'</p></div>').join('') : '<span class="sp-empty">ไม่มีหมายเหตุเดิมรายความหนาในส่วนนี้</span>';
+      });
     }
     function rowValue(row) {
       if (!row) return null;
@@ -1317,11 +1333,7 @@ module.exports = {
     function saveToolbar() {if(readOnly)return '<p class="sp-save-scope">ดูอย่างเดียว · ใช้ราคาและหมายเหตุที่เจ้าของบันทึกไว้</p>';return '<div class="sp-save-prices"><button type="button" class="cursor-interaction" data-save-prices aria-label="เซฟราคาและหมายเหตุทุกความหนา">เซฟราคาและหมายเหตุ</button><button type="button" class="cursor-interaction" data-export-prices aria-label="ส่งออก JSON ราคาและหมายเหตุที่เซฟแล้ว">Export JSON ที่เซฟแล้ว</button><span class="sp-save-status" data-save-price-status role="status" aria-live="polite"></span><span class="sp-save-scope">'+esc(options.persistenceLabel || 'เก็บราคา สกุลเงิน และหมายเหตุในพรีวิว Codex นี้ · ไม่แก้สต๊อกหรือข้อมูลส่วนกลาง')+' · Export ไม่รวมร่างที่ยังไม่เซฟ</span><div class="sp-export-panel" data-export-panel hidden style="flex-basis:100%;width:100%"><label class="sp-thickness-note-label">JSON สำหรับย้าย catalog ที่เซฟแล้ว<textarea class="sp-thickness-note" rows="8" readonly data-export-json aria-label="JSON ราคาและหมายเหตุที่เซฟแล้ว"></textarea></label><button type="button" class="cursor-interaction" data-copy-export-json>คัดลอก JSON</button><span class="sp-save-status" data-export-copy-status role="status" aria-live="polite">เลือกข้อความแล้วคัดลอกได้ทันที</span></div></div>';}
     function thicknessNotesMarkup(thicknesses, scopeId) {
       const keys = [...new Set(thicknesses.map(thicknessKey).filter(key => key !== null))].sort((a,b) => Number(a)-Number(b));
-      const fields = '<div class="sp-free-notes">'+keys.map(key => {
-        const id = scopeId+'-note-'+encodeURIComponent(key).replaceAll('%','_');
-        return '<label class="sp-thickness-note-label" for="'+esc(id)+'">หมายเหตุความหนา '+esc(thick(key))+' มม.<textarea id="'+esc(id)+'" class="sp-thickness-note" rows="2" data-thickness-note="'+esc(key)+'" placeholder="พิมพ์หมายเหตุ แล้วกดเซฟราคาและหมายเหตุ"></textarea></label>';
-      }).join('')+'</div>';
-      return keys.length > 1 ? '<details class="sp-free-notes-disclosure"><summary class="cursor-interaction">หมายเหตุรายความหนา</summary>'+fields+'</details>' : fields;
+      return '<details class="sp-free-notes-disclosure"><summary class="cursor-interaction">หมายเหตุเดิมรายความหนา</summary><p class="sp-save-scope">ข้อความเดิมใช้ร่วมกันทั้งความหนา · อ่านอย่างเดียว · ไม่ใช่หมายเหตุรายสเปก และไม่ได้ย้ายไปให้รายการใดอัตโนมัติ</p><div class="sp-free-notes" data-legacy-thickness-notes="'+esc(scopeId === 'sp-money-all-g-all' ? '*' : keys.join('|'))+'"></div></details>';
     }
     function historicalReference(key) {
       const catalogKey = priceKey(key), reverse = reversedSpecKey(catalogKey);
@@ -1350,12 +1362,12 @@ module.exports = {
     }
     function freeMarkup(inventory, scopeId, thicknesses) {
       const rows = inventory.rows.filter(row => row.free > 0);
-      const controls = saveToolbar();
-      if (!rows.length) return controls+thicknessNotesMarkup(thicknesses || inventory.rows.map(row => row.t),scopeId)+'<span class="sp-empty">ไม่มีสเปกที่มี Free มากกว่า 0</span>';
+      const controls = saveToolbar()+thicknessNotesMarkup(thicknesses || inventory.rows.map(row => row.t),scopeId);
+      if (!rows.length) return controls+'<span class="sp-empty">ไม่มีสเปกที่มี Free มากกว่า 0</span>';
       return controls+'<div class="sp-table-scroll"><table class="sp-stock-table sp-free-table"><caption>เฉพาะสเปกที่มี Free มากกว่า 0 · ราคาต่อแผ่นจริง / ชิ้นแถบ · เลือกบาทหรือ USD · เว้นว่าง = ยังไม่ทราบราคา'+historicalSourceMarkup(rows)+'</caption><thead><tr><th scope="col">หนา (มม.)</th><th scope="col">เกรด</th><th scope="col">ขนาด (มม.)</th><th scope="col">Free</th><th scope="col">ราคาต่อหน่วย</th><th scope="col">หมายเหตุ</th><th scope="col">มูลค่า Free โดยประมาณ (บาท)</th></tr></thead><tbody>'+rows.map(row => {
         const key = specKey(row), label = 'ราคาประเมิน '+thick(row.t)+' มม. '+row.grade+' '+row.w+' × '+row.l;
         const noteId = scopeId+'-note-'+encodeURIComponent(key).replaceAll('%','_');
-        return '<tr><td>'+esc(thick(row.t))+'</td><td>'+esc(row.grade)+'</td><td>'+fmt(row.w)+' × '+fmt(row.l)+'</td><td>'+fmt(row.free)+' '+esc(unitName(row.unit))+'</td><td><div class="sp-price-controls"><input class="sp-number-input" type="number" min="0.0000001" step="any" inputmode="decimal" placeholder="ใส่ราคา" data-unit="'+esc(row.unit)+'" data-price-label="'+esc(label)+'" data-free-price="'+esc(key)+'"><select class="sp-currency-select cursor-interaction" aria-label="สกุลเงิน '+esc(label)+'" data-free-currency="'+esc(key)+'"><option value="THB">บาท</option><option value="USD">USD</option></select></div>'+historicalPriceMarkup(key)+'</td><td class="sp-free-note-cell"><textarea id="'+esc(noteId)+'" class="sp-thickness-note" rows="2" data-thickness-note="'+esc(thicknessKey(row.t))+'" aria-label="หมายเหตุความหนา '+esc(thick(row.t))+' มม. '+esc(row.grade)+' '+row.w+' × '+row.l+'" placeholder="ใส่หมายเหตุความหนานี้"></textarea></td><td class="sp-free-value-cell" data-free-row-value="'+esc(key)+'"></td></tr>';
+        return '<tr><td>'+esc(thick(row.t))+'</td><td>'+esc(row.grade)+'</td><td>'+fmt(row.w)+' × '+fmt(row.l)+'</td><td>'+fmt(row.free)+' '+esc(unitName(row.unit))+'</td><td><div class="sp-price-controls"><input class="sp-number-input" type="number" min="0.0000001" step="any" inputmode="decimal" placeholder="ใส่ราคา" data-unit="'+esc(row.unit)+'" data-price-label="'+esc(label)+'" data-free-price="'+esc(key)+'"><select class="sp-currency-select cursor-interaction" aria-label="สกุลเงิน '+esc(label)+'" data-free-currency="'+esc(key)+'"><option value="THB">บาท</option><option value="USD">USD</option></select></div>'+historicalPriceMarkup(key)+'</td><td class="sp-free-note-cell"><textarea id="'+esc(noteId)+'" class="sp-thickness-note" rows="2" maxlength="4000" data-spec-note="'+esc(canonicalNoteKey(key))+'" aria-label="หมายเหตุเฉพาะสเปก '+esc(thick(row.t))+' มม. '+esc(row.grade)+' '+row.w+' × '+row.l+' '+esc(unitName(row.unit))+'" placeholder="ใส่หมายเหตุเฉพาะสเปกนี้"></textarea></td><td class="sp-free-value-cell" data-free-row-value="'+esc(key)+'"></td></tr>';
       }).join('')+'</tbody><tfoot><tr><td colspan="3">รวม Free</td><td>'+esc(stockText(inventory,'free'))+'</td><td colspan="2"><small data-free-coverage="'+scopeId+'"></small></td><td class="sp-free-value-cell" data-free-value="'+scopeId+'"></td></tr></tfoot></table></div>';
     }
     function stockMarkup(inventory) {
@@ -1585,7 +1597,7 @@ module.exports = {
       if (readOnly) return;
       if (storeLoading || storeLoadFailed) return;
       if (input.matches('[data-fx]')) {if(priceNotesOnly || automaticFx)return;pricing.fx = positive(input.value);input.setAttribute('aria-invalid',String(pricing.fx === null));updateFinancialView();saveFx();return;}
-      if (input.matches('[data-thickness-note]')) {const key = thicknessKey(input.dataset.thicknessNote);if (key === null) return;if (input.value === '') delete pricing.notesByThickness[key];else pricing.notesByThickness[key] = input.value;syncInputs(input);markEdited();return;}
+      if (input.matches('[data-spec-note]')) {const key = canonicalNoteKey(input.dataset.specNote);if (key === null || !knownNoteKeys.has(key)) return;if (input.value === '') delete pricing.notesBySpec[key];else pricing.notesBySpec[key] = input.value;syncInputs(input);markEdited();notifyPriceDraftChange('draft');return;}
       if (!input.matches('[data-free-price]')) return;
       const displayKey = knownDisplayKey(input.dataset.freePrice);
       if (input.validity.badInput) {rejectDraftPrice(displayKey,input.value,input);return;}
@@ -1652,4 +1664,3 @@ module.exports = {
   host.AAFSalesPreviewBuildModel = buildModel;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
-
