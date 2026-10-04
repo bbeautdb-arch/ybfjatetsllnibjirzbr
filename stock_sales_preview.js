@@ -170,6 +170,15 @@ function exactSpecKey(row) {
   return [canonicalNumber(row.t), normalizeGrade(row.grade), ...dimensions, normalizeUnit(row.unit)].join('|');
 }
 
+// Allocation equivalence is deliberately separate from catalog/note identity.
+// The owner permits only this size pair (and rotation), never a near-size match.
+function allocationPoolKey(row) {
+  const dimensions = [canonicalNumber(row.w), canonicalNumber(row.l)]
+    .sort((a, b) => Number(a) - Number(b));
+  if (normalizeUnit(row.unit) === 'sheet' && dimensions[0] === '1200' && dimensions[1] === '2400') dimensions.splice(0, 2, '1220', '2440');
+  return [canonicalNumber(row.t), normalizeGrade(row.grade), ...dimensions, normalizeUnit(row.unit)].join('|');
+}
+
 function orderKey(row, index) {
   return text(row.orderId) || text(row.ref) || text(row.id) || `row-${index + 1}`;
 }
@@ -417,7 +426,16 @@ function buildStock(stockRows, reservationRows) {
     });
   });
 
-  reservationRows.filter(row => row.status !== 'loaded' && row.reservesStock !== false).forEach(row => {
+  const allocations = reservationRows.map((row, index) => ({row, index}))
+    .filter(({row}) => row.status !== 'loaded' && row.reservesStock !== false);
+  allocations.sort((a, b) => {
+    const stage = STATUS_ORDER.indexOf(a.row.status) - STATUS_ORDER.indexOf(b.row.status);
+    if (stage) return stage;
+    const ready = row => normalizedText(row.productStatus) === 'พร้อมโหลด' ? 0 : 1;
+    if (a.row.status === 'forecast' && ready(a.row) !== ready(b.row)) return ready(a.row) - ready(b.row);
+    return a.row.sourceIndex - b.row.sourceIndex || a.index - b.index;
+  });
+  allocations.forEach(({row}) => {
     const key = exactSpecKey(row);
     if (!specs.has(key)) {
       specs.set(key, {
@@ -436,14 +454,35 @@ function buildStock(stockRows, reservationRows) {
         skus: [],
       });
     }
-    specs.get(key).reserved += row.qty;
   });
 
-  const rows = [...specs.values()].map(row => ({
-    ...row,
-    free: Math.max(0, row.physical - row.reserved),
-    shortage: Math.max(0, row.reserved - row.physical),
-  })).sort((a, b) => (
+  const pools = new Map(), allocationById = {};
+  [...specs.values()].sort((a, b) => a.key.localeCompare(b.key, 'en')).forEach(row => {
+    row.free = row.physical;
+    const key = allocationPoolKey(row);
+    if (!pools.has(key)) pools.set(key, {key, unit: row.unit, physical: 0, reserved: 0, free: 0, shortage: 0, rows: []});
+    const pool = pools.get(key);
+    pool.physical += row.physical;pool.free += row.physical;pool.rows.push(row);
+  });
+  allocations.forEach(({row}) => {
+    const key = exactSpecKey(row), poolKey = allocationPoolKey(row), pool = pools.get(poolKey);
+    const part = {allocationId: row.id, key, poolKey, t: row.t, grade: row.grade, w: row.w, l: row.l, unit: row.unit,
+      requested: row.qty, availableBefore: pool.free, allocated: 0, shortage: 0, remaining: 0, stockAllocations: []};
+    let needed = row.qty;
+    // Every physical row is consumed once, in the same exact-key order for every
+    // order. Value fulfilled stock at its actual size; retain source shortages.
+    pool.rows.forEach(stock => {
+      if (!(needed > 0 && stock.free > 0)) return;
+      const allocated = Math.min(needed, stock.free), availableBefore = stock.free;
+      stock.free -= allocated;stock.reserved += allocated;needed -= allocated;part.allocated += allocated;
+      part.stockAllocations.push({key: stock.key, t: stock.t, grade: stock.grade, w: stock.w, l: stock.l, unit: stock.unit,
+        allocated, availableBefore, remaining: stock.free});
+    });
+    part.shortage = needed;specs.get(key).shortage += needed;specs.get(key).reserved += needed;
+    pool.reserved += row.qty;pool.shortage += needed;pool.free -= part.allocated;
+    part.remaining = pool.free;allocationById[row.id] = part;
+  });
+  const rows = [...specs.values()].sort((a, b) => (
     a.t - b.t
     || a.grade.localeCompare(b.grade, 'en')
     || a.w - b.w
@@ -454,6 +493,8 @@ function buildStock(stockRows, reservationRows) {
   return {
     rows,
     byKey: Object.fromEntries(rows.map(row => [row.key, row])),
+    pools: Object.fromEntries([...pools].map(([key, {rows: poolRows, ...pool}]) => [key, {...pool, specKeys: poolRows.map(row => row.key)}])),
+    allocationById,
     unitTotals: stockUnitTotals(rows),
     missingSpecCount: rows.filter(row => row.missingStockSpec).length,
   };
@@ -820,7 +861,7 @@ function buildModel(salesRows = [], stockRows = [], opts = {}) {
       mix: { ...options.mix },
       paidOverrideRefs: [...options.paidOverrideRefs],
       quantityPolicy: 'Quantities are summed by exact unit; cross-unit qty is null.',
-      stockPolicy: 'Reserve unloaded rows by exact t|grade|min(w,l)|max(w,l)|unit; reversed axes share one pool; never approximate dimensions or cross-compensate grade/thickness/unit.',
+      stockPolicy: 'Reserve unloaded rows by t|grade|allocation size|unit; reversed axes and owner-approved sheet sizes 1200×2400 / 1220×2440 share one pool; preserve exact source/catalog identities; never match any other near-size or cross-grade/thickness/unit.',
       amountPolicy: 'Unknown and unsafe allocations remain null with amountReason metadata.',
     },
     thicknesses,
@@ -839,6 +880,7 @@ function buildModel(salesRows = [], stockRows = [], opts = {}) {
 module.exports = {
   buildModel,
   exactSpecKey,
+  allocationPoolKey,
   canonicalNumber,
   constants: {
     DEFAULT_MIX,
@@ -1176,10 +1218,10 @@ module.exports = {
     // value stock with invoice money. Reject stale/incomplete readiness evidence.
     function inventoryPartition() {
       try {
-        const keyOf = host.AafAllModel.exactSpecKey, epsilon = 1e-7;
+        const keyOf = host.AafAllModel.exactSpecKey, poolKeyOf = host.AafAllModel.allocationPoolKey, epsilon = 1e-7;
         const near = (a,b) => {if (!Number.isFinite(a)||!Number.isFinite(b)||Math.abs(a-b)>epsilon) throw new Error('allocation mismatch');};
         const rows = model.all.stock.rows.map(row => ({...row,soldStock:0,otherStock:0,soldShortage:0,otherShortage:0,soldDemand:0,otherDemand:0}));
-        const pools = new Map(rows.map(row => [keyOf(row),row])), remaining = new Map(rows.map(row => [keyOf(row),row.physical]));
+        const specs = new Map(rows.map(row => [keyOf(row),row]));
         const statusOrder = host.AafAllModel.constants.STATUS_ORDER;
         const allocations = model.allocationRows.map((row,index) => ({row,index})).filter(({row}) => row.status !== 'loaded' && row.reservesStock !== false);
         allocations.sort((a,b) => {
@@ -1190,21 +1232,36 @@ module.exports = {
         });
         const seen = new Set(), reservedStatusPools = new Map();
         allocations.forEach(({row}) => {
-          const parts=options.readiness?.byAllocationId?.[row.id]?.parts, key=keyOf(row), pool=pools.get(key);
-          if(seen.has(row.id)||!pool||!Array.isArray(parts)||parts.length!==1)throw new Error('missing allocation');
-          seen.add(row.id);const part=parts[0], available=remaining.get(key), allocated=Math.min(row.qty,available);
+          const parts=options.readiness?.byAllocationId?.[row.id]?.parts, key=keyOf(row), sourceSpec=specs.get(key);
+          const expected=model.all.stock.allocationById?.[row.id];
+          if(seen.has(row.id)||!sourceSpec||!expected||!Array.isArray(parts)||parts.length!==1)throw new Error('missing allocation');
+          seen.add(row.id);const part=parts[0];
           if(part.allocationId!==row.id||part.key!==key||keyOf(part)!==key)throw new Error('stale allocation');
-          near(part.requested,row.qty);near(part.availableBefore,available);near(part.allocated,allocated);
-          near(part.shortage,row.qty-allocated);near(part.remaining,available-allocated);
+          if(part.poolKey!==undefined&&part.poolKey!==poolKeyOf(row))throw new Error('stale pool');
+          near(part.requested,row.qty);near(part.availableBefore,expected.availableBefore);near(part.allocated,expected.allocated);
+          near(part.shortage,expected.shortage);near(part.remaining,expected.remaining);
+          let routes=part.stockAllocations;
+          // Old exact-size readiness remains readable, but cannot claim a new
+          // cross-size match without explicit physical-route evidence.
+          if(routes===undefined&&expected.stockAllocations.every(route=>route.key===key))routes=expected.stockAllocations;
+          if(!Array.isArray(routes)||routes.length!==expected.stockAllocations.length)throw new Error('missing stock routes');
+          routes.forEach((route,index)=>{
+            const wanted=expected.stockAllocations[index];
+            if(route.key!==wanted.key||keyOf(route)!==wanted.key||poolKeyOf(route)!==poolKeyOf(row))throw new Error('stale stock route');
+            near(route.allocated,wanted.allocated);near(route.availableBefore,wanted.availableBefore);near(route.remaining,wanted.remaining);
+          });
           const prefix=row.status==='paid'?'sold':'other';
-          pool[prefix+'Stock']+=part.allocated;pool[prefix+'Shortage']+=part.shortage;pool[prefix+'Demand']+=part.requested;
-          if (prefix === 'other') {
-            if (!reservedStatusPools.has(row.status)) reservedStatusPools.set(row.status,new Map());
-            const statusPool = reservedStatusPools.get(row.status);
-            if (!statusPool.has(key)) statusPool.set(key,{...pool,statusStock:0,statusShortage:0,statusDemand:0});
-            const statusRow = statusPool.get(key);statusRow.statusStock+=part.allocated;statusRow.statusShortage+=part.shortage;statusRow.statusDemand+=part.requested;
-          }
-          remaining.set(key,part.remaining);
+          const assign=(spec,allocated,shortage)=>{
+            spec[prefix+'Stock']+=allocated;spec[prefix+'Shortage']+=shortage;spec[prefix+'Demand']+=allocated+shortage;
+            if(prefix==='other'){
+              if(!reservedStatusPools.has(row.status))reservedStatusPools.set(row.status,new Map());
+              const statusPool=reservedStatusPools.get(row.status),specKey=keyOf(spec);
+              if(!statusPool.has(specKey))statusPool.set(specKey,{...spec,statusStock:0,statusShortage:0,statusDemand:0});
+              const statusRow=statusPool.get(specKey);statusRow.statusStock+=allocated;statusRow.statusShortage+=shortage;statusRow.statusDemand+=allocated+shortage;
+            }
+          };
+          routes.forEach(route=>assign(specs.get(route.key),route.allocated,0));
+          if(part.shortage>0)assign(sourceSpec,0,part.shortage);
         });
         rows.forEach(row => {
           near(row.soldStock+row.otherStock+row.free,row.physical);
