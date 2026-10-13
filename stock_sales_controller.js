@@ -6,6 +6,26 @@
   let host=null,view=null,viewGeneration=0,session='',catalogRevision=0,pending=null,generation=0,reportSummary=null;
   let readOnly=false,salesMode=false,stockRevision=null,mountedRevision=null,mountedSalesMode=false,loadFailed=false,statusNode=null;
   let fxTimer=null;
+  // Only controlled messages leave the persistence boundary; never expose server
+  // response text, credentials or a previous session's private draft.
+  const saveMessages={
+    'auth-required':'ยังไม่เซฟ · กรุณาเข้าสู่ระบบ AAF ก่อนบันทึก · เก็บร่างในหน้านี้ไว้ก่อน',
+    'auth-expired':'ยังไม่เซฟ · สิทธิ์เข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบ AAF ใหม่ · เก็บร่างในหน้านี้ไว้ก่อน',
+    'permission-denied':'ยังไม่เซฟ · บัญชีนี้ไม่มีสิทธิ์บันทึกราคาและหมายเหตุ กรุณาตรวจสิทธิ์บัญชี',
+    'read-only':'ยังไม่เซฟ · หน้านี้ดูอย่างเดียว กรุณาตรวจสิทธิ์และโหลดข้อมูลส่วนกลางใหม่ก่อนบันทึก',
+    'access-invalidated':'ยังไม่เซฟ · ยังยืนยันสิทธิ์หรือข้อมูลส่วนกลางไม่ได้ กรุณาตรวจการเข้าสู่ระบบ · เก็บร่างในหน้านี้ไว้ก่อน',
+    'session-changed':'ยังไม่เซฟ · เซสชันเปลี่ยนแล้ว กรุณายืนยันบัญชีและโหลดข้อมูลส่วนกลางใหม่ก่อนบันทึก',
+    'catalog-conflict':'ยังไม่เซฟ · มีราคาใหม่จากอีกหน้า กรุณาเปรียบเทียบข้อมูลส่วนกลางกับร่างก่อนบันทึก ไม่ได้ทับข้อมูล',
+    'preflight-failed':'ยังไม่เซฟ · อ่านข้อมูลส่วนกลางล่าสุดไม่สำเร็จ ตรวจการเชื่อมต่อแล้วลองใหม่ · ร่างยังอยู่',
+    'save-rejected':'ยังไม่เซฟ · ระบบปฏิเสธการบันทึก กรุณาตรวจข้อมูลราคา หมายเหตุ และสิทธิ์บัญชี',
+    'save-outcome-unknown':'เซฟไม่สำเร็จในการยืนยันผล · อาจบันทึกส่วนกลางแล้ว ห้ามกดเซฟซ้ำ ให้ตรวจข้อมูลส่วนกลางก่อน · ร่างยังอยู่',
+    'readback-mismatch':'ยังยืนยันผลเซฟไม่ได้ · ข้อมูลที่อ่านกลับไม่ตรงกับที่ส่ง อาจบันทึกส่วนกลางแล้ว ห้ามเซฟซ้ำก่อนตรวจข้อมูลส่วนกลาง',
+    'session-changed-after-save':'เซสชันเปลี่ยนแล้วหลังส่งบันทึก · อาจบันทึกส่วนกลางแล้ว ห้ามเซฟซ้ำก่อนตรวจข้อมูลส่วนกลาง',
+    'catalog-unavailable':'ยังไม่เซฟ · ยังโหลดราคาและหมายเหตุไม่ครบ กรุณาตรวจการเชื่อมต่อส่วนกลาง'
+  };
+  const uncertainCodes=new Set(['save-outcome-unknown','readback-mismatch','session-changed-after-save']);
+  const saveError=code=>Object.assign(new Error(saveMessages[code]||saveMessages['save-outcome-unknown']),{code:Object.hasOwn(saveMessages,code)?code:'save-outcome-unknown'});
+  let accessError=null,blockedSaveError=null,reconciliationError=null;
   const token=()=>{if(window.AAFStockAccess)return window.AAFStockAccess.token();if(window.AAFStockAccessRequired)return '';try{const s=JSON.parse(sessionStorage.getItem('aaf_user'));return s?.stockSessionToken||s?.gradeBridgeSessionToken||s?.bridgeSessionToken||'';}catch{return '';}};
   const current=(version,currentHost,auth)=>version===generation&&currentHost===host&&auth===session&&auth===token();
   const sameSavedValue=(a,b)=>{
@@ -16,10 +36,17 @@
   function publishReportSummary(summary){reportSummary=mountedRevision===stockRevision?summary:null;window.AAFStockSummary?.setSalesSummary?.(reportSummary);}
   function publishPriceDraftChange(change){window.AAFStockSummary?.syncPriceDrafts?.(change);}
   async function request(body=null,catalogOnly=false){
-    if(body&&readOnly)throw new Error('รายงานนี้ดูอย่างเดียว');
-    const auth=token();if(!auth)throw new Error('กรุณาเข้าสู่ระบบ AAF ก่อนดูยอดขาย');
-    const response=await fetch(API+(body?'':'?view='+(salesMode?'salesReport':'salesPreview')+(catalogOnly?'&catalogOnly=1':'')),{method:body?'POST':'GET',cache:'no-store',headers:{Authorization:'Bearer '+auth,...(body?{'Content-Type':'text/plain;charset=UTF-8'}:{})},...(body?{body:JSON.stringify(body)}:{})});
-    const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||'โหลดพรีวิวไม่สำเร็จ');return data;
+    if(body&&readOnly)throw accessError||saveError('read-only');
+    const auth=token();if(!auth)throw saveError('auth-required');
+    let response;
+    try{response=await fetch(API+(body?'':'?view='+(salesMode?'salesReport':'salesPreview')+(catalogOnly?'&catalogOnly=1':'')),{method:body?'POST':'GET',cache:'no-store',headers:{Authorization:'Bearer '+auth,...(body?{'Content-Type':'text/plain;charset=UTF-8'}:{})},...(body?{body:JSON.stringify(body)}:{})});}
+    catch{throw saveError(body?'save-outcome-unknown':'preflight-failed');}
+    if(response.status===401)throw saveError('auth-expired');
+    if(response.status===403)throw saveError('permission-denied');
+    if(response.status===409||response.status===412)throw saveError('catalog-conflict');
+    if(body&&(response.status===400||response.status===422))throw saveError('save-rejected');
+    let data;try{data=await response.json();}catch{throw saveError(body?'save-outcome-unknown':'preflight-failed');}
+    if(!response.ok||!data.ok)throw saveError(body?'save-outcome-unknown':'preflight-failed');return data;
   }
   function startAutomaticFx(active,version,currentHost,auth){
     if(typeof active.setAutomaticFx!=='function')return;
@@ -57,7 +84,7 @@
     const p=data.preview;
     if(salesMode&&data.permissions?.pricesAndNotes!==true)throw new Error('บัญชีนี้ยังไม่มีสิทธิ์ราคาและหมายเหตุฝ่ายขาย');
     if(salesMode&&stockRevision!==null&&data.revision!==stockRevision)throw new Error('ข้อมูลเปลี่ยนระหว่างโหลด · กรุณากดโหลดล่าสุดอีกครั้ง');
-    readOnly=false;
+    readOnly=false;accessError=null;blockedSaveError=null;reconciliationError=null;
     if(!p||!window.AafAllModel||!window.mountAllThickness)throw new Error('โหลดตัวแสดงพรีวิวไม่ครบ กรุณารีเฟรช');
     if(!data.widgetState){
       if(salesMode)throw new Error('ยังไม่มีชุดราคาที่บันทึก · รอเจ้าของจัดเตรียมรายงาน');
@@ -84,17 +111,22 @@
       return;
     }
     const root=element('section',{id:'sales-stock-preview-16'});content.replaceChildren(root);
+    let reconcileRequired=null;
+    const requireReconciliation=cause=>{reconcileRequired=cause;if(current(version,currentHost,auth))reconciliationError=cause;return cause;};
     const store={widgetState:data.widgetState,load:()=>data.widgetState,setWidgetState:async value=>{
-      if(readOnly)throw new Error('รายงานนี้ดูอย่างเดียว');
-      if(!current(version,currentHost,auth))throw new Error('เซสชันเปลี่ยนแล้ว · ยังไม่ได้เซฟ');
+      if(reconcileRequired)throw reconcileRequired;
+      if(readOnly)throw accessError||saveError('read-only');
+      if(!token())throw saveError('auth-required');
+      if(!current(version,currentHost,auth))throw saveError('session-changed');
       const latest=await request(null,true);
-      if(!current(version,currentHost,auth))throw new Error('เซสชันเปลี่ยนแล้ว · ยังไม่ได้เซฟ');
-      if(latest.catalogRevision!==mountedCatalogRevision)throw new Error('มีราคาใหม่จากอีกหน้า ยังไม่ได้ทับข้อมูล');
+      if(!current(version,currentHost,auth))throw saveError('session-changed');
+      if(latest.catalogRevision!==mountedCatalogRevision)throw saveError('catalog-conflict');
       const p=value.privateContent;
-      const saved=await request(salesMode?{action:'saveSalesReport',expectedRevision:latest.revision,expectedCatalogRevision:mountedCatalogRevision,prices:p.prices,currencies:p.currencies,notesByThickness:p.notesByThickness,notesBySpec:p.notesBySpec,savedAt:p.savedAt}:{action:'saveSalesPreview',expectedRevision:latest.revision,expectedCatalogRevision:mountedCatalogRevision,widgetState:value});
-      if(!current(version,currentHost,auth))throw new Error('เซสชันเปลี่ยนแล้ว · เซฟแล้วแต่ไม่ได้นำมาทับหน้าใหม่');
+      let saved;try{saved=await request(salesMode?{action:'saveSalesReport',expectedRevision:latest.revision,expectedCatalogRevision:mountedCatalogRevision,prices:p.prices,currencies:p.currencies,notesByThickness:p.notesByThickness,notesBySpec:p.notesBySpec,savedAt:p.savedAt}:{action:'saveSalesPreview',expectedRevision:latest.revision,expectedCatalogRevision:mountedCatalogRevision,widgetState:value});}
+      catch(cause){if(uncertainCodes.has(cause?.code))requireReconciliation(cause);throw cause;}
+      if(!current(version,currentHost,auth))throw requireReconciliation(saveError('session-changed-after-save'));
       const expected=salesMode?{...value.privateContent,savedAt:saved.widgetState?.privateContent?.savedAt}:value;
-      if(!sameSavedValue(salesMode?saved.widgetState?.privateContent:saved.widgetState,expected))throw new Error('ข้อมูลที่อ่านกลับไม่ตรงกับที่เซฟ');
+      if(!sameSavedValue(salesMode?saved.widgetState?.privateContent:saved.widgetState,expected))throw requireReconciliation(saveError('readback-mismatch'));
       mountedCatalogRevision=saved.catalogRevision;catalogRevision=saved.catalogRevision;store.widgetState=saved.widgetState;return saved.widgetState;
     }};
     // Both grouping and financial arithmetic remain in the original model/view.
@@ -114,25 +146,28 @@
       if(mountedRevision!==stockRevision){if(statusNode){statusNode.hidden=false;message(statusNode,'ข้อมูลส่วนกลางเปลี่ยน · เก็บร่างราคาไว้แล้ว · เซฟหรือยกเลิกร่างแล้วกดโหลดล่าสุดก่อนใช้ยอดรายงาน',true);}publishReportSummary(null);}
       slot.replaceChildren(host);return pending;
     }
-    mountedRevision=stockRevision;mountedSalesMode=salesMode;loadFailed=false;
+    mountedRevision=stockRevision;mountedSalesMode=salesMode;loadFailed=false;blockedSaveError=null;accessError=null;reconciliationError=null;
     if(fxTimer!==null)window.clearInterval?.(fxTimer);fxTimer=null;
     if(view)view.destroy();view=null;viewGeneration=0;session=auth;publishReportSummary(null);const version=++generation,{state,content}=shell(),currentHost=host;slot.replaceChildren(currentHost);
     pending=request().then(data=>current(version,currentHost,auth)?mount(data,content,state,version,currentHost,auth):undefined).catch(e=>{if(current(version,currentHost,auth)){loadFailed=true;message(state,e.message,true);}});return pending;
   }
   const sameSessionView=()=>session&&session===token()&&viewGeneration===generation?view:null;
   const editableView=()=>{if(readOnly)return null;const active=sameSessionView(),state=active?.getPriceState?.();return active&&state&&!state.loading&&!state.loadFailed?active:null;};
+  const saveBlockage=()=>!token()?saveError('auth-required'):view&&session!==token()?saveError('session-changed'):reconciliationError||accessError||readOnly&&saveError('read-only')||saveError('catalog-unavailable');
+  const getSaveStatus=()=>{const active=sameSessionView(),state=active?.getPriceState?.(),cause=active&&reconciliationError||blockedSaveError||accessError,uncertain=uncertainCodes.has(cause?.code||state?.errorCode);return {error:cause?.message||state?.error||'',errorCode:cause?.code||state?.errorCode||'',blocked:!!cause||uncertain,uncertain};};
   window.AAFSalesPreview={
     setAccess:access=>{const mode=window.AAFStockAccess?.isShared()===true||access.salesMode===true;if(mode!==salesMode){salesMode=mode;readOnly=mode;publishReportSummary(null);}stockRevision=access.revision??null;},
-    invalidate:text=>{readOnly=true;loadFailed=true;if(fxTimer!==null)window.clearInterval?.(fxTimer);fxTimer=null;publishReportSummary(null);if(statusNode){statusNode.hidden=false;message(statusNode,text,true);}},
+    invalidate:text=>{readOnly=true;loadFailed=true;accessError=saveError(/เข้าสู่ระบบ/.test(String(text))?'auth-expired':'access-invalidated');sameSessionView()?.setPersistenceError?.(accessError);if(fxTimer!==null)window.clearInterval?.(fxTimer);fxTimer=null;publishReportSummary(null);if(statusNode){statusNode.hidden=false;message(statusNode,accessError.message,true);}},
     isReadOnly:()=>readOnly,
     attach,
     isDirty:()=>!!sameSessionView()?.getPriceState?.().dirty,
     isSaving:()=>!!sameSessionView()?.getPriceState?.().saving,
     getReportSummary:()=>session===token()?reportSummary:null,
-    getPriceState:()=>{const state=sameSessionView()?.getPriceState?.();return state?{...state,readOnly}:null;},
+    getPriceState:()=>{const state=sameSessionView()?.getPriceState?.(),cause=reconciliationError||accessError;return state?{...state,readOnly,...(cause?{error:cause.message,errorCode:cause.code}:{})}:null;},
+    getSaveStatus,
     getDraftPrice:key=>editableView()?.getDraftPrice?.(key) || null,
     setDraftPrice:(key,value,currency)=>editableView()?.setDraftPrice?.(key,value,currency) === true,
-    savePrices:async()=>{const active=editableView(),version=generation,auth=session;if(!active?.savePrices)return false;try{const saved=await active.savePrices();return saved===true&&active===sameSessionView()&&version===generation&&auth===session&&auth===token();}catch{return false;}},
+    savePrices:async()=>{const active=editableView(),version=generation,auth=session;if(!active?.savePrices||reconciliationError){blockedSaveError=saveBlockage();sameSessionView()?.setPersistenceError?.(blockedSaveError);return false;}blockedSaveError=null;try{const saved=await active.savePrices();return saved===true&&active===sameSessionView()&&version===generation&&auth===session&&auth===token();}catch(cause){blockedSaveError=saveError(Object.hasOwn(saveMessages,cause?.code)?cause.code:'save-outcome-unknown');if(active===sameSessionView())active.setPersistenceError?.(blockedSaveError);return false;}},
   };
   window.addEventListener('beforeunload',event=>{if(view?.getPriceState().dirty||view?.getPriceState().saving){event.preventDefault();event.returnValue='';}});
 })();
