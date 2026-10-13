@@ -114,6 +114,22 @@
       return `<div class="ss-gap-editor" data-stock-price-row="${esc(key)}"><div class="ss-gap-spec"><span>${esc(label)}</span><b>${number(r.qty)} ${unit}</b></div><label><span>ราคาต่อ${unit}</span><input type="number" min="0" step="any" inputmode="decimal" placeholder="ใส่ราคา" data-stock-gap-price="${esc(key)}" aria-label="ราคา ${esc(label)} ต่อ${unit}" disabled></label><label><span>สกุลเงิน</span><select data-stock-gap-currency="${esc(key)}" aria-label="สกุลเงิน ${esc(label)}" disabled><option value="THB">บาท</option><option value="USD">USD</option></select></label></div>`;
     }).join('')}${specs.length?'<div class="ss-gap-actions"><button type="button" data-stock-gap-save disabled>เซฟราคาและหมายเหตุทั้งหมด</button><span data-stock-gap-status role="status">รอเชื่อมชุดราคาหัวข้อ 02</span></div><small>กรอกครั้งเดียว ใช้ราคาประเมินสต๊อกชุดเดียวกันทุกกล่อง · ยอดสรุปเปลี่ยนหลังเซฟสำเร็จ</small>':'<small>ยังไม่รวมในมูลค่า · รออัตราแลกเปลี่ยน</small>'}</details>`;
   }
+  function soldLoadingBreakdown(summary){
+    const sold=summary?.sold,p=summary?.partition;
+    const valid=b=>b&&['sheet','strip'].every(unit=>typeof b[unit]==='number'&&Number.isFinite(b[unit])&&b[unit]>=0);
+    const total=valid(sold?.byUnit)?sold.byUnit:null,loaded=valid(sold?.loaded?.byUnit)?sold.loaded.byUnit:null;
+    const inStock=p?.status==='verified'&&valid(p.sold?.inStock?.byUnit)?p.sold.inStock.byUnit:null;
+    const toProduce=p?.status==='verified'&&valid(p.sold?.toProduce?.byUnit)?p.sold.toProduce.byUnit:null;
+    const units=['sheet','strip'],epsilon=0.000001;
+    const remaining=total&&loaded&&units.every(unit=>total[unit]>=loaded[unit])?Object.fromEntries(units.map(unit=>[unit,Number((total[unit]-loaded[unit]).toFixed(6))])):null;
+    const reconciled=!!(remaining&&inStock&&toProduce&&units.every(unit=>Math.abs(remaining[unit]-inStock[unit]-toProduce[unit])<epsilon));
+    const reason=!remaining?'ยังตรวจยอดรอโหลดไม่ได้ · รอยอดขายทั้งหมดและยอดโหลดที่ถูกต้อง':!inStock||!toProduce?'รอยืนยันส่วนมีของในสต๊อกและต้องผลิตเพิ่ม':!reconciled?'ยอดแยกยังไม่ตรงกับยอดรอโหลด · กรุณาตรวจข้อมูลจัดสรร':'';
+    return {loaded,remaining,inStock,toProduce,reconciled,reason};
+  }
+  function soldLoadingHTML(summary){
+    const b=soldLoadingBreakdown(summary);
+    return `<div class="ss-sold-quantity-split ss-sold-loading-breakdown" aria-label="ยอดขายแยกการโหลด"><div class="ss-loaded-total"><span>โหลดออกแล้ว</span><b>${quantityText(b.loaded)}</b></div><section class="ss-awaiting-load" aria-label="เหลือรอโหลดและส่วนประกอบ"><div class="ss-awaiting-total"><span>เหลือรอโหลด</span><b>${quantityText(b.remaining)}</b></div><small>ยอดขายทั้งหมด − โหลดออกแล้ว</small><div class="ss-awaiting-subsets"><small>แยกจากยอดเหลือรอโหลด</small><div><span>มีของในสต๊อก</span><b>${quantityText(b.inStock)}</b></div><div><span>ต้องผลิตเพิ่ม</span><b>${quantityText(b.toProduce)}</b></div></div>${b.reconciled?'<small class="ss-loading-equation">มีของ + ต้องผลิต = เหลือรอโหลด</small>':`<small class="ss-loading-warning" role="alert">${esc(b.reason)}</small>`}</section></div>`;
+  }
   function partitionKpiHTML(summary){
     const p=summary.partition,verified=p?.status==='verified',firmOnly=p?.reservationPolicy==='aaf-firm-only-20261003-v1';
     const equivalents=b=>`<dl class="ss-physical-equivalents"><div><dt>เทียบ 4×8 · ความหนาเดิม</dt><dd>${display(b?.eq4x8)} <small>แผ่น</small></dd></div><div><dt>เทียบ 4×8 · หนา 2.5 มม.</dt><dd>${display(b?.eq2_5)} <small>แผ่น</small></dd></div></dl>`;
@@ -132,7 +148,7 @@
       const stages=[['pi','เปิด PI แล้ว'],['vessel','มีเรือแล้ว'],['negotiate','เจรจา'],['forecast','Forecast']].filter(([status])=>!firmOnly||!['negotiate','forecast'].includes(status));
       if(verified&&Object.values(p.reserved.byStatus?.unknown?.inStock?.byUnit||{}).some(q=>q>0))stages.push(['unknown','สถานะอื่น / ยังไม่ระบุ']);
       const reservationSplit=`<div class="ss-sold-quantity-split"><small>แยกเฉพาะที่มีของรองรับ</small>${stages.map(([status,title])=>`<div><span>${title}</span><b>${quantityText(verified?p.reserved.byStatus?.[status]?.inStock?.byUnit:null)}</b></div>`).join('')}</div><div class="ss-sold-equivalents">${equivalents(b)}</div>`;
-      const split=id==='sold'?`<div class="ss-sold-quantity-split"><div><span>มีของในสต๊อก</span><b>${quantityText(verified?p.sold.inStock.byUnit:null)}</b></div><div><span>ต้องผลิตเพิ่ม</span><b>${quantityText(verified?p.sold.toProduce.byUnit:null)}</b></div><div><span>โหลดออกแล้ว</span><b>${quantityText(summary.sold?.loaded?.byUnit)}</b></div></div><div class="ss-sold-equivalents">${equivalents(summary.sold)}</div>`:id==='reserved'?reservationSplit:equivalents(b);
+      const split=id==='sold'?`${soldLoadingHTML(summary)}<div class="ss-sold-equivalents">${equivalents(summary.sold)}</div>`:id==='reserved'?reservationSplit:equivalents(b);
       return `<div class="ss-kpi ss-kpi-${id}"><div class="ss-physical-main"><h3>${label}</h3><strong>${display(units?.sheet)}</strong><small>แผ่น · ${note}</small>${units?.strip?`<div class="ss-strip-quantity">ไม้แถบ <b>${number(units.strip)}</b> ชิ้น</div>`:''}</div>${split}<div class="ss-kpi-value"><span>${id==='physical'?'มูลค่าสต๊อกจริงทั้งหมด':'มูลค่าส่วนที่อยู่ในสต๊อกจริง'}</span><b>${reportMoney(b)}</b>${priceCoverage(b,id+'-stock')}</div>${detail}</div>`;
     }).join('');
     return cards+(!verified?`<p class="ss-partition-error" role="alert">${esc(p?.reason||'รอตรวจข้อมูลจัดสรรจากหัวข้อ 02')} · ยังไม่รวมยอดแยกกลุ่ม</p>`:'');
@@ -267,6 +283,16 @@
     [data-aaf-stock-summary] .ss-sold-quantity-split{display:grid;gap:8px;border-left:1px solid #c3d5e3;padding-left:14px;font-size:11px}
     [data-aaf-stock-summary] .ss-sold-quantity-split div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:3px 8px}
     [data-aaf-stock-summary] .ss-sold-quantity-split b{font-size:14px}
+    [data-aaf-stock-summary] .ss-sold-loading-breakdown{align-self:start;gap:12px}
+    [data-aaf-stock-summary] .ss-loaded-total{color:#176b53}
+    [data-aaf-stock-summary] .ss-awaiting-load{min-width:0;border-top:1px solid #bdd2ef;padding-top:10px}
+    [data-aaf-stock-summary] .ss-awaiting-total{font-weight:700;align-items:baseline}
+    [data-aaf-stock-summary] .ss-awaiting-total b{font-size:17px}
+    [data-aaf-stock-summary] .ss-awaiting-load>small{display:block;margin-top:4px;font-size:10px}
+    [data-aaf-stock-summary] .ss-sold-quantity-split .ss-awaiting-subsets{display:grid;justify-content:stretch;gap:8px;margin-top:10px;padding:8px 0 4px 10px;border-left:3px solid #aac4e5}
+    [data-aaf-stock-summary] .ss-awaiting-subsets>small{font-size:10px}
+    [data-aaf-stock-summary] .ss-awaiting-load .ss-loading-equation{color:#176b53;margin-top:8px}
+    [data-aaf-stock-summary] .ss-awaiting-load .ss-loading-warning{color:#9e3b33;margin-top:8px}
     [data-aaf-stock-summary] .ss-sold-equivalents{grid-column:1/-1}
     [data-aaf-stock-summary] .ss-sold-equivalents .ss-physical-equivalents{border-left:0;border-top:1px solid #c3d5e3;padding:8px 0 0;grid-template-columns:1fr 1fr;gap:8px}
     [data-aaf-stock-summary] .ss-sold-equivalents dd{font-size:17px}
@@ -428,4 +454,5 @@
   window.AAFStockSummary={update,showError,setSalesSummary,syncPriceDrafts};
   // Pure read-only builders exposed for regression tests and isolated previews.
   window.AAFStockSummary.buildModel=model;window.AAFStockSummary.renderHTML=html;window.AAFStockSummary.renderKpis=kpiHTML;
+  window.AAFStockSummary.soldLoadingBreakdown=soldLoadingBreakdown;
 })();
