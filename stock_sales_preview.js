@@ -877,8 +877,20 @@ function buildModel(salesRows = [], stockRows = [], opts = {}) {
   };
 }
 
+// Commercial sale value is the full documented sale amount, not the unpaid
+// balance used by receipt tracking. Never split a repeated invoice total by
+// quantity or reuse it for multiple source lines without line-level evidence.
+function actualSaleAmount(row, allRows) {
+  if (!row || !Number.isFinite(row.grossAmount) || row.grossAmount < 0) return null;
+  if (row.amountReasons?.includes('mixed-invoice-across-specs')) return null;
+  const invoiceRows = allRows.filter(candidate => candidate.invoiceKey === row.invoiceKey);
+  if (!row.lineAmountConfirmed && invoiceRows.length !== 1) return null;
+  return row.grossAmount;
+}
+
 module.exports = {
   buildModel,
+  actualSaleAmount,
   exactSpecKey,
   allocationPoolKey,
   canonicalNumber,
@@ -956,7 +968,30 @@ module.exports = {
       else autoFx = {...autoFx,status:'unavailable'};
       syncInputs();updateFinancialView();saveStatus();notifyReportSummary('exchange-rate');return true;
     }
-    let dirty = false, saving = false, error = '', writeCount = 0, queuedWrites = 0, writeFailed = false;
+    let dirty = false, saving = false, error = '', errorCode = '', writeCount = 0, queuedWrites = 0, writeFailed = false;
+    const persistenceMessages = {
+      'state-too-large':'ยังไม่เซฟ · ราคาและหมายเหตุรวมเกิน 16 KB กรุณาย่อหมายเหตุ',
+      'auth-required':'ยังไม่เซฟ · กรุณาเข้าสู่ระบบ AAF ก่อนบันทึก · เก็บร่างในหน้านี้ไว้ก่อน',
+      'auth-expired':'ยังไม่เซฟ · สิทธิ์เข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบ AAF ใหม่ · เก็บร่างในหน้านี้ไว้ก่อน',
+      'permission-denied':'ยังไม่เซฟ · บัญชีนี้ไม่มีสิทธิ์บันทึกราคาและหมายเหตุ กรุณาตรวจสิทธิ์บัญชี',
+      'read-only':'ยังไม่เซฟ · หน้านี้ดูอย่างเดียว กรุณาตรวจสิทธิ์และโหลดข้อมูลส่วนกลางใหม่ก่อนบันทึก',
+      'access-invalidated':'ยังไม่เซฟ · ยังยืนยันสิทธิ์หรือข้อมูลส่วนกลางไม่ได้ กรุณาตรวจการเข้าสู่ระบบ · เก็บร่างในหน้านี้ไว้ก่อน',
+      'session-changed':'ยังไม่เซฟ · เซสชันเปลี่ยนแล้ว กรุณายืนยันบัญชีและโหลดข้อมูลส่วนกลางใหม่ก่อนบันทึก',
+      'catalog-conflict':'ยังไม่เซฟ · มีราคาใหม่จากอีกหน้า กรุณาเปรียบเทียบข้อมูลส่วนกลางกับร่างก่อนบันทึก ไม่ได้ทับข้อมูล',
+      'preflight-failed':'ยังไม่เซฟ · อ่านข้อมูลส่วนกลางล่าสุดไม่สำเร็จ ตรวจการเชื่อมต่อแล้วลองใหม่ · ร่างยังอยู่',
+      'save-rejected':'ยังไม่เซฟ · ระบบปฏิเสธการบันทึก กรุณาตรวจข้อมูลราคา หมายเหตุ และสิทธิ์บัญชี',
+      'save-outcome-unknown':'เซฟไม่สำเร็จในการยืนยันผล · อาจบันทึกส่วนกลางแล้ว ห้ามกดเซฟซ้ำ ให้ตรวจข้อมูลส่วนกลางก่อน · ร่างยังอยู่',
+      'readback-mismatch':'ยังยืนยันผลเซฟไม่ได้ · ข้อมูลที่อ่านกลับไม่ตรงกับที่ส่ง อาจบันทึกส่วนกลางแล้ว ห้ามเซฟซ้ำก่อนตรวจข้อมูลส่วนกลาง',
+      'session-changed-after-save':'เซสชันเปลี่ยนแล้วหลังส่งบันทึก · อาจบันทึกส่วนกลางแล้ว ห้ามเซฟซ้ำก่อนตรวจข้อมูลส่วนกลาง',
+      'catalog-unavailable':'ยังไม่เซฟ · ยังโหลดราคาและหมายเหตุไม่ครบ กรุณาตรวจการเชื่อมต่อส่วนกลาง'
+    };
+    function setPersistenceError(cause) {
+      if (destroyed) return;
+      // Never echo arbitrary backend messages. An unknown writer error does not
+      // prove that a POST failed before committing, so require readback first.
+      errorCode = Object.hasOwn(persistenceMessages,cause?.code) ? cause.code : 'save-outcome-unknown';
+      error = persistenceMessages[errorCode];saveStatus();notifyPriceDraftChange('save-blocked');
+    }
     let storeLoading = false, storeLoadFailed = false;
     let queue = Promise.resolve();
     const cleanups = [];
@@ -1036,7 +1071,7 @@ module.exports = {
       committedFx = pricing.fx; hasSavedState = true;
       priceKeyBindings.clear();
       invalidDraftValues.clear();
-      dirty = false; error = ''; return true;
+      dirty = false; error = ''; errorCode = ''; return true;
     }
     function payload(catalog, fx = pricing.fx) {
       return {modelContent:{scope:'AAF preview price catalog',fxThbPerUsd:fx,freePriceUnit:'THB or USD per actual sheet or strip piece',freeValueCurrency:'THB'},privateContent:{version:3,context:pricingContext,fx,...copyCatalog(catalog),savedAt:catalog.savedAt || null}};
@@ -1070,7 +1105,7 @@ module.exports = {
       updatePersistenceAccess();
     }
     function knownDisplayKey(key) {return typeof key === 'string' ? knownPoolKeys.get(key) || null : null;}
-    function getPriceState() {return {...pricing,...copyCatalog(pricing),readOnly,dirty,saving,error,loading:storeLoading,loadFailed:storeLoadFailed,invalidKeys:[...invalidDraftValues.keys()]};}
+    function getPriceState() {return {...pricing,...copyCatalog(pricing),readOnly,dirty,saving,error,errorCode,loading:storeLoading,loadFailed:storeLoadFailed,invalidKeys:[...invalidDraftValues.keys()]};}
     function getDraftPrice(key) {
       if (destroyed || storeLoading || storeLoadFailed) return null;
       const displayKey = knownDisplayKey(key);if (displayKey === null) return null;
@@ -1079,12 +1114,12 @@ module.exports = {
     }
     function notifyPriceDraftChange(reason,key = null) {
       if (destroyed || typeof options.onPriceDraftChange !== 'function') return;
-      const state = getPriceState(), change = {reason,key,draft:key === null ? null : getDraftPrice(key),dirty:state.dirty,saving:state.saving,error:state.error,loading:state.loading,loadFailed:state.loadFailed,invalidKeys:state.invalidKeys};
+      const state = getPriceState(), change = {reason,key,draft:key === null ? null : getDraftPrice(key),dirty:state.dirty,saving:state.saving,error:state.error,errorCode:state.errorCode,loading:state.loading,loadFailed:state.loadFailed,invalidKeys:state.invalidKeys};
       try {options.onPriceDraftChange(change);} catch (cause) {win.console?.error?.('AAF sales preview price draft callback failed',cause);}
     }
     const draftValidationError = 'ยังไม่เซฟ · ตรวจราคาให้มากกว่า 0 หรือเว้นว่าง';
     function recomputeDirty() {dirty = invalidDraftValues.size > 0 || !sameCatalog(pricing,committed);return dirty;}
-    function markEdited() {recomputeDirty();error = invalidDraftValues.size ? draftValidationError : '';saveStatus();}
+    function markEdited() {recomputeDirty();error = invalidDraftValues.size ? draftValidationError : '';errorCode = '';saveStatus();}
     function rejectDraftPrice(displayKey,value,active = null) {
       if (displayKey !== null) invalidDraftValues.set(displayKey,typeof value === 'string' || typeof value === 'number' ? value : String(value ?? ''));
       active?.setAttribute?.('aria-invalid','true');
@@ -1113,16 +1148,16 @@ module.exports = {
       pricing.currencies[priceKey(displayKey)] = currencyCode;syncInputs(active);updateFinancialView();markEdited();notifyPriceDraftChange('draft',displayKey);return true;
     }
     async function savePrices() {
-      if (readOnly) return false;
+      if (readOnly) {setPersistenceError({code:'read-only'});return false;}
       const loaded = await ready;
       if (destroyed || loaded === false || storeLoading || storeLoadFailed) {error = 'ยังไม่เซฟ · โหลด catalog ไม่สำเร็จ';saveStatus();notifyPriceDraftChange('save-blocked');return false;}
       if (saving) return false;
       if (invalidDraftValues.size || [...root.querySelectorAll('[data-free-price]')].some(input => input.validity.badInput || input.getAttribute('aria-invalid') === 'true')) {error = 'ยังไม่เซฟ · ตรวจราคาให้มากกว่า 0 หรือเว้นว่าง';saveStatus();notifyPriceDraftChange('save-blocked');return false;}
       const snapshot = {...copyCatalog(pricing),savedAt:new Date().toISOString()};
-      saving = true; error = ''; saveStatus();notifyPriceDraftChange('save-start');
+      saving = true; error = ''; errorCode = ''; saveStatus();notifyPriceDraftChange('save-start');
       let saved = false;
       try {await enqueue(() => payload(snapshot),value => {committed = {...snapshot,savedAt:value.privateContent.savedAt};committedFx = positive(value.privateContent.fx);hasSavedState = true;recomputeDirty();});saved = true;}
-      catch (cause) {error = cause?.code === 'state-too-large' ? 'ยังไม่เซฟ · ราคาและหมายเหตุรวมเกิน 16 KB กรุณาย่อหมายเหตุ' : 'เซฟไม่สำเร็จ · ราคาและหมายเหตุยังไม่ถูกบันทึก กรุณากดใหม่';}
+      catch (cause) {setPersistenceError(cause);}
       finally {saving = false; saveStatus();}
       if (saved) notifyReportSummary('saved');
       notifyPriceDraftChange(saved ? 'saved' : 'save-failed');return saved;
@@ -1287,14 +1322,15 @@ module.exports = {
       const quantities = reportQuantities(rows,row => row.qty), byCurrency = {};
       let knownValueTHB = 0, knownRowCount = 0, unknownRowCount = 0, missingFxRowCount = 0;
       rows.forEach(row => {
-        if (!Number.isFinite(row.amount) || !row.currency) {unknownRowCount++;return;}
-        byCurrency[row.currency] = (byCurrency[row.currency] || 0)+row.amount;
-        if (row.currency === 'THB') {knownValueTHB += row.amount;knownRowCount++;return;}
-        if (row.currency === 'USD' && effectiveFx(true) !== null) {knownValueTHB += row.amount*effectiveFx(true);knownRowCount++;return;}
+        const amount = host.AafAllModel.actualSaleAmount(row,model.salesRows);
+        if (amount === null || !row.currency) {unknownRowCount++;return;}
+        byCurrency[row.currency] = (byCurrency[row.currency] || 0)+amount;
+        if (row.currency === 'THB') {knownValueTHB += amount;knownRowCount++;return;}
+        if (row.currency === 'USD' && effectiveFx(true) !== null) {knownValueTHB += amount*effectiveFx(true);knownRowCount++;return;}
         missingFxRowCount++;
       });
       const complete = unknownRowCount === 0 && missingFxRowCount === 0;
-      return {...quantities,valueTHB:complete ? knownValueTHB : null,knownValueTHB,byCurrency,coverage:{complete,knownRowCount,unknownRowCount,missingFxRowCount,totalRowCount:rows.length,orderCount:new Set(rows.map(row => row.orderKey)).size}};
+      return {...quantities,valueBasis:'actual-sale-full-amount-not-cash-receipts',valueTHB:complete ? knownValueTHB : null,knownValueTHB,byCurrency,coverage:{complete,knownRowCount,unknownRowCount,missingFxRowCount,totalRowCount:rows.length,orderCount:new Set(rows.map(row => row.orderKey)).size}};
     }
     function getReportSummary() {
       const loadedRows = model.salesRows.filter(row => row.status === 'loaded');
@@ -1686,7 +1722,7 @@ module.exports = {
     });
     // Mounting never writes state; changes are handled only by explicit interactions.
     function destroy() {destroyed = true;cleanups.forEach(fn => fn());}
-    return {destroy,ready,getPriceState,getDraftPrice,setDraftPrice,getReportSummary,savePrices,exportSaved,setAutomaticFx};
+    return {destroy,ready,getPriceState,getDraftPrice,setDraftPrice,getReportSummary,savePrices,exportSaved,setAutomaticFx,setPersistenceError};
   }
   host.mountAllThickness = mountAllThickness;
   if (typeof module !== 'undefined' && module.exports) module.exports = mountAllThickness;
