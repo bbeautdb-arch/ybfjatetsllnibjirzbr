@@ -5,7 +5,7 @@
   const assetBase=new URL('.',document.currentScript.src);
   let host=null,view=null,viewGeneration=0,session='',catalogRevision=0,pending=null,generation=0,reportSummary=null;
   let readOnly=false,salesMode=false,stockRevision=null,mountedRevision=null,mountedSalesMode=false,loadFailed=false,statusNode=null;
-  let fxTimer=null,accessEpoch=0;
+  let fxTimer=null,accessEpoch=0,fxRun=null,headerFx=null,fxSession='',fxBlocked=false;
   // Only controlled messages leave the persistence boundary; never expose server
   // response text, credentials or a previous session's private draft.
   const saveMessages={
@@ -45,7 +45,7 @@
     if(!a||!b||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)!==Array.isArray(b))return false;
     const keys=Object.keys(a);return keys.length===Object.keys(b).length&&keys.every(key=>Object.hasOwn(b,key)&&sameSavedValue(a[key],b[key]));
   };
-  function publishReportSummary(summary){reportSummary=mountedRevision===stockRevision?summary:null;window.AAFStockSummary?.setSalesSummary?.(reportSummary);}
+  function publishReportSummary(summary){reportSummary=!fxBlocked&&mountedRevision===stockRevision?summary:null;window.AAFStockSummary?.setSalesSummary?.(reportSummary);}
   function publishPriceDraftChange(change){window.AAFStockSummary?.syncPriceDrafts?.(change);}
   async function request(body=null,catalogOnly=false){
     if(body&&readOnly)throw accessError||saveError('read-only');
@@ -94,25 +94,52 @@
     unchanged();
     return {stock:{...pick(stock,['revision','updatedAt','exchangeRate']),report:pick(stock.report,['reportDate','checksum','sourceRowCount']),rows,sellablePlan:stock.sellablePlan?pick(stock.sellablePlan,['reportDate','month','appliedAt','needsSalesRefresh']):null},catalog:catalog?{...pick(catalog,['revision','catalogRevision','stockReportDate']),widgetState:{privateContent:pick(catalog.widgetState.privateContent,['version','context','fx','prices','currencies','notesByThickness','notesBySpec','savedAt'])}}:null,catalogWarning,verifiedAt:new Date().toISOString()};
   }
-  function startAutomaticFx(active,version,currentHost,auth){
-    if(typeof active.setAutomaticFx!=='function')return;
-    let busy=false;
-    const safe=()=>{const price=active.getPriceState?.();return !loadFailed&&!readOnly&&current(version,currentHost,auth)&&view===active&&!price?.dirty&&!price?.saving&&!document.activeElement?.matches?.('input,textarea,select')&&!currentHost.shadowRoot?.activeElement?.matches?.('input,textarea,select');};
+  function stopAutomaticFx(){if(fxRun)fxRun.stopped=true;fxRun=null;if(fxTimer!==null)window.clearInterval?.(fxTimer);fxTimer=null;}
+  function clearHeaderFx(){headerFx=null;fxSession='';window.AAFStockSummary?.setExchangeRate?.(null);}
+  function denyAutomaticFx(){fxBlocked=true;stopAutomaticFx();clearHeaderFx();publishReportSummary(null);}
+  function validAutomaticFx(value){
+    const date=value?.date;
+    if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date))return null;
+    const stamp=new Date(date+'T00:00:00.000Z');
+    if(!Number.isFinite(stamp.getTime())||stamp.toISOString().slice(0,10)!==date||date>new Date(Date.now()+7*60*60*1000).toISOString().slice(0,10))return null;
+    if(value.basis!=='BOT_USD_THB_BUYING_TRANSFER'||typeof value.rate!=='number'||!Number.isFinite(value.rate)||value.rate<=0||value.rate>1000||!['current','stale','unavailable'].includes(value.status))return null;
+    return {rate:value.rate,date,status:value.status,basis:value.basis,url:'https://www.bot.or.th/th/statistics/exchange-rate.html',sourceLabel:'ธปท. · อัตราซื้อเงินโอน USD รายวัน',...(typeof value.checkedAt==='string'?{checkedAt:value.checkedAt}:{})};
+  }
+  const sameSessionFx=()=>fxSession&&fxSession===session&&fxSession===token()&&headerFx?{...headerFx}:null;
+  function applyViewFx(run,value){
+    const active=view,price=active?.getPriceState?.();
+    // Header reads are independent. The valuation view retains its existing draft/focus guards.
+    if(!run.stopped&&fxRun===run&&run.epoch===accessEpoch&&current(run.version,run.host,run.auth)&&!loadFailed&&!readOnly&&viewGeneration===run.version&&!price?.dirty&&!price?.saving&&!document.activeElement?.matches?.('input,textarea,select')&&!run.host.shadowRoot?.activeElement?.matches?.('input,textarea,select'))active?.setAutomaticFx?.(value);
+  }
+  function startAutomaticFx(version,currentHost,auth){
+    const hasHeader=typeof window.AAFStockSummary?.setExchangeRate==='function';
+    if(fxBlocked||!auth||(!hasHeader&&typeof view?.setAutomaticFx!=='function'))return;
+    if(fxRun&&fxRun.version===version&&fxRun.host===currentHost&&fxRun.auth===auth&&fxRun.epoch===accessEpoch){const value=sameSessionFx();if(value)applyViewFx(fxRun,value);return;}
+    stopAutomaticFx();
+    const run={version,host:currentHost,auth,epoch:accessEpoch,busy:false,stopped:false};fxRun=run;
+    const safe=()=>!run.stopped&&fxRun===run&&run.epoch===accessEpoch&&current(version,currentHost,auth);
     const refresh=async()=>{
-      // Do not rebuild summary cards under a price/notes draft or its focused input.
-      if(busy||!safe()||document.visibilityState==='hidden')return;
-      busy=true;
+      if(run.busy||!safe()||document.visibilityState==='hidden')return;
+      // Preserve the legacy view-only polling behavior when the header is not mounted.
+      const price=view?.getPriceState?.();
+      if(!hasHeader&&(loadFailed||readOnly||price?.dirty||price?.saving||document.activeElement?.matches?.('input,textarea,select')||currentHost.shadowRoot?.activeElement?.matches?.('input,textarea,select')))return;
+      run.busy=true;
       try{
-        const response=await fetch(API+'?view=exchangeRate',{cache:'no-store',headers:{Authorization:'Bearer '+auth}});
-        const data=await response.json();
-        if(!response.ok||!data.ok)throw new Error('โหลดเรทไม่สำเร็จ');
-        if(safe())active.setAutomaticFx(data.exchangeRate);
+        const response=await fetch(API+'?view=exchangeRate',{method:'GET',cache:'no-store',headers:{Authorization:'Bearer '+auth}});
+        if(!safe())return;
+        if(response.status===401||response.status===403){denyAutomaticFx();return;}
+        const data=await response.json();if(!safe())return;
+        const value=response.ok&&data?.ok?validAutomaticFx(data.exchangeRate):null;
+        if(!value||(sameSessionFx()&&value.date<headerFx.date))throw new Error('fx-unavailable');
+        headerFx=value;fxSession=auth;window.AAFStockSummary?.setExchangeRate?.({...value});applyViewFx(run,value);
       }catch{
-        if(safe())active.setAutomaticFx({status:'unavailable'});
-      }finally{busy=false;}
+        if(safe()){
+          const previous=sameSessionFx();headerFx=previous?{...previous,status:'unavailable'}:null;fxSession=headerFx?auth:'';
+          window.AAFStockSummary?.setExchangeRate?.(headerFx?{...headerFx}:null);applyViewFx(run,headerFx||{status:'unavailable'});
+        }
+      }finally{run.busy=false;}
     };
-    refresh();
-    fxTimer=window.setInterval?.(refresh,30*60*1000);
+    run.refresh=refresh;refresh();fxTimer=window.setInterval?.(refresh,30*60*1000)??null;
   }
   function message(node,text,error=false){node.textContent=text;node.style.color=error?'#b42332':'#52657a';}
   function element(tag,props={},text=''){const el=document.createElement(tag);Object.assign(el,props);if(text)el.textContent=text;return el;}
@@ -128,7 +155,7 @@
     if(!current(version,currentHost,auth))return;
     catalogRevision=data.catalogRevision;let mountedCatalogRevision=data.catalogRevision;
     const p=data.preview;
-    if(salesMode&&data.permissions?.pricesAndNotes!==true)throw new Error('บัญชีนี้ยังไม่มีสิทธิ์ราคาและหมายเหตุฝ่ายขาย');
+    if(salesMode&&data.permissions?.pricesAndNotes!==true)throw readError('permission-denied');
     if(salesMode&&stockRevision!==null&&data.revision!==stockRevision)throw new Error('ข้อมูลเปลี่ยนระหว่างโหลด · กรุณากดโหลดล่าสุดอีกครั้ง');
     readOnly=false;accessError=null;blockedSaveError=null;reconciliationError=null;
     if(!p||!window.AafAllModel||!window.mountAllThickness)throw new Error('โหลดตัวแสดงพรีวิวไม่ครบ กรุณารีเฟรช');
@@ -181,23 +208,25 @@
     if(mountedView.ready&&(await mountedView.ready)===false){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}throw new Error('โหลดราคาที่เซฟไว้ไม่สำเร็จ · ยังไม่แสดงยอดสรุป');}
     if(!current(version,currentHost,auth)){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}return;}
     if(mountedView.getReportSummary)publishReportSummary(mountedView.getReportSummary());
-    startAutomaticFx(mountedView,version,currentHost,auth);
+    startAutomaticFx(version,currentHost,auth);
     setReportLoadStatus('ready');
     message(state,salesMode?'ฝ่ายขาย · แก้ราคาและหมายเหตุได้ · สต๊อก '+data.stockReportDate+' · ข้อมูลฝ่ายขาย '+data.salesReportDate:'');state.hidden=!salesMode;
   }
   function attach(slot){
     if(!slot)return;
     const auth=token();
+    if(fxSession&&fxSession!==auth){stopAutomaticFx();clearHeaderFx();}
     const priceState=view?.getPriceState?.();
     if(host&&!loadFailed&&session===auth&&mountedSalesMode===salesMode&&(mountedRevision===stockRevision||priceState?.dirty||priceState?.saving)){
       if(mountedRevision!==stockRevision){if(statusNode){statusNode.hidden=false;message(statusNode,'ข้อมูลส่วนกลางเปลี่ยน · เก็บร่างราคาไว้แล้ว · เซฟหรือยกเลิกร่างแล้วกดโหลดล่าสุดก่อนใช้ยอดรายงาน',true);}publishReportSummary(null);}
-      slot.replaceChildren(host);return pending;
+      slot.replaceChildren(host);startAutomaticFx(generation,host,auth);return pending;
     }
     mountedRevision=stockRevision;mountedSalesMode=salesMode;loadFailed=false;blockedSaveError=null;accessError=null;reconciliationError=null;
-    if(fxTimer!==null)window.clearInterval?.(fxTimer);fxTimer=null;
+    stopAutomaticFx();fxBlocked=false;
     if(view)view.destroy();view=null;viewGeneration=0;session=auth;publishReportSummary(null);const version=++generation,{state,content}=shell(),currentHost=host;slot.replaceChildren(currentHost);
     setReportLoadStatus('loading');
-    pending=request().then(data=>current(version,currentHost,auth)?mount(data,content,state,version,currentHost,auth):undefined).catch(e=>{if(current(version,currentHost,auth)){loadFailed=true;const cause=e.code==='report-pending'?e:readError(['auth-required','auth-expired','permission-denied'].includes(e.code)?e.code:'read-unavailable');setReportLoadStatus(cause.code==='report-pending'?'pending':'unavailable',cause);message(state,cause.message,true);publishReportSummary(null);}});return pending;
+    pending=request().then(data=>current(version,currentHost,auth)?mount(data,content,state,version,currentHost,auth):undefined).catch(e=>{if(current(version,currentHost,auth)){loadFailed=true;const cause=e.code==='report-pending'?e:readError(['auth-required','auth-expired','permission-denied'].includes(e.code)?e.code:'read-unavailable');if(['auth-required','auth-expired','permission-denied'].includes(cause.code))denyAutomaticFx();setReportLoadStatus(cause.code==='report-pending'?'pending':'unavailable',cause);message(state,cause.message,true);publishReportSummary(null);}});
+    startAutomaticFx(version,currentHost,auth);return pending;
   }
   const sameSessionView=()=>session&&session===token()&&viewGeneration===generation?view:null;
   const editableView=()=>{if(readOnly)return null;const active=sameSessionView(),state=active?.getPriceState?.();return active&&state&&!state.loading&&!state.loadFailed?active:null;};
@@ -205,13 +234,14 @@
   const getSaveStatus=()=>{const active=sameSessionView(),state=active?.getPriceState?.(),cause=active&&reconciliationError||blockedSaveError||accessError,uncertain=uncertainCodes.has(cause?.code||state?.errorCode);return {error:cause?.message||state?.error||'',errorCode:cause?.code||state?.errorCode||'',blocked:!!cause||uncertain,uncertain};};
   window.AAFSalesPreview={
     setAccess:access=>{const mode=window.AAFStockAccess?.isShared()===true||access.salesMode===true;if(mode!==salesMode||stockRevision!==(access.revision??null))accessEpoch++;if(mode!==salesMode){salesMode=mode;readOnly=mode;publishReportSummary(null);}stockRevision=access.revision??null;},
-    invalidate:text=>{accessEpoch++;readOnly=true;loadFailed=true;accessError=saveError(/เข้าสู่ระบบ/.test(String(text))?'auth-expired':'access-invalidated');setReportLoadStatus('unavailable',readError('auth-expired'));sameSessionView()?.setPersistenceError?.(accessError);if(fxTimer!==null)window.clearInterval?.(fxTimer);fxTimer=null;publishReportSummary(null);if(statusNode){statusNode.hidden=false;message(statusNode,accessError.message,true);}},
+    invalidate:text=>{accessEpoch++;readOnly=true;loadFailed=true;accessError=saveError(/เข้าสู่ระบบ/.test(String(text))?'auth-expired':'access-invalidated');setReportLoadStatus('unavailable',readError('auth-expired'));sameSessionView()?.setPersistenceError?.(accessError);denyAutomaticFx();publishReportSummary(null);if(statusNode){statusNode.hidden=false;message(statusNode,accessError.message,true);}},
     isReadOnly:()=>readOnly,
     attach,
     isDirty:()=>!!sameSessionView()?.getPriceState?.().dirty,
     isSaving:()=>!!sameSessionView()?.getPriceState?.().saving,
     getReportSummary:()=>session===token()?reportSummary:null,
     getReportLoadStatus:()=>session===token()?{...reportLoadStatus}:{state:'unavailable',code:'snapshot-changed',message:readMessages['snapshot-changed'],stockRevision:null},
+    getExchangeRateStatus:sameSessionFx,
     readExportSnapshot,
     getPriceState:()=>{const state=sameSessionView()?.getPriceState?.(),cause=reconciliationError||accessError;return state?{...state,readOnly,...(cause?{error:cause.message,errorCode:cause.code}:{})}:null;},
     getSaveStatus,
@@ -219,5 +249,6 @@
     setDraftPrice:(key,value,currency)=>editableView()?.setDraftPrice?.(key,value,currency) === true,
     savePrices:async()=>{const active=editableView(),version=generation,auth=session;if(!active?.savePrices||reconciliationError){blockedSaveError=saveBlockage();sameSessionView()?.setPersistenceError?.(blockedSaveError);return false;}blockedSaveError=null;try{const saved=await active.savePrices();return saved===true&&active===sameSessionView()&&version===generation&&auth===session&&auth===token();}catch(cause){blockedSaveError=saveError(Object.hasOwn(saveMessages,cause?.code)?cause.code:'save-outcome-unknown');if(active===sameSessionView())active.setPersistenceError?.(blockedSaveError);return false;}},
   };
+  document.addEventListener?.('visibilitychange',()=>{if(document.visibilityState!=='hidden')fxRun?.refresh();});
   window.addEventListener('beforeunload',event=>{if(view?.getPriceState().dirty||view?.getPriceState().saving){event.preventDefault();event.returnValue='';}});
 })();
