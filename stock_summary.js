@@ -14,7 +14,36 @@
   const standardArea=1220*2440;
   const blank=()=>({qty:0,baseQty:0,freeQty:0,committedQty:0,eq4x8:0,eq:0,value:0,freeValue:0,freeEq4x8:0,freeEq:0,reservedEq4x8:0,reservedEq:0,reservedValue:0,reservedUnpricedQty:0,agingBaseQty:0,aging90:0,aging180:0,agingOver180:0,count:0});
   const add=(s,r)=>{for(const k of ['qty','baseQty','freeQty','committedQty','eq4x8','eq','value','freeValue','freeEq4x8','freeEq','reservedEq4x8','reservedEq','reservedValue','reservedUnpricedQty','agingBaseQty','aging90','aging180','agingOver180'])s[k]+=r[k];s.count++;return s;};
-  let latest=null,exporting=false,canvasLoader=null;
+  let latest=null,exporting=false,canvasLoader=null,headerExchangeRate=null;
+
+  // A dated FX reference is independently readable even when sales/valuation
+  // readiness is pending. It must never turn pending money totals into estimates.
+  function validHeaderFx(value){
+    if(!value||value.basis!=='BOT_USD_THB_BUYING_TRANSFER'||typeof value.rate!=='number'||!Number.isFinite(value.rate)||value.rate<=0||value.rate>1000||!['current','stale','unavailable'].includes(value.status))return null;
+    const date=value.date;if(!/^\d{4}-\d{2}-\d{2}$/.test(date||''))return null;
+    const parsed=new Date(date+'T00:00:00Z');if(Number.isNaN(parsed.getTime())||parsed.toISOString().slice(0,10)!==date)return null;
+    const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).map(p=>[p.type,p.value]));
+    if(date>[parts.year,parts.month,parts.day].join('-'))return null;
+    return {rate:value.rate,date,status:value.status,basis:value.basis};
+  }
+  function exchangeRateDisplay(summary,reference){
+    const catalog=summary?.catalog;
+    if(typeof catalog?.fxThbPerUsd==='number'&&Number.isFinite(catalog.fxThbPerUsd)&&catalog.fxThbPerUsd>0&&catalog.fxThbPerUsd<=1000)return {rate:catalog.fxThbPerUsd,status:catalog.fxStatus||'เรทที่บันทึกไว้ในหัวข้อ 02 · ไม่ใช่เรทรับเงินจริง'};
+    const fx=validHeaderFx(reference);
+    if(!fx)return {rate:null,status:'ยังยืนยันเรท USD ไม่ได้ · ไม่ใช้ 0 แทน'};
+    const prefix=fx.status==='current'?'ธปท. ซื้อเงินโอน':fx.status==='stale'?'ธปท. ซื้อเงินโอน · ข้อมูลเกิน 7 วัน':'ดึงเรทล่าสุดไม่สำเร็จ · คงเรท ธปท. ที่ยืนยันแล้ว';
+    return {rate:fx.rate,status:prefix+' · '+reportDay(fx.date)+' · บาท / 1 USD · อัตรารายวัน ไม่ใช่เรทรับเงินจริง'};
+  }
+  function paintExchangeRate(){
+    const display=exchangeRateDisplay(latest?.salesSummary,headerExchangeRate);
+    const value=root?.querySelector('.ss-exchange b');if(value)value.textContent=display.rate===null?'—':number(display.rate,4);
+    const status=root?.querySelector('.ss-exchange small');if(status)status.textContent=display.status;
+  }
+  function setExchangeRate(value){
+    headerExchangeRate=validHeaderFx(value);
+    if(latest)latest={...latest,headerExchangeRate};
+    paintExchangeRate();
+  }
 
   function model(data,calculate){
     if(!data.report||!Array.isArray(data.rows)||!data.rows.length)throw new Error('ยังไม่มีรายงานสต๊อกส่วนกลาง');
@@ -217,8 +246,7 @@
       cards.innerHTML=kpiHTML(summary,latest);
       cards.querySelectorAll('[data-stock-gap-group]').forEach(node=>{node.open=opened.has(node.dataset.stockGapGroup);});
     }
-    const fx=root?.querySelector('.ss-exchange b');if(fx)fx.textContent=summary?.catalog?.fxThbPerUsd?number(summary.catalog.fxThbPerUsd,4):'—';
-    const fxInfo=root?.querySelector('.ss-exchange small');if(fxInfo)fxInfo.textContent=summary?.catalog?.fxStatus||'บาท / 1 USD';
+    paintExchangeRate();
     const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=summarySourceText(summary,latest);
     syncPriceDrafts();
   }
@@ -260,7 +288,7 @@
     const t=m.total,overrides=m.rows.filter(r=>r.physicalAt||r.freeAt).length,followed=m.rows.filter(r=>String(r.followup).trim()).length;
     let index=0;
     return `<article class="ss-sheet">
-      <header class="ss-hero"><div><div class="ss-eyebrow">AAF / STOCK & SALES FOLLOW-UP</div><h2>รายงานสต๊อกและติดตามการขาย</h2><p>อ้างอิงรายงานเมล ${esc(reportDay(m.reportDate))}</p></div><div class="ss-hero-meta"><div class="ss-stamp">ข้อมูลที่บันทึกแล้ว<br><b>ครบ ${number(m.rows.length)} สเปก</b><br>ทุกเกรด · ทุกขนาด</div><div class="ss-exchange"><span>อัตราแลกเปลี่ยน · หัวข้อ 02</span><b>${m.salesSummary?.catalog?.fxThbPerUsd?number(m.salesSummary.catalog.fxThbPerUsd,4):'—'}</b><small>${esc(m.salesSummary?.catalog?.fxStatus||'บาท / 1 USD')}</small></div></div></header>
+      <header class="ss-hero"><div><div class="ss-eyebrow">AAF / STOCK & SALES FOLLOW-UP</div><h2>รายงานสต๊อกและติดตามการขาย</h2><p>อ้างอิงรายงานเมล ${esc(reportDay(m.reportDate))}</p></div><div class="ss-hero-meta"><div class="ss-stamp">ข้อมูลที่บันทึกแล้ว<br><b>ครบ ${number(m.rows.length)} สเปก</b><br>ทุกเกรด · ทุกขนาด</div><div class="ss-exchange"><span>อัตราแลกเปลี่ยน USD → บาท</span><b>${exchangeRateDisplay(m.salesSummary,m.headerExchangeRate).rate===null?'—':number(exchangeRateDisplay(m.salesSummary,m.headerExchangeRate).rate,4)}</b><small>${esc(exchangeRateDisplay(m.salesSummary,m.headerExchangeRate).status)}</small></div></div></header>
       <div class="ss-content"><div class="ss-context"><span>ข้อมูลส่วนกลางล่าสุด <b>${esc(when(m.updatedAt))}</b></span><span>เวลาไทย (UTC+7) · ภาพรวมทั้งชุด ไม่ใช้ตัวกรองในหน้าสต๊อก</span></div>
       <p class="ss-sales-summary-source" role="status">${esc(summarySourceText(m.salesSummary,m))}</p>
       <div class="ss-kpis">${kpiHTML(m.salesSummary,m)}</div>
@@ -467,7 +495,9 @@
   function showError(message){if(!root)return;const n=root.querySelector('.ss-status')||root;n.textContent=message;n.classList.add('ss-error');root.querySelectorAll('.ss-download,.cash-download').forEach(b=>b.disabled=true);latest=null;root.querySelector('.ss-sheet')?.remove();root.querySelector('.cash-sheet')?.remove();}
   let jumpedToCash=false;
   function update(data,calculate){
-    if(!root)return;const m=model(data,calculate);m.salesSummary=window.AAFSalesPreview?.getReportSummary?.()||null;latest=m;root.classList.remove('ss-error');
+    if(!root)return;const m=model(data,calculate);m.salesSummary=window.AAFSalesPreview?.getReportSummary?.()||null;
+    if(typeof window.AAFSalesPreview?.getExchangeRateStatus==='function')headerExchangeRate=validHeaderFx(window.AAFSalesPreview.getExchangeRateStatus());
+    m.headerExchangeRate=headerExchangeRate;latest=m;root.classList.remove('ss-error');
     // Retain the same native preview node: changing stock revisions must not discard price/note drafts.
     const preview=root.querySelector('#stock-sales-preview-host');
     const focused=preview?.shadowRoot?.activeElement;
@@ -500,8 +530,9 @@
       status(`ดาวน์โหลดภาพครบ ${captured.rows.length} สเปกแล้ว · ข้อมูลบันทึก ${when(captured.updatedAt)}${latest!==captured?' · มีข้อมูลใหม่บนหน้าจอหลังเริ่มสร้างภาพ':''}`);
     }catch(e){status('ยังไม่ได้ดาวน์โหลดภาพ: '+e.message);}finally{box?.remove();exporting=false;root.querySelectorAll('.ss-download,.cash-download').forEach(b=>b.disabled=!latest);}
   }
-  window.AAFStockSummary={update,showError,setSalesSummary,syncPriceDrafts};
+  window.AAFStockSummary={update,showError,setSalesSummary,setExchangeRate,syncPriceDrafts};
   // Pure read-only builders exposed for regression tests and isolated previews.
   window.AAFStockSummary.buildModel=model;window.AAFStockSummary.renderHTML=html;window.AAFStockSummary.renderKpis=kpiHTML;
   window.AAFStockSummary.soldLoadingBreakdown=soldLoadingBreakdown;
+  window.AAFStockSummary.exchangeRateDisplay=exchangeRateDisplay;
 })();
