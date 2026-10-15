@@ -5,7 +5,7 @@
   const assetBase=new URL('.',document.currentScript.src);
   let host=null,view=null,viewGeneration=0,session='',catalogRevision=0,pending=null,generation=0,reportSummary=null;
   let readOnly=false,salesMode=false,stockRevision=null,mountedRevision=null,mountedSalesMode=false,loadFailed=false,statusNode=null;
-  let fxTimer=null;
+  let fxTimer=null,accessEpoch=0;
   // Only controlled messages leave the persistence boundary; never expose server
   // response text, credentials or a previous session's private draft.
   const saveMessages={
@@ -25,6 +25,18 @@
   };
   const uncertainCodes=new Set(['save-outcome-unknown','readback-mismatch','session-changed-after-save']);
   const saveError=code=>Object.assign(new Error(saveMessages[code]||saveMessages['save-outcome-unknown']),{code:Object.hasOwn(saveMessages,code)?code:'save-outcome-unknown'});
+  const readMessages={
+    'report-pending':'รายละเอียดยอดขายและมูลค่ายังไม่ตรงกับสต๊อกส่วนกลาง · แสดงจำนวนสต๊อกที่ยืนยันแล้วได้ แต่รอเจ้าของตรวจชุดยอดขายก่อน',
+    'auth-required':'กรุณาเข้าสู่ระบบหรือเปิดลิงก์ฝ่ายขายที่ได้รับอนุญาตก่อนอ่านข้อมูลส่วนกลาง',
+    'auth-expired':'สิทธิ์อ่านข้อมูลส่วนกลางหมดอายุหรือถูกยกเลิก · กรุณาตรวจบัญชีหรือลิงก์ฝ่ายขาย',
+    'permission-denied':'สิทธิ์ปัจจุบันไม่อนุญาตให้อ่านรายงานนี้ · กรุณาให้เจ้าของตรวจสิทธิ์',
+    'read-unavailable':'ยังอ่านข้อมูลส่วนกลางไม่สำเร็จ · กรุณาตรวจการเชื่อมต่อแล้วลองใหม่',
+    'snapshot-changed':'ข้อมูลหรือเซสชันเปลี่ยนระหว่างเตรียมไฟล์ · ยังไม่ส่งออก กรุณาลองใหม่จากข้อมูลล่าสุด',
+    'snapshot-invalid':'ข้อมูลส่วนกลางยังไม่ครบสำหรับส่งออก · ยังไม่ได้สร้างไฟล์'
+  };
+  const readError=code=>Object.assign(new Error(readMessages[code]||readMessages['read-unavailable']),{code:Object.hasOwn(readMessages,code)?code:'read-unavailable'});
+  let reportLoadStatus={state:'idle',code:null,message:'',stockRevision:null};
+  function setReportLoadStatus(state,cause=null){reportLoadStatus={state,code:cause?.code||null,message:cause?.message||'',stockRevision};}
   let accessError=null,blockedSaveError=null,reconciliationError=null;
   const token=()=>{if(window.AAFStockAccess)return window.AAFStockAccess.token();if(window.AAFStockAccessRequired)return '';try{const s=JSON.parse(sessionStorage.getItem('aaf_user'));return s?.stockSessionToken||s?.gradeBridgeSessionToken||s?.bridgeSessionToken||'';}catch{return '';}};
   const current=(version,currentHost,auth)=>version===generation&&currentHost===host&&auth===session&&auth===token();
@@ -43,10 +55,44 @@
     catch{throw saveError(body?'save-outcome-unknown':'preflight-failed');}
     if(response.status===401)throw saveError('auth-expired');
     if(response.status===403)throw saveError('permission-denied');
-    if(response.status===409||response.status===412)throw saveError('catalog-conflict');
+    if(response.status===409||response.status===412)throw !body&&!catalogOnly?readError('report-pending'):saveError('catalog-conflict');
     if(body&&(response.status===400||response.status===422))throw saveError('save-rejected');
     let data;try{data=await response.json();}catch{throw saveError(body?'save-outcome-unknown':'preflight-failed');}
     if(!response.ok||!data.ok)throw saveError(body?'save-outcome-unknown':'preflight-failed');return data;
+  }
+  // Export reads a new authorized snapshot, never the view's cache or private draft.
+  // This does not call accept(), change the mounted revision, or POST a catalog.
+  async function readExportSnapshot(){
+    const auth=token(),version=generation,epoch=accessEpoch;if(!auth)throw readError('auth-required');
+    const unchanged=()=>{if(token()!==auth||generation!==version||accessEpoch!==epoch)throw readError('snapshot-changed');};
+    const read=async suffix=>{
+      unchanged();let response;
+      try{response=await fetch(API+suffix,{method:'GET',cache:'no-store',headers:{Authorization:'Bearer '+auth}});}catch{throw readError('read-unavailable');}
+      unchanged();
+      if(response.status===401)throw readError('auth-expired');
+      if(response.status===403)throw readError('permission-denied');
+      if(response.status===409||response.status===412)throw readError('read-unavailable');
+      let data;try{data=await response.json();}catch{throw readError('read-unavailable');}
+      unchanged();if(!response.ok||!data?.ok)throw readError('read-unavailable');return data;
+    };
+    const stock=await read('');
+    if(!Number.isSafeInteger(stock.revision)||!/^\d{4}-\d{2}-\d{2}$/.test(stock.report?.reportDate||'')||!Array.isArray(stock.rows)||!stock.rows.length)throw readError('snapshot-invalid');
+    let catalog=null,catalogWarning='';
+    try{catalog=await read('?view=salesReport&catalogOnly=1');}
+    catch(cause){unchanged();if(['auth-expired','permission-denied','snapshot-changed'].includes(cause.code))throw cause;catalogWarning='อ่านชุดราคาที่บันทึกไม่สำเร็จ · ส่งออกจำนวนสต๊อกได้ แต่เว้นราคาและมูลค่าที่ไม่มีหลักฐาน';}
+    if(catalog&&(stock.revision!==catalog.revision||catalog.stockReportDate!==stock.report.reportDate))throw readError('snapshot-changed');
+    if(catalog&&(!Number.isSafeInteger(catalog.catalogRevision)||!catalog.widgetState?.privateContent)){catalog=null;catalogWarning='ยังไม่มีชุดราคาที่บันทึกครบ · ส่งออกจำนวนสต๊อกได้ แต่เว้นราคาและมูลค่าที่ไม่มีหลักฐาน';}
+    const pick=(value,keys)=>Object.fromEntries(keys.filter(key=>value?.[key]!==undefined).map(key=>[key,JSON.parse(JSON.stringify(value[key]))]));
+    const rows=stock.rows.map(row=>{
+      const result=pick(row,'key sku desc size w l t grade unit baseQty qty committedQty remainingQty productionQty freeQty d90 d180 d270 d360 dOver note followup retained'.split(' '));
+      if(typeof row.rawSource==='boolean')result.rawSource=row.rawSource;
+      for(const key of ['rawSku','exportSku','noteBy','noteAt','followupBy','followupAt'])if(typeof row[key]==='string'||row[key]===null)result[key]=row[key];
+      if(Array.isArray(row.aliases)&&row.aliases.every(alias=>typeof alias==='string'))result.aliases=[...row.aliases];
+      for(const key of ['physicalOverride','freeOverride'])if(typeof row[key]?.at==='string')result[key]={at:row[key].at};
+      return result;
+    });
+    unchanged();
+    return {stock:{...pick(stock,['revision','updatedAt','exchangeRate']),report:pick(stock.report,['reportDate','checksum','sourceRowCount']),rows,sellablePlan:stock.sellablePlan?pick(stock.sellablePlan,['reportDate','month','appliedAt','needsSalesRefresh']):null},catalog:catalog?{...pick(catalog,['revision','catalogRevision','stockReportDate']),widgetState:{privateContent:pick(catalog.widgetState.privateContent,['version','context','fx','prices','currencies','notesByThickness','notesBySpec','savedAt'])}}:null,catalogWarning,verifiedAt:new Date().toISOString()};
   }
   function startAutomaticFx(active,version,currentHost,auth){
     if(typeof active.setAutomaticFx!=='function')return;
@@ -136,6 +182,7 @@
     if(!current(version,currentHost,auth)){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}return;}
     if(mountedView.getReportSummary)publishReportSummary(mountedView.getReportSummary());
     startAutomaticFx(mountedView,version,currentHost,auth);
+    setReportLoadStatus('ready');
     message(state,salesMode?'ฝ่ายขาย · แก้ราคาและหมายเหตุได้ · สต๊อก '+data.stockReportDate+' · ข้อมูลฝ่ายขาย '+data.salesReportDate:'');state.hidden=!salesMode;
   }
   function attach(slot){
@@ -149,20 +196,23 @@
     mountedRevision=stockRevision;mountedSalesMode=salesMode;loadFailed=false;blockedSaveError=null;accessError=null;reconciliationError=null;
     if(fxTimer!==null)window.clearInterval?.(fxTimer);fxTimer=null;
     if(view)view.destroy();view=null;viewGeneration=0;session=auth;publishReportSummary(null);const version=++generation,{state,content}=shell(),currentHost=host;slot.replaceChildren(currentHost);
-    pending=request().then(data=>current(version,currentHost,auth)?mount(data,content,state,version,currentHost,auth):undefined).catch(e=>{if(current(version,currentHost,auth)){loadFailed=true;message(state,e.message,true);}});return pending;
+    setReportLoadStatus('loading');
+    pending=request().then(data=>current(version,currentHost,auth)?mount(data,content,state,version,currentHost,auth):undefined).catch(e=>{if(current(version,currentHost,auth)){loadFailed=true;const cause=e.code==='report-pending'?e:readError(['auth-required','auth-expired','permission-denied'].includes(e.code)?e.code:'read-unavailable');setReportLoadStatus(cause.code==='report-pending'?'pending':'unavailable',cause);message(state,cause.message,true);publishReportSummary(null);}});return pending;
   }
   const sameSessionView=()=>session&&session===token()&&viewGeneration===generation?view:null;
   const editableView=()=>{if(readOnly)return null;const active=sameSessionView(),state=active?.getPriceState?.();return active&&state&&!state.loading&&!state.loadFailed?active:null;};
   const saveBlockage=()=>!token()?saveError('auth-required'):view&&session!==token()?saveError('session-changed'):reconciliationError||accessError||readOnly&&saveError('read-only')||saveError('catalog-unavailable');
   const getSaveStatus=()=>{const active=sameSessionView(),state=active?.getPriceState?.(),cause=active&&reconciliationError||blockedSaveError||accessError,uncertain=uncertainCodes.has(cause?.code||state?.errorCode);return {error:cause?.message||state?.error||'',errorCode:cause?.code||state?.errorCode||'',blocked:!!cause||uncertain,uncertain};};
   window.AAFSalesPreview={
-    setAccess:access=>{const mode=window.AAFStockAccess?.isShared()===true||access.salesMode===true;if(mode!==salesMode){salesMode=mode;readOnly=mode;publishReportSummary(null);}stockRevision=access.revision??null;},
-    invalidate:text=>{readOnly=true;loadFailed=true;accessError=saveError(/เข้าสู่ระบบ/.test(String(text))?'auth-expired':'access-invalidated');sameSessionView()?.setPersistenceError?.(accessError);if(fxTimer!==null)window.clearInterval?.(fxTimer);fxTimer=null;publishReportSummary(null);if(statusNode){statusNode.hidden=false;message(statusNode,accessError.message,true);}},
+    setAccess:access=>{const mode=window.AAFStockAccess?.isShared()===true||access.salesMode===true;if(mode!==salesMode||stockRevision!==(access.revision??null))accessEpoch++;if(mode!==salesMode){salesMode=mode;readOnly=mode;publishReportSummary(null);}stockRevision=access.revision??null;},
+    invalidate:text=>{accessEpoch++;readOnly=true;loadFailed=true;accessError=saveError(/เข้าสู่ระบบ/.test(String(text))?'auth-expired':'access-invalidated');setReportLoadStatus('unavailable',readError('auth-expired'));sameSessionView()?.setPersistenceError?.(accessError);if(fxTimer!==null)window.clearInterval?.(fxTimer);fxTimer=null;publishReportSummary(null);if(statusNode){statusNode.hidden=false;message(statusNode,accessError.message,true);}},
     isReadOnly:()=>readOnly,
     attach,
     isDirty:()=>!!sameSessionView()?.getPriceState?.().dirty,
     isSaving:()=>!!sameSessionView()?.getPriceState?.().saving,
     getReportSummary:()=>session===token()?reportSummary:null,
+    getReportLoadStatus:()=>session===token()?{...reportLoadStatus}:{state:'unavailable',code:'snapshot-changed',message:readMessages['snapshot-changed'],stockRevision:null},
+    readExportSnapshot,
     getPriceState:()=>{const state=sameSessionView()?.getPriceState?.(),cause=reconciliationError||accessError;return state?{...state,readOnly,...(cause?{error:cause.message,errorCode:cause.code}:{})}:null;},
     getSaveStatus,
     getDraftPrice:key=>editableView()?.getDraftPrice?.(key) || null,

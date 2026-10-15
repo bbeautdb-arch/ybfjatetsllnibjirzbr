@@ -24,7 +24,7 @@
       result.retained=!!r.retained;
       result.priceMissing=!!r.priceMissing;
       // Whitelist display fields: no account, token or permissions enter the report.
-      for(const k of ['key','sku','desc','size','w','l','t','grade','followup','note','followupBy','followupAt','noteBy','noteAt'])result[k]=r[k]??'';
+      for(const k of ['key','sku','desc','size','w','l','t','grade','unit','followup','note','followupBy','followupAt','noteBy','noteAt'])result[k]=r[k]??'';
       for(const k of ['qty','baseQty','freeQty','committedQty',...agingKeys]){
         if(r.rawSource===false&&agingKeys.includes(k)){result[k]=0;continue;}
         if(typeof r[k]!=='number'||!Number.isFinite(r[k])||r[k]<0)throw new Error('ข้อมูลจำนวนไม่ครบ: '+(r.key||r.sku)+' / '+k);
@@ -175,7 +175,25 @@
     }).join('');
     return cards+(!verified?`<p class="ss-partition-error" role="alert">${esc(p?.reason||'รอตรวจข้อมูลจัดสรรจากหัวข้อ 02')} · ยังไม่รวมยอดแยกกลุ่ม</p>`:'');
   }
-  function kpiHTML(summary){
+  // Basic stock has its own authenticated read. A pending sales allocation must
+  // not hide these saved quantities or turn them into a fabricated sales report.
+  function basicStockKpis(m){
+    if(!m?.rows?.length||m.rows.some(r=>!['sheet','strip'].includes(r.unit)))return '';
+    const bucket=field=>{
+      const b={byUnit:{sheet:0,strip:0},eq4x8:0,eq2_5:0};
+      for(const r of m.rows){const qty=r[field];if(typeof qty!=='number'||!Number.isFinite(qty)||qty<0)return null;b.byUnit[r.unit]+=qty;if(r.unit==='sheet'){const area=Number(r.w)*Number(r.l)/standardArea;b.eq4x8+=qty*area;b.eq2_5+=qty*area*Number(r.t)/2.5;}}
+      return b;
+    };
+    const cards=[['physical','สต๊อกจริง · Physical',bucket('qty')],['sold','ขายแล้วทั้งหมด',null],['reserved','ยอดจองที่บันทึกไว้',bucket('committedQty')],['free','Free ที่บันทึกไว้',bucket('freeQty')]];
+    return cards.map(([id,label,b])=>`<div class="ss-kpi ss-kpi-${id}" data-basic-stock="${id}"><div class="ss-physical-main"><h3>${label}</h3><strong>${display(b?.byUnit.sheet)}</strong><small>${b?'แผ่น · ข้อมูลส่วนกลางที่บันทึกแล้ว':'รอชุดยอดขายที่ตรวจตรงกับสต๊อก'}</small>${b?`<div class="ss-strip-quantity">ไม้แถบ <b>${number(b.byUnit.strip)}</b> ชิ้น</div>`:''}</div>${b?`<dl class="ss-physical-equivalents"><div><dt>เฉพาะแผ่น · เทียบ 4×8</dt><dd>${display(b.eq4x8)} <small>แผ่น</small></dd></div><div><dt>เฉพาะแผ่น · เทียบ 2.5 มม.</dt><dd>${display(b.eq2_5)} <small>แผ่น</small></dd></div></dl>`:''}<div class="ss-kpi-value"><span>${id==='sold'?'มูลค่าการขาย':'มูลค่าสต๊อก'}</span><b>—</b><small>${id==='sold'?'รอราคาขายจริงและข้อมูลจัดสรร':'รอยืนยันชุดราคาสต๊อก · ไม่ใช้ราคาขายหรือศูนย์แทน'}</small></div>${['reserved','free'].includes(id)?'<small class="ss-demand-note">ยอดตามที่บันทึกไว้ · ยังไม่ยืนยันกับยอดขายล่าสุด ไม่ใช่การตัดสต๊อกรอบใหม่</small>':''}</div>`).join('');
+  }
+  function summarySourceText(summary,m){
+    if(summary)return summary.catalog?.automaticFx?'อ้างอิงหัวข้อ 02 · ราคาที่เซฟแล้ว + เรท ธปท. อัตโนมัติ':'อ้างอิงหัวข้อ 02 · ใช้ราคาและเรทที่เซฟแล้ว';
+    const status=window.AAFSalesPreview?.getReportLoadStatus?.();
+    return 'แสดงสต๊อกส่วนกลางตามรายงาน '+reportDay(m?.reportDate)+' · รอข้อมูลจากหัวข้อ 02 เพื่อยืนยันยอดขายและมูลค่าให้ตรงกัน'+(status?.message?' · '+status.message:'');
+  }
+  function kpiHTML(summary,m){
+    if(!summary){const basic=basicStockKpis(m);if(basic)return basic;}
     if(summary?.version>=2)return partitionKpiHTML(summary);
     const cards=[
       ['physical','สต๊อกจริง · Physical','สต๊อกหลังโยก','มูลค่าสต๊อกรวม'],
@@ -196,12 +214,12 @@
     if(latest)latest={...latest,salesSummary:summary};
     const cards=root?.querySelector('.ss-kpis');if(cards){
       const opened=new Set([...cards.querySelectorAll('[data-stock-gap-group]')].filter(node=>node.open).map(node=>node.dataset.stockGapGroup));
-      cards.innerHTML=kpiHTML(summary);
+      cards.innerHTML=kpiHTML(summary,latest);
       cards.querySelectorAll('[data-stock-gap-group]').forEach(node=>{node.open=opened.has(node.dataset.stockGapGroup);});
     }
     const fx=root?.querySelector('.ss-exchange b');if(fx)fx.textContent=summary?.catalog?.fxThbPerUsd?number(summary.catalog.fxThbPerUsd,4):'—';
     const fxInfo=root?.querySelector('.ss-exchange small');if(fxInfo)fxInfo.textContent=summary?.catalog?.fxStatus||'บาท / 1 USD';
-    const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=summary?(summary.catalog?.automaticFx?'อ้างอิงหัวข้อ 02 · ราคาที่เซฟแล้ว + เรท ธปท. อัตโนมัติ':'อ้างอิงหัวข้อ 02 · ใช้ราคาและเรทที่เซฟแล้ว'):'รอข้อมูลจากหัวข้อ 02 · ยังไม่แสดงยอดจากชุดอื่น';
+    const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=summarySourceText(summary,latest);
     syncPriceDrafts();
   }
   function syncPriceDrafts(){
@@ -244,8 +262,8 @@
     return `<article class="ss-sheet">
       <header class="ss-hero"><div><div class="ss-eyebrow">AAF / STOCK & SALES FOLLOW-UP</div><h2>รายงานสต๊อกและติดตามการขาย</h2><p>อ้างอิงรายงานเมล ${esc(reportDay(m.reportDate))}</p></div><div class="ss-hero-meta"><div class="ss-stamp">ข้อมูลที่บันทึกแล้ว<br><b>ครบ ${number(m.rows.length)} สเปก</b><br>ทุกเกรด · ทุกขนาด</div><div class="ss-exchange"><span>อัตราแลกเปลี่ยน · หัวข้อ 02</span><b>${m.salesSummary?.catalog?.fxThbPerUsd?number(m.salesSummary.catalog.fxThbPerUsd,4):'—'}</b><small>${esc(m.salesSummary?.catalog?.fxStatus||'บาท / 1 USD')}</small></div></div></header>
       <div class="ss-content"><div class="ss-context"><span>ข้อมูลส่วนกลางล่าสุด <b>${esc(when(m.updatedAt))}</b></span><span>เวลาไทย (UTC+7) · ภาพรวมทั้งชุด ไม่ใช้ตัวกรองในหน้าสต๊อก</span></div>
-      <p class="ss-sales-summary-source" role="status">${m.salesSummary?(m.salesSummary.catalog?.automaticFx?'อ้างอิงหัวข้อ 02 · ราคาที่เซฟแล้ว + เรท ธปท. อัตโนมัติ':'อ้างอิงหัวข้อ 02 · ใช้ราคาและเรทที่เซฟแล้ว'):'รอข้อมูลจากหัวข้อ 02 · ยังไม่แสดงยอดจากชุดอื่น'}</p>
-      <div class="ss-kpis">${kpiHTML(m.salesSummary)}</div>
+      <p class="ss-sales-summary-source" role="status">${esc(summarySourceText(m.salesSummary,m))}</p>
+      <div class="ss-kpis">${kpiHTML(m.salesSummary,m)}</div>
       <div class="ss-section-title"><span>01</span><h3>ภาพรวมแยกเกรดและความหนา</h3></div>
       <div class="ss-groups">${groupTable('แยกตามเกรด',m.grades,'เกรด',t)}${groupTable('แยกตามความหนา',m.thickness.filter(([,totals])=>totals.qty>0).map(([thick,totals])=>[thicknessLabel(thick),totals]),'หนา (mm)',t)}</div>
       <div class="ss-aging"><h3>Aging ตามรายงานเมลต้นฉบับ</h3><div class="ss-aging-grid">${m.aging.map((n,i)=>`<div><small>${agingLabels[i]}</small><b>${number(n)}</b><span>${t.agingBaseQty?number(n/t.agingBaseQty*100,1):'0'}%</span></div>`).join('')}</div><p>ฐาน Aging ${number(m.aging.reduce((a,b)=>a+b,0))} / ยอดเมลต้นฉบับ ${number(t.agingBaseQty)} หน่วย · ไม่กระจายยอดปรับระหว่างวันเข้าอายุสินค้า</p>${agingChart(m)}</div>
