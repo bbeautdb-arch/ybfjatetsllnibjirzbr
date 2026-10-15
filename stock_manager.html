@@ -70,9 +70,19 @@
         #stock-report-access { max-width:1500px; width:100%; margin:0 auto 16px; padding:16px; border:1px solid #fecaca; border-radius:12px; background:#fff7f7; color:#9f1239; }
         #stock-report-access[hidden] { display:none !important; }
         #stock-report-access a, #stock-report-access button { display:inline-block; margin:10px 8px 0 0; padding:8px 12px; border-radius:8px; background:#fff; border:1px solid #cbd5e1; color:#334155; }
+        #stock-report-downloads { max-width:1500px; width:100%; margin:0 auto 12px; display:flex; justify-content:flex-end; align-items:center; gap:12px; flex-wrap:wrap; }
+        #stock-report-downloads button { padding:11px 18px; border:0; border-radius:10px; background:#087f65; color:#fff; font:600 14px 'Prompt',sans-serif; cursor:pointer; }
+        #stock-report-downloads button:disabled { opacity:.55; cursor:wait; }
+        #stock-excel-status { color:#475569; font-size:12px; flex:1 1 300px; text-align:right; }
+        #stock-excel-status[data-error="true"] { color:#b42318; }
     </style>
 </head>
 <body class="p-4 md:p-6 min-h-screen flex flex-col">
+
+    <div id="stock-report-downloads" aria-label="ส่งออกรายงานสต๊อก">
+        <span id="stock-excel-status" role="status"></span>
+        <button id="stock-export-excel" type="button" title="ดาวน์โหลดรายการครบทุกสเปกจากข้อมูลส่วนกลางที่บันทึกแล้ว">ส่งออก Excel</button>
+    </div>
 
     <div id="stock-management-workbench" hidden aria-hidden="true" class="max-w-[1500px] mx-auto w-full flex flex-col space-y-6 pb-20">
         
@@ -1269,8 +1279,10 @@
     <script src="stock_reservations.js?v=20260914-reservations"></script>
     <script src="stock_cash.js?v=20260914-reservations"></script>
     <script src="stock_sales_preview.js?v=20261014-sale-value-save-errors"></script>
-    <script src="stock_sales_controller.js?v=20261014-price-save-errors"></script>
-    <script src="stock_summary.js?v=20261014-actual-sale-value"></script>
+    <script src="stock_sales_controller.js?v=20261015-stock-report"></script>
+    <script src="stock_summary.js?v=20261015-stock-report"></script>
+    <script src="stock_report_export.js?v=20261015-stock-report"></script>
+    <script src="stock_report_toolbar.js?v=20261015-stock-report"></script>
     <script src="stock_plan_ui.js?v=20261004-hide-duplicate-reports"></script>
     <script src="stock_sales_export.js?v=20260910-daily"></script>
     <script src="stock_link_manager.js?v=20261003-until-revoked"></script>
