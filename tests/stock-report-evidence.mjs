@@ -17,7 +17,7 @@ test('standalone auth failure invalidates pending controller reads as well as cl
   const r=await setup({stockSessionToken:'synthetic'},[{data},{status:401}]);r.polls[0]();await r.tick();assert.equal(r.invalidations.length,1);assert.match(r.invalidations[0],/เข้าสู่ระบบ/);assert.equal(r.errors.length,1);
 });
 test('both report entry points cache-bust the complete-ledger model/controller/summary assets',()=>{
-  for(const page of ['stock_report','stock_manager']){const html=fs.readFileSync(new URL('../'+page+'.html',import.meta.url),'utf8');assert.ok(html.includes('stock_sales_preview.js?v=20261019-actual-sale-settlement'));assert.ok(html.includes('stock_sales_controller.js?v=20261018-complete-ledger'));assert.ok(html.includes('stock_summary.js?v=20261019-free-equivalent-25'));}
+  for(const page of ['stock_report','stock_manager']){const html=fs.readFileSync(new URL('../'+page+'.html',import.meta.url),'utf8');assert.ok(html.includes('stock_sales_preview.js?v=20261019-actual-sale-settlement'));assert.ok(html.includes('stock_sales_controller.js?v=20261018-complete-ledger'));assert.ok(html.includes('stock_summary.js?v=20261019-reserved-demand-value'));}
   assert.match(fs.readFileSync(new URL('../stock_report.html',import.meta.url),'utf8'),/stock_report.js\?v=20261018-complete-ledger/);
   assert.match(fs.readFileSync(new URL('../stock_manager.html',import.meta.url),'utf8'),/stock_shared.js\?v=20261018-complete-ledger/);
 });

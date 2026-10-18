@@ -113,6 +113,34 @@ test('other reservations show the whole demand with physical-backed and outside-
   assert.match(uncertain,/ยังระบุ|ยังยืนยัน|รอ|—/);
 });
 
+test('expanded other reservations value the whole demand with stock prices while keeping its two subsets distinct',()=>{
+  const report=summary(),m=model(),before=JSON.stringify({report,m});
+  const html=api.renderKpis(report,m),full=details(html,'reserved');
+  const total=element(full,'class="ss-demand-note ss-reserved-demand-total"'),text=visibleText(total);
+  assert.match(text,/ยอดสั่งจองอื่นทั้งหมด.*88 แผ่น.*ไม้แถบ 400 ชิ้น/);
+  assert.match(text,/มูลค่าจองรวม · ใช้ราคาประเมินสต๊อก.*12,440/);
+  assert.match(text,/ส่วนมีของรองรับ \+ ส่วนต้องผลิตเพิ่ม.*รวมมูลค่าไม้แถบ/);
+  assert.match(text,/ไม่ใช่มูลค่าสต๊อกที่มีอยู่จริงทั้งหมด.*ไม่ใช่ราคาขายจริง/);
+  assert.doesNotMatch(text,/8,640|40,000|22,000/,'do not substitute sales, Physical or Free money');
+  assert.match(visibleText(full),/มูลค่าส่วนที่อยู่ในสต๊อกจริง.*11,000/);
+  assert.match(visibleText(full),/ต้องผลิตเพิ่ม · นอกสต๊อกจริง.*1,440/);
+  assert.equal(JSON.stringify({report,m}),before);
+  const changed=clone(report);changed.sold.valueTHB=98765;
+  assert.equal(element(details(api.renderKpis(changed,m),'reserved'),'class="ss-demand-note ss-reserved-demand-total"'),total);
+});
+
+test('expanded demand value preserves unknown-price and allocation warnings without inventing totals',()=>{
+  const report=summary(),total=()=>visibleText(element(details(api.renderKpis(report,model()),'reserved'),'class="ss-demand-note ss-reserved-demand-total"'));
+  report.partition.reserved.demand={...report.partition.reserved.demand,valueTHB:null,knownValueTHB:4300,coverage:{complete:false,valuedSpecCount:1,missingFxSpecCount:1},unpricedSpecs:[{key:'SYNTHETIC',qty:5}]};
+  assert.match(total(),/4,300 · เฉพาะที่มีราคา/);assert.match(total(),/รอราคา\/สกุลเงิน 1 สเปก.*รอเรท 1 สเปก/);
+  report.partition.reserved.demand.coverage.valuedSpecCount=0;
+  assert.match(total(),/ยังระบุมูลค่าไม่ได้/);assert.doesNotMatch(total(),/฿\s*0(?:\D|$)/);
+  report.partition.status='pending';
+  assert.match(total(),/รอยืนยันข้อมูล/);assert.doesNotMatch(total(),/4,300|12,440|88 แผ่น/);
+  report.partition.status='verified';delete report.partition.reserved.demand;
+  assert.match(total(),/รอยืนยันข้อมูล/);assert.doesNotMatch(total(),/12,440|11,000/);
+});
+
 test('unknown or partial commercial money is visibly qualified in the collapsed report, never fabricated as zero',()=>{
   const report=summary();
   report.sold.valueTHB=null;report.sold.knownValueTHB=3200;

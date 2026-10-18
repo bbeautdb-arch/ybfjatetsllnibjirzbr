@@ -408,7 +408,10 @@
       let detail='';
       if(id==='physical'&&verified)detail=`<div class="ss-stock-equation"><b>สต๊อกจริง = ขายแล้วที่มีของ + จองอื่นที่มีของ + Free</b><span>ตรวจยอดตรงกัน · ใช้ราคาสต๊อกที่เซฟชุดเดียวกัน</span><small>ไม่รวมของที่ต้องผลิตเพิ่ม หรือที่โหลดออกแล้ว</small></div>`;
       if(id==='sold')detail=production(verified?p.sold.toProduce:null,'sold-production',false);
-      if(id==='reserved')detail=production(verified?p.reserved.toProduce:null,'reserved-production')+`<small class="ss-demand-note">ยอดสั่งจองอื่นทั้งหมด ${quantityText(verified?p.reserved.demand.byUnit:null)} · รวมส่วนต้องผลิต</small>`;
+      if(id==='reserved'){
+        const demand=verified?p.reserved.demand:null;
+        detail=production(verified?p.reserved.toProduce:null,'reserved-production')+`<section class="ss-demand-note ss-reserved-demand-total" aria-label="ยอดจองอื่นรวมและมูลค่าราคาสต๊อก"><div class="ss-overview-row"><span>ยอดสั่งจองอื่นทั้งหมด</span><b>${quantityText(demand?.byUnit)}</b></div><div class="ss-kpi-value ss-reserved-demand-money"><span>มูลค่าจองรวม · ใช้ราคาประเมินสต๊อก</span><b>${reportMoney(demand)}</b>${overviewCoverage(demand)}<small>รวมส่วนมีของรองรับ + ส่วนต้องผลิตเพิ่ม${demand?.byUnit?.strip?' · รวมมูลค่าไม้แถบ':''} · ไม่ใช่มูลค่าสต๊อกที่มีอยู่จริงทั้งหมด และไม่ใช่ราคาขายจริง</small></div></section>`;
+      }
       const stages=[['pi','เปิด PI แล้ว'],['vessel','มีเรือแล้ว'],['negotiate','เจรจา'],['forecast','Forecast']].filter(([status])=>!firmOnly||!['negotiate','forecast'].includes(status));
       if(verified&&Object.values(p.reserved.byStatus?.unknown?.inStock?.byUnit||{}).some(q=>q>0))stages.push(['unknown','สถานะอื่น / ยังไม่ระบุ']);
       const reservationSplit=`<div class="ss-sold-quantity-split"><small>แยกเฉพาะที่มีของรองรับ</small>${stages.map(([status,title])=>`<div><span>${title}</span><b>${quantityText(verified?p.reserved.byStatus?.[status]?.inStock?.byUnit:null)}</b></div>`).join('')}</div><div class="ss-sold-equivalents">${equivalents(b)}</div>`;
@@ -573,6 +576,8 @@
     [data-aaf-stock-summary] .ss-kpi-value b{font-size:20px;color:#172b42;margin-left:auto;font-variant-numeric:tabular-nums}
     [data-aaf-stock-summary] .ss-kpi-value small{flex-basis:100%;font-size:10px}
     [data-aaf-stock-summary] .ss-stock-equation,[data-aaf-stock-summary] .ss-outside-stock,[data-aaf-stock-summary] .ss-commercial,[data-aaf-stock-summary] .ss-demand-note{grid-column:1/-1;font-size:12px;line-height:1.6}
+    [data-aaf-stock-summary] .ss-reserved-demand-total{padding:12px;border:1px solid #e5d5ad;border-radius:10px;background:#fffdf7}
+    [data-aaf-stock-summary] .ss-reserved-demand-money{margin-top:8px}
     [data-aaf-stock-summary] .ss-stock-equation{display:grid;gap:5px;border:1px solid #b9cddd;border-radius:9px;background:#fff;padding:12px}
     [data-aaf-stock-summary] .ss-stock-equation span{color:#176b53}
     [data-aaf-stock-summary] .ss-outside-stock{display:grid;grid-template-columns:1fr auto;gap:3px 10px;border:1px solid #edc8c5;border-radius:9px;padding:10px 12px;background:#fff6f4;color:#9e3b33}
