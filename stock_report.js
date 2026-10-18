@@ -17,6 +17,7 @@
   }
   function fail(message,login=false){
     revision=null;authRequired=login;signin.hidden=!login;tell(message,true);
+    window.AAFSalesPreview?.invalidate?.(login?'กรุณาเข้าสู่ระบบอีกครั้ง':message);
     window.AAFStockSummary?.showError(login?'กรุณาเข้าสู่ระบบด้วยบัญชีที่มีสิทธิ์ดูสต๊อก แล้วกลับมาเปิดหน้ารายงานนี้':message);
     document.title='รายงานสต๊อก AAF';
   }
@@ -31,9 +32,11 @@
       if(res.status===401||res.status===403){fail('เซสชันหมดอายุหรือบัญชีนี้ไม่มีสิทธิ์ดูสต๊อก กรุณาเข้าสู่ระบบอีกครั้ง',true);return;}
       if(!res.ok)throw new Error('โหลดรายงานไม่ได้ กรุณาลองใหม่');
       const data=await res.json();if(!data.ok)throw new Error(data.error||'โหลดรายงานไม่ได้');
+      if(sessionToken()!==token){fail('บัญชีเปลี่ยนระหว่างโหลด กรุณาเข้าสู่ระบบแล้วโหลดข้อมูลใหม่',true);return;}
       if(!window.AAFStockSummary)throw new Error('โหลดส่วนแสดงรายงานไม่สำเร็จ กรุณารีเฟรชหน้านี้');
       // The API remains the authorization authority; the client role is never a grant.
       if(force||revision===null||String(data.revision)!==revision){
+        window.AAFSalesPreview?.setAccess?.({salesMode:data.actor?.owner!==true,revision:data.revision,reportDate:data.report?.reportDate,rows:data.rows});
         window.AAFStockSummary.update(data,r=>values(r,data));revision=String(data.revision);
       }
       signin.hidden=true;authRequired=false;

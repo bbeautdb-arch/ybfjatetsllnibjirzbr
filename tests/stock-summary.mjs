@@ -71,7 +71,7 @@ for(const evidence of invalidSold){const sampleSource={...data,soldSummary:evide
 const unpricedRow={...row,key:'unpriced',priceMissing:true,priceObj:{price:0,currency:'THB'},qty:10,committedQty:7,freeQty:5};
 const allUnpriced=buildModel({...data,rows:[unpricedRow]},calculate),allUnpricedHTML=renderHTML(allUnpriced),allUnpricedReserved=kpiCards(allUnpricedHTML).cards.reserved;
 assert.equal(allUnpriced.total.reservedUnpricedQty,7);assert(allUnpricedReserved.includes('<b>—</b>'),'all-unpriced Reserved money is unknown, not zero');assert(!allUnpricedReserved.includes('฿ 0'));
-assert(allUnpricedHTML.includes('รอข้อมูลจากหัวข้อ 02'),'no old central-price fallback before preview is ready');
+assert(allUnpricedHTML.includes('กำลังตรวจชุดราคาที่บันทึก'),'prices stay unknown until the independent saved catalog is verified');
 const partialReserved=buildModel({...data,rows:[row,unpricedRow]},calculate);
 partialReserved.salesSummary={...previewSummary,reserved:{...previewSummary.reserved,valueTHB:null,knownValueTHB:777,coverage:{complete:false,pricedSpecCount:1,valuedSpecCount:1,totalSpecCount:2}}};
 const partialReservedCard=kpiCards(renderHTML(partialReserved)).cards.reserved;

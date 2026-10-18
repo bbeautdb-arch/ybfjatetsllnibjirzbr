@@ -1,0 +1,18 @@
+<!doctype html><html lang="th"><meta charset="utf-8"><title>Sales04 current stock regression preview · synthetic</title>
+<style>body{font-family:Arial,sans-serif;background:#e9eff2;margin:20px}#stock-summary{max-width:1500px;margin:auto}button{padding:12px}</style>
+<p>ทดสอบด้วยข้อมูลสมมติเท่านั้น · ไม่อ่านหรือเขียนระบบจริง</p><button id="retry">โหลดล่าสุด (ทดสอบ)</button><div id="stock-summary" data-aaf-stock-summary></div>
+<script>
+const rows=[
+ {key:'1220|2440|2|F',sku:'TEST-F',w:1220,l:2440,t:2,grade:'F',unit:'sheet',qty:100,baseQty:100,committedQty:20,freeQty:80,d90:100,d180:0,d270:0,d360:0,dOver:0,note:'ตัวอย่างราคาที่บันทึก 2 USD',followup:'',rawSource:true},
+ {key:'1220|2440|2.3|A',sku:'TEST-NEW',w:1220,l:2440,t:2.3,grade:'A',unit:'sheet',qty:7,baseQty:7,committedQty:0,freeQty:7,d90:7,d180:0,d270:0,d360:0,dOver:0,note:'รายการใหม่ไม่มีราคา',followup:'',rawSource:true},
+ {key:'25|2440|3.2|B',sku:'TEST-STRIP',w:25,l:2440,t:3.2,grade:'B',unit:'strip',qty:50,baseQty:50,committedQty:10,freeQty:40,d90:50,d180:0,d270:0,d360:0,dOver:0,note:'แยกหน่วยไม้แถบ',followup:'',rawSource:true},
+ {key:'915|1830|2.5|B',sku:'TEST-ZERO',w:915,l:1830,t:2.5,grade:'B',unit:'sheet',qty:0,baseQty:0,committedQty:0,freeQty:0,d90:0,d180:0,d270:0,d360:0,dOver:0,note:'ทะเบียนเดิมยอดศูนย์ต้องยังอยู่',followup:'',rawSource:false,retained:true}
+];
+const data={revision:58,report:{reportDate:'2026-10-18',sourceRowCount:3},rows,exchangeRate:33,updatedAt:'2026-10-18T15:00:41Z'};
+const catalog={ok:true,revision:58,stockReportDate:'2026-10-18',catalogRevision:12,widgetState:{privateContent:{version:3,context:'aaf-sales-stock-preview|free-price-catalog',prices:{'2|F|1220|2440|sheet':2,'3.2|B|25|2440|strip':3},currencies:{'2|F|1220|2440|sheet':'USD'},notesBySpec:{},notesByThickness:{},savedAt:'2026-10-16T02:00:00Z'}}};
+window.AAFStockAccess={token:()=> 'synthetic-local-only',isShared:()=>true};
+window.fetch=async(url,init)=>{if(init?.method==='POST')throw Error('Writes forbidden in fixture');const response=url.includes('catalogOnly')?catalog:url.includes('exchangeRate')?{ok:true,exchangeRate:{rate:33,date:'2026-10-15',status:'current',basis:'BOT_USD_THB_BUYING_TRANSFER'}}:{ok:false};return {ok:response.ok,status:response.ok?200:409,json:async()=>response};};
+</script>
+<script src="../stock_sales_controller.js"></script><script src="../stock_summary.js"></script>
+<script>function refresh(){AAFSalesPreview.setAccess({revision:58,salesMode:true,reportDate:data.report.reportDate,rows});AAFStockSummary.update(data,r=>({price:0,curr:'THB',value:0,freeValue:0,eq:r.qty*r.w*r.l/2976800*r.t/2.5}));}document.getElementById('retry').onclick=refresh;refresh();</script>
+</html>

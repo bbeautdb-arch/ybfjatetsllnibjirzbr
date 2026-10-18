@@ -6,6 +6,8 @@
   let host=null,view=null,viewGeneration=0,session='',catalogRevision=0,pending=null,generation=0,reportSummary=null;
   let readOnly=false,salesMode=false,stockRevision=null,mountedRevision=null,mountedSalesMode=false,loadFailed=false,statusNode=null;
   let fxTimer=null,accessEpoch=0,fxRun=null,headerFx=null,fxSession='',fxBlocked=false;
+  let stockSnapshot=null,snapshotRequired=false,mountedSnapshotStamp=null,fallbackContent=null;
+  const guardedReports=new WeakSet();
   // Only controlled messages leave the persistence boundary; never expose server
   // response text, credentials or a previous session's private draft.
   const saveMessages={
@@ -26,7 +28,7 @@
   const uncertainCodes=new Set(['save-outcome-unknown','readback-mismatch','session-changed-after-save']);
   const saveError=code=>Object.assign(new Error(saveMessages[code]||saveMessages['save-outcome-unknown']),{code:Object.hasOwn(saveMessages,code)?code:'save-outcome-unknown'});
   const readMessages={
-    'report-pending':'รายละเอียดยอดขายและมูลค่ายังไม่ตรงกับสต๊อกส่วนกลาง · แสดงจำนวนสต๊อกที่ยืนยันแล้วได้ แต่รอเจ้าของตรวจชุดยอดขายก่อน',
+    'report-pending':'รายละเอียดยอดขายและมูลค่าการขายยังไม่ตรงกับสต๊อกส่วนกลาง · แสดงจำนวนสต๊อกที่ยืนยันแล้วได้ แต่รอเจ้าของตรวจชุดยอดขายก่อน',
     'auth-required':'กรุณาเข้าสู่ระบบหรือเปิดลิงก์ฝ่ายขายที่ได้รับอนุญาตก่อนอ่านข้อมูลส่วนกลาง',
     'auth-expired':'สิทธิ์อ่านข้อมูลส่วนกลางหมดอายุหรือถูกยกเลิก · กรุณาตรวจบัญชีหรือลิงก์ฝ่ายขาย',
     'permission-denied':'สิทธิ์ปัจจุบันไม่อนุญาตให้อ่านรายงานนี้ · กรุณาให้เจ้าของตรวจสิทธิ์',
@@ -45,20 +47,27 @@
     if(!a||!b||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)!==Array.isArray(b))return false;
     const keys=Object.keys(a);return keys.length===Object.keys(b).length&&keys.every(key=>Object.hasOwn(b,key)&&sameSavedValue(a[key],b[key]));
   };
-  function publishReportSummary(summary){reportSummary=!fxBlocked&&mountedRevision===stockRevision?summary:null;window.AAFStockSummary?.setSalesSummary?.(reportSummary);}
+  const stockEvidenceCurrent=()=>!snapshotRequired||!!stockSnapshot&&stockSnapshot.auth===token()&&mountedSnapshotStamp===stockSnapshot.stamp;
+  function publishReportSummary(summary){reportSummary=!fxBlocked&&mountedRevision===stockRevision&&stockEvidenceCurrent()?summary:null;window.AAFStockSummary?.setSalesSummary?.(reportSummary);}
+  function clearSavedStockCatalog(){window.AAFStockSummary?.setSavedStockCatalog?.(null);}
+  function clearFallback(){fallbackContent?.replaceChildren();fallbackContent=null;clearSavedStockCatalog();}
   function publishPriceDraftChange(change){window.AAFStockSummary?.syncPriceDrafts?.(change);}
   async function request(body=null,catalogOnly=false){
     if(body&&readOnly)throw accessError||saveError('read-only');
     const auth=token();if(!auth)throw saveError('auth-required');
+    // Both live entry points use the server's date, demand and allocation-ledger
+    // guards. Owner write/catalog actions retain their original authorization.
+    const guarded=!body&&!catalogOnly&&(salesMode||snapshotRequired);
+    const viewName=guarded||salesMode?'salesReport':'salesPreview';
     let response;
-    try{response=await fetch(API+(body?'':'?view='+(salesMode?'salesReport':'salesPreview')+(catalogOnly?'&catalogOnly=1':'')),{method:body?'POST':'GET',cache:'no-store',headers:{Authorization:'Bearer '+auth,...(body?{'Content-Type':'text/plain;charset=UTF-8'}:{})},...(body?{body:JSON.stringify(body)}:{})});}
+    try{response=await fetch(API+(body?'':'?view='+viewName+(catalogOnly?'&catalogOnly=1':'')),{method:body?'POST':'GET',cache:'no-store',headers:{Authorization:'Bearer '+auth,...(body?{'Content-Type':'text/plain;charset=UTF-8'}:{})},...(body?{body:JSON.stringify(body)}:{})});}
     catch{throw saveError(body?'save-outcome-unknown':'preflight-failed');}
     if(response.status===401)throw saveError('auth-expired');
     if(response.status===403)throw saveError('permission-denied');
     if(response.status===409||response.status===412)throw !body&&!catalogOnly?readError('report-pending'):saveError('catalog-conflict');
     if(body&&(response.status===400||response.status===422))throw saveError('save-rejected');
     let data;try{data=await response.json();}catch{throw saveError(body?'save-outcome-unknown':'preflight-failed');}
-    if(!response.ok||!data.ok)throw saveError(body?'save-outcome-unknown':'preflight-failed');return data;
+    if(!response.ok||!data.ok)throw saveError(body?'save-outcome-unknown':'preflight-failed');if(guarded)guardedReports.add(data);return data;
   }
   // Export reads a new authorized snapshot, never the view's cache or private draft.
   // This does not call accept(), change the mounted revision, or POST a catalog.
@@ -94,9 +103,100 @@
     unchanged();
     return {stock:{...pick(stock,['revision','updatedAt','exchangeRate']),report:pick(stock.report,['reportDate','checksum','sourceRowCount']),rows,sellablePlan:stock.sellablePlan?pick(stock.sellablePlan,['reportDate','month','appliedAt','needsSalesRefresh']):null},catalog:catalog?{...pick(catalog,['revision','catalogRevision','stockReportDate']),widgetState:{privateContent:pick(catalog.widgetState.privateContent,['version','context','fx','prices','currencies','notesByThickness','notesBySpec','savedAt'])}}:null,catalogWarning,verifiedAt:new Date().toISOString()};
   }
+  // A central revision dates the saved state, not the packaged owner's preview.
+  // Keep exact price/spec dimensions distinct from allocation-only equivalence.
+  const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+  const finiteQty=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0;
+  const positive=value=>typeof value==='number'&&Number.isFinite(value)&&value>0;
+  const validDay=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value+'T00:00:00Z'))&&new Date(value+'T00:00:00Z').toISOString().slice(0,10)===value;
+  const exactKey=row=>[Number(row.t),row.grade,...[Number(row.w),Number(row.l)].sort((a,b)=>a-b),row.unit].join('|');
+  const validSpec=row=>row&&['sheet','strip'].includes(row.unit)&&['AV','AAA','A','B','F','REJ','C','UN','CTS'].includes(row.grade)&&['w','l','t'].every(key=>Number.isFinite(Number(row[key]))&&Number(row[key])>0);
+  function centralSnapshot(access){
+    if(!Number.isSafeInteger(access.revision)||!validDay(access.reportDate)||!Array.isArray(access.rows)||!access.rows.length)return null;
+    const keys=new Set(),rows=[];
+    for(const row of access.rows){
+      if(!validSpec(row)||!['qty','committedQty','freeQty'].every(key=>finiteQty(row[key])))return null;
+      const key=typeof row.key==='string'&&row.key?row.key:exactKey(row);
+      if(keys.has(key))return null;keys.add(key);
+      const saved={key,w:Number(row.w),l:Number(row.l),t:Number(row.t),grade:row.grade,unit:row.unit,qty:row.qty,committedQty:row.committedQty,freeQty:row.freeQty};
+      for(const field of ['sku','note','followup'])saved[field]=typeof row[field]==='string'?row[field]:'';
+      rows.push(saved);
+    }
+    const result={revision:access.revision,reportDate:access.reportDate,rows};
+    return {...result,auth:token(),stamp:JSON.stringify(result)};
+  }
+  function previewMatchesStock(data){
+    if(!snapshotRequired)return true; // Compatibility with isolated legacy callers.
+    const stock=stockSnapshot;
+    if(!stock||stock.auth!==token()||data.revision!==stock.revision||data.stockReportDate!==stock.reportDate)return false;
+    if(salesMode)return true; // The salesReport endpoint validates its complete ledger.
+    const preview=data.preview,sourceDay=preview?.source?.stockReportDate||(guardedReports.has(data)?data.stockReportDate:preview?.options?.receiptBreakdown?.asOf?.slice?.(0,10));
+    if(sourceDay!==stock.reportDate||!Array.isArray(preview?.stockRows))return false;
+    const totals=(rows,field)=>{const result=new Map();for(const row of rows){if(!validSpec(row)||!finiteQty(row[field]))return null;const key=exactKey(row);result.set(key,(result.get(key)||0)+row[field]);}return result;};
+    const expected=totals(preview.stockRows,'physical'),actual=totals(stock.rows,'qty');
+    return !!expected&&!!actual&&[...new Set([...expected.keys(),...actual.keys()])].every(key=>Math.abs((expected.get(key)||0)-(actual.get(key)||0))<1e-7);
+  }
+  function savedCatalogRows(stock,response){
+    if(response?.revision!==stock.revision||response.stockReportDate!==stock.reportDate||!Number.isSafeInteger(response.catalogRevision))throw readError('snapshot-changed');
+    const catalog=response.widgetState?.privateContent;
+    const legacy=[1,2].includes(catalog?.version)&&/^\d{4}-\d{2}-\d{2}\|[\d.]+\|(THB-)?per-sheet$/.test(catalog?.context||'');
+    if(!catalog||!(legacy||catalog.version===3&&catalog.context==='aaf-sales-stock-preview|free-price-catalog')||!plain(catalog.prices)||catalog.currencies!==undefined&&!plain(catalog.currencies)||catalog.notesBySpec!==undefined&&!plain(catalog.notesBySpec)||catalog.notesByThickness!==undefined&&!plain(catalog.notesByThickness))throw readError('read-unavailable');
+    const owns=key=>Object.hasOwn(catalog.prices,key)||Object.hasOwn(catalog.currencies||{},key);
+    const lookup=key=>{const price=catalog.prices[key],code=catalog.currencies?.[key];return {price:positive(price)?price:null,currency:code===undefined?'THB':['THB','USD'].includes(code)?code:null};};
+    const rows=stock.rows.map(row=>{
+      const direct=[row.t,row.grade,row.w,row.l,row.unit].join('|'),reverse=[row.t,row.grade,row.l,row.w,row.unit].join('|');
+      let price=null,currency=null,priceStatus='ยังไม่มีราคาที่บันทึก';
+      const chosen=owns(direct)?direct:owns(reverse)?reverse:null;
+      if(chosen){const value=lookup(chosen);price=value.price;currency=value.currency;
+        if(direct!==reverse&&owns(direct)&&owns(reverse)&&!sameSavedValue(lookup(direct),lookup(reverse))){price=null;currency=null;priceStatus='ราคา/สกุลเงินขนาดกลับด้านขัดกัน · รอตรวจ';}
+        else if(price!==null&&currency===null){price=null;priceStatus='ยังยืนยันสกุลเงินไม่ได้';}
+        else if(price!==null)priceStatus='ราคาที่บันทึกตามสเปก · ไม่ใช่ราคาขายรายออเดอร์';
+      }
+      return {...row,price,currency,priceStatus,specNote:typeof catalog.notesBySpec?.[exactKey(row)]==='string'?catalog.notesBySpec[exactKey(row)]:'',thicknessNote:typeof catalog.notesByThickness?.[String(row.t)]==='string'?catalog.notesByThickness[String(row.t)]:''};
+    });
+    return {revision:stock.revision,reportDate:stock.reportDate,rows,catalogRevision:response.catalogRevision,savedAt:typeof catalog.savedAt==='string'&&Number.isFinite(Date.parse(catalog.savedAt))?catalog.savedAt:null};
+  }
+  function publishSavedCatalog(catalog){
+    if(fxBlocked||!stockSnapshot||stockSnapshot.auth!==token()||catalog.revision!==stockSnapshot.revision||catalog.reportDate!==stockSnapshot.reportDate)return;
+    window.AAFStockSummary?.setSavedStockCatalog?.(catalog);
+  }
+  function renderSavedStock(content,stock,catalog=null,warning=''){
+    const rows=catalog?.rows||stock.rows.map(row=>({...row,price:null,currency:null,specNote:'',thicknessNote:'',priceStatus:'ยังไม่มีราคาที่อ่านยืนยันได้'}));
+    const box=element('section',{className:'saved-stock-fallback'});box.setAttribute('aria-label','สต๊อกส่วนกลางและราคาที่บันทึก · อ่านอย่างเดียว');
+    box.style.cssText='padding:16px;border:1px solid #cbd5e1;border-radius:10px;margin:0 0 16px;background:#f8fafc';
+    box.append(element('h3',{},'สต๊อกส่วนกลางครบ '+rows.length+' สเปก · รายงาน '+stock.reportDate));
+    box.append(element('p',{},'Physical ล่าสุด · ยอดจองและ Free เป็นค่าที่บันทึกไว้ ยังไม่ยืนยันกับยอดขายล่าสุด · ไม่หักซ้ำ'));
+    box.append(element('p',{},catalog?'ราคา/สกุลเงิน/หมายเหตุที่บันทึกตามสเปก · ไม่ใช่ราคาขายรายออเดอร์ และยังไม่ใช่ราคาเฉลี่ย 6 เดือนอัตโนมัติ':'กำลังอ่านชุดราคาที่บันทึก · แสดงจำนวนสต๊อกได้โดยไม่ต้องรอยอดขาย'));
+    if(warning)box.append(element('p',{},warning));
+    const scroll=element('div');scroll.style.cssText='overflow:auto;max-width:100%';scroll.setAttribute('tabindex','0');
+    const table=element('table');table.style.cssText='border-collapse:collapse;width:100%;min-width:840px;font-size:12px';
+    const head=element('thead'),header=element('tr');
+    for(const title of ['SKU / ขนาด / เกรด','หน่วย','Physical','ยอดจองที่บันทึก','Free ที่บันทึก','ราคาที่บันทึก / หน่วย','สกุลเงิน','หมายเหตุ / การติดตาม'])header.append(element('th',{},title));
+    head.append(header);const body=element('tbody'),format=value=>typeof value==='number'?value.toLocaleString('th-TH',{maximumFractionDigits:4}):'—';
+    for(const row of rows){
+      const tr=element('tr');tr.setAttribute('data-saved-stock-key',row.key);
+      const notes=[row.note&&'สต๊อก: '+row.note,row.followup&&'ติดตาม: '+row.followup,row.specNote&&'สเปก: '+row.specNote,row.thicknessNote&&'ความหนา: '+row.thicknessNote,row.priceStatus].filter(Boolean).join('\n');
+      for(const value of [(row.sku||'—')+'\n'+row.w+' × '+row.l+' × '+row.t+' '+row.grade,row.unit==='sheet'?'แผ่น':'ชิ้น strip',format(row.qty),format(row.committedQty),format(row.freeQty),format(row.price),row.currency||'—',notes]){const td=element('td',{},value);td.style.cssText='padding:8px;border-top:1px solid #dbe3ed;white-space:pre-wrap;vertical-align:top';tr.append(td);}body.append(tr);
+    }
+    table.append(head,body);scroll.append(table);box.append(scroll);content.replaceChildren(box);fallbackContent=content;
+  }
+  async function mountSavedStockFallback(content,state,version,currentHost,auth){
+    const stock=stockSnapshot,epoch=accessEpoch;
+    const safe=()=>!fxBlocked&&current(version,currentHost,auth)&&epoch===accessEpoch&&stock&&stockSnapshot?.stamp===stock.stamp&&stock.auth===auth;
+    if(!safe())return;
+    readOnly=true;clearSavedStockCatalog();renderSavedStock(content,stock);
+    try{
+      const response=await request(null,true);if(!safe())return;
+      const catalog=savedCatalogRows(stock,response);renderSavedStock(content,stock,catalog);publishSavedCatalog(catalog);
+    }catch(cause){
+      if(!safe())return;
+      if(['auth-required','auth-expired','permission-denied'].includes(cause.code)){denyAutomaticFx();setReportLoadStatus('unavailable',readError(cause.code));message(state,readMessages[cause.code],true);return;}
+      clearSavedStockCatalog();renderSavedStock(content,stock,null,cause.code==='snapshot-changed'?'ชุดราคากับสต๊อกเป็นคนละรุ่น · ไม่แสดงราคาปะปน กรุณาโหลดล่าสุด':'อ่านชุดราคาไม่สำเร็จ · จำนวนสต๊อกยังแสดงครบ ราคาไม่ทราบแสดง — ไม่ใช้ 0 แทน');
+    }
+  }
   function stopAutomaticFx(){if(fxRun)fxRun.stopped=true;fxRun=null;if(fxTimer!==null)window.clearInterval?.(fxTimer);fxTimer=null;}
   function clearHeaderFx(){headerFx=null;fxSession='';window.AAFStockSummary?.setExchangeRate?.(null);}
-  function denyAutomaticFx(){fxBlocked=true;stopAutomaticFx();clearHeaderFx();publishReportSummary(null);}
+  function denyAutomaticFx(){const hadFallback=!!fallbackContent;fxBlocked=true;stopAutomaticFx();clearHeaderFx();clearFallback();if(hadFallback)setReportLoadStatus('unavailable',readError('auth-expired'));publishReportSummary(null);}
   function validAutomaticFx(value){
     const date=value?.date;
     if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date))return null;
@@ -157,6 +257,8 @@
     const p=data.preview;
     if(salesMode&&data.permissions?.pricesAndNotes!==true)throw readError('permission-denied');
     if(salesMode&&stockRevision!==null&&data.revision!==stockRevision)throw new Error('ข้อมูลเปลี่ยนระหว่างโหลด · กรุณากดโหลดล่าสุดอีกครั้ง');
+    if(!previewMatchesStock(data))throw readError('report-pending');
+    mountedSnapshotStamp=stockSnapshot?.stamp??null;
     readOnly=false;accessError=null;blockedSaveError=null;reconciliationError=null;
     if(!p||!window.AafAllModel||!window.mountAllThickness)throw new Error('โหลดตัวแสดงพรีวิวไม่ครบ กรุณารีเฟรช');
     if(!data.widgetState){
@@ -178,7 +280,8 @@
           const result=await request({action:'importSalesPreview',expectedRevision:fresh.revision,expectedCatalogRevision:0,widgetState});
           if(!current(version,currentHost,auth))return;
           if(!sameSavedValue(result.widgetState,widgetState))throw new Error('ข้อมูลหลังนำเข้าไม่ตรง กรุณาตรวจสอบ');
-          await mount({...data,...result},content,state,version,currentHost,auth);
+          const imported={...data,...result};if(guardedReports.has(data))guardedReports.add(imported);
+          await mount(imported,content,state,version,currentHost,auth);
         }catch(e){message(feedback,e.message,true);button.disabled=false;}
       });
       return;
@@ -200,7 +303,7 @@
       if(!current(version,currentHost,auth))throw requireReconciliation(saveError('session-changed-after-save'));
       const expected=salesMode?{...value.privateContent,savedAt:saved.widgetState?.privateContent?.savedAt}:value;
       if(!sameSavedValue(salesMode?saved.widgetState?.privateContent:saved.widgetState,expected))throw requireReconciliation(saveError('readback-mismatch'));
-      mountedCatalogRevision=saved.catalogRevision;catalogRevision=saved.catalogRevision;store.widgetState=saved.widgetState;return saved.widgetState;
+      mountedCatalogRevision=saved.catalogRevision;catalogRevision=saved.catalogRevision;store.widgetState=saved.widgetState;clearSavedStockCatalog();return saved.widgetState;
     }};
     // Both grouping and financial arithmetic remain in the original model/view.
     const model=window.AafAllModel.buildModel(p.salesRows,p.stockRows,p.modelOptions);
@@ -208,6 +311,7 @@
     if(mountedView.ready&&(await mountedView.ready)===false){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}throw new Error('โหลดราคาที่เซฟไว้ไม่สำเร็จ · ยังไม่แสดงยอดสรุป');}
     if(!current(version,currentHost,auth)){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}return;}
     if(mountedView.getReportSummary)publishReportSummary(mountedView.getReportSummary());
+    if(stockSnapshot)try{publishSavedCatalog(savedCatalogRows(stockSnapshot,data));}catch{clearSavedStockCatalog();}
     startAutomaticFx(version,currentHost,auth);
     setReportLoadStatus('ready');
     message(state,salesMode?'ฝ่ายขาย · แก้ราคาและหมายเหตุได้ · สต๊อก '+data.stockReportDate+' · ข้อมูลฝ่ายขาย '+data.salesReportDate:'');state.hidden=!salesMode;
@@ -222,10 +326,11 @@
       slot.replaceChildren(host);startAutomaticFx(generation,host,auth);return pending;
     }
     mountedRevision=stockRevision;mountedSalesMode=salesMode;loadFailed=false;blockedSaveError=null;accessError=null;reconciliationError=null;
+    clearFallback();mountedSnapshotStamp=null;
     stopAutomaticFx();fxBlocked=false;
     if(view)view.destroy();view=null;viewGeneration=0;session=auth;publishReportSummary(null);const version=++generation,{state,content}=shell(),currentHost=host;slot.replaceChildren(currentHost);
     setReportLoadStatus('loading');
-    pending=request().then(data=>current(version,currentHost,auth)?mount(data,content,state,version,currentHost,auth):undefined).catch(e=>{if(current(version,currentHost,auth)){loadFailed=true;const cause=e.code==='report-pending'?e:readError(['auth-required','auth-expired','permission-denied'].includes(e.code)?e.code:'read-unavailable');if(['auth-required','auth-expired','permission-denied'].includes(cause.code))denyAutomaticFx();setReportLoadStatus(cause.code==='report-pending'?'pending':'unavailable',cause);message(state,cause.message,true);publishReportSummary(null);}});
+    pending=request().then(data=>current(version,currentHost,auth)?mount(data,content,state,version,currentHost,auth):undefined).catch(async e=>{if(current(version,currentHost,auth)){loadFailed=true;const cause=e.code==='report-pending'?e:readError(['auth-required','auth-expired','permission-denied'].includes(e.code)?e.code:'read-unavailable');if(['auth-required','auth-expired','permission-denied'].includes(cause.code))denyAutomaticFx();setReportLoadStatus(cause.code==='report-pending'?'pending':'unavailable',cause);message(state,cause.message,true);publishReportSummary(null);if(cause.code==='report-pending')await mountSavedStockFallback(content,state,version,currentHost,auth);}});
     startAutomaticFx(version,currentHost,auth);return pending;
   }
   const sameSessionView=()=>session&&session===token()&&viewGeneration===generation?view:null;
@@ -233,13 +338,13 @@
   const saveBlockage=()=>!token()?saveError('auth-required'):view&&session!==token()?saveError('session-changed'):reconciliationError||accessError||readOnly&&saveError('read-only')||saveError('catalog-unavailable');
   const getSaveStatus=()=>{const active=sameSessionView(),state=active?.getPriceState?.(),cause=active&&reconciliationError||blockedSaveError||accessError,uncertain=uncertainCodes.has(cause?.code||state?.errorCode);return {error:cause?.message||state?.error||'',errorCode:cause?.code||state?.errorCode||'',blocked:!!cause||uncertain,uncertain};};
   window.AAFSalesPreview={
-    setAccess:access=>{const mode=window.AAFStockAccess?.isShared()===true||access.salesMode===true;if(mode!==salesMode||stockRevision!==(access.revision??null))accessEpoch++;if(mode!==salesMode){salesMode=mode;readOnly=mode;publishReportSummary(null);}stockRevision=access.revision??null;},
+    setAccess:access=>{const mode=window.AAFStockAccess?.isShared()===true||access.salesMode===true;const required=Object.hasOwn(access,'rows')||Object.hasOwn(access,'reportDate'),snapshot=required?centralSnapshot(access):null;if(mode!==salesMode||stockRevision!==(access.revision??null)||stockSnapshot?.stamp!==snapshot?.stamp){accessEpoch++;clearSavedStockCatalog();}snapshotRequired=required;stockSnapshot=snapshot;if(mode!==salesMode){salesMode=mode;readOnly=mode;publishReportSummary(null);}stockRevision=access.revision??null;},
     invalidate:text=>{accessEpoch++;readOnly=true;loadFailed=true;accessError=saveError(/เข้าสู่ระบบ/.test(String(text))?'auth-expired':'access-invalidated');setReportLoadStatus('unavailable',readError('auth-expired'));sameSessionView()?.setPersistenceError?.(accessError);denyAutomaticFx();publishReportSummary(null);if(statusNode){statusNode.hidden=false;message(statusNode,accessError.message,true);}},
     isReadOnly:()=>readOnly,
     attach,
     isDirty:()=>!!sameSessionView()?.getPriceState?.().dirty,
     isSaving:()=>!!sameSessionView()?.getPriceState?.().saving,
-    getReportSummary:()=>session===token()?reportSummary:null,
+    getReportSummary:()=>session===token()&&mountedRevision===stockRevision&&stockEvidenceCurrent()?reportSummary:null,
     getReportLoadStatus:()=>session===token()?{...reportLoadStatus}:{state:'unavailable',code:'snapshot-changed',message:readMessages['snapshot-changed'],stockRevision:null},
     getExchangeRateStatus:sameSessionFx,
     readExportSnapshot,
