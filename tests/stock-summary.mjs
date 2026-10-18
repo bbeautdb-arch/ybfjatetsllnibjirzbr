@@ -50,7 +50,7 @@ const {order:cardOrder,cards}=kpiCards(layoutHTML);
 assert.deepEqual(cardOrder,['physical','sold','reserved','free'],'KPI order is Physical, Sold, Reserved, Free');
 assert.equal(Object.keys(cards).length,4,'exactly four KPI cards render');
 for(const id of cardOrder){assert.equal((cards[id].match(/<dt>/g)||[]).length,2,id+' has exactly two equivalent subsets');assert.equal((cards[id].match(/class="ss-kpi-value"/g)||[]).length,1,id+' has exactly one money footer');}
-assert(cards.physical.includes('<strong>123</strong>'));assert(cards.physical.includes('<dd>30.75 <small>แผ่น</small></dd>'));assert(cards.physical.includes('<dd>39.36 <small>แผ่น</small></dd>'));assert(cards.physical.includes('<b>฿ '+shown(123*unitTHB)+'</b>'));
+assert(cards.physical.includes('<strong>123</strong>'));assert(cards.physical.includes('<dd>30.75 <small>แผ่น</small>'));assert(cards.physical.includes('<dd>39.36 <small>แผ่น</small>'));assert(cards.physical.includes('<b>฿ '+shown(123*unitTHB)+'</b>'));
 assert(cards.sold.includes('<strong>17</strong>'));assert(cards.sold.includes('<dd>13.75 <small>แผ่น</small></dd>'));assert(cards.sold.includes('<dd>10.25 <small>แผ่น</small></dd>'));assert(cards.sold.includes('<b>฿ '+shown(1200+5*layoutRate)+'</b>'));assert(cards.sold.includes('ไม้แถบ <b>9</b> ชิ้น'));
 assert(cards.reserved.includes('<strong>20</strong>'));assert(cards.reserved.includes('<dd>5 <small>แผ่น</small></dd>'));assert(cards.reserved.includes('<dd>6.4 <small>แผ่น</small></dd>'));assert(cards.reserved.includes('<b>฿ '+shown(20*unitTHB)+'</b>'));
 assert(cards.free.includes('<strong>75</strong>'));assert(cards.free.includes('<dd>18.75 <small>แผ่น</small></dd>'));assert(cards.free.includes('<dd>24 <small>แผ่น</small></dd>'));assert(cards.free.includes('<b>฿ '+shown(75*unitTHB)+'</b>'));
@@ -120,17 +120,17 @@ for(const thick of [2,3]){
   assert.equal(JSON.stringify(wholeSource),wholeBefore,'display formatting preserves data and calculations');
 }
 for(const group of summaryGroups){
-  assert.equal((group.match(/rowspan="2"/g)||[]).length,7,'10-column table has seven fixed headers');assert.equal((group.match(/colspan="3"/g)||[]).length,1,'three Aging columns share one mail header');
+  assert.equal((group.match(/rowspan="2"/g)||[]).length,9,'12-column table has nine fixed headers');assert.equal((group.match(/colspan="3"/g)||[]).length,1,'three Aging columns share one mail header');
   assert(group.includes('0–90')&&group.includes('91–180')&&group.includes('&gt;180 วัน'));assert(!group.includes('หน่วยตามเมล (แผ่น/ชิ้น)'));assert(group.includes('Aging เมล = ยอดต้นฉบับก่อนโยก'));
-  const footer=group.match(/<tfoot><tr>([\s\S]*?)<\/tr><\/tfoot>/)?.[1];assert.equal((footer?.match(/<(?:th|td)\b/g)||[]).length,10,'footer has exactly ten cells');
+  const footer=group.match(/<tfoot><tr>([\s\S]*?)<\/tr>/)?.[1];assert.equal((footer?.match(/<(?:th|td)\b/g)||[]).length,12,'first footer has exactly twelve cells');
   assert(footer.includes('>11</td>')&&footer.includes('>22</td>')&&footer.includes('>208</td>'),'footer repeats exact raw Aging totals');
 }
-assert.equal((agingHTML.match(/aria-label="[^"]*10 คอลัมน์ เลื่อนแนวนอนได้"/g)||[]).length,2,'both wide tables expose their scroll region');
+assert.equal((agingHTML.match(/aria-label="[^"]*12 คอลัมน์ เลื่อนแนวนอนได้"/g)||[]).length,2,'both wide tables expose their scroll region');
 assert(/\.ss-group\{[^}]*min-width:0/.test(source)&&/\.ss-group-scroll\{[^}]*max-width:100%[^}]*overflow-x:auto/.test(source),'wide tables scroll internally without widening the page');
-assert(/\.ss-groups\{[^}]*grid-template-columns:1fr 1fr/.test(source),'normal 1575px desktop keeps both summaries side by side');
-assert(/\.ss-group table\{[^}]*table-layout:fixed[^}]*font-size:11px[^}]*min-width:0/.test(source),'compact table fits its card without a forced wide minimum');
+assert(/\.ss-groups\{[^}]*grid-template-columns:1fr;/.test(source),'expanded12-column summaries each get full width');
+assert(/\.ss-group table\{[^}]*table-layout:fixed[^}]*font-size:11px[^}]*min-width:1080px/.test(source),'expanded table retains readable numeric widths and scrolls within its card');
 assert(/\.ss-group th,[^}]*\.ss-group td\{padding:7px 3px\}/.test(source)&&/\.ss-group thead th\{font-size:10px\}/.test(source),'compact cells and headers remain explicitly readable');
-for(const rule of ['nth-child(1){width:7%}','nth-child(2){width:5%}','nth-child(3),[data-aaf-stock-summary] .ss-group thead tr:first-child th:nth-child(4),[data-aaf-stock-summary] .ss-group thead tr:first-child th:nth-child(5){width:11%}','nth-child(6){width:30%}','nth-child(7),[data-aaf-stock-summary] .ss-group thead tr:first-child th:nth-child(8){width:12.5%}'])assert(source.includes(rule),'missing compact column allocation: '+rule);
+for(const rule of ['nth-child(1){width:5%}','nth-child(2){width:4%}','nth-child(n+3):nth-child(-n+7){width:9%}','nth-child(8){width:24%}','nth-child(9),[data-aaf-stock-summary] .ss-group thead tr:first-child th:nth-child(10){width:11%}'])assert(source.includes(rule),'missing compact column allocation: '+rule);
 assert(!source.includes('min-width:980px'),'desktop tables no longer require horizontal scrolling');
 assert(/@media\(max-width:1450px\)\{[^}]*\.ss-groups\{grid-template-columns:1fr/.test(source),'narrow screens stack the two summary cards');
 assert(/\.ss-group thead small\{font-size:9px/.test(source),'wrapped narrow header text keeps the approved minimum size');
