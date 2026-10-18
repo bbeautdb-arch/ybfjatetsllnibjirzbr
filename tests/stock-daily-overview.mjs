@@ -86,6 +86,19 @@ test('compact overview keeps sheet/strip units distinct and actual sales value s
   assert.equal(overview(api.renderKpis(changed,model()),'sold'),overview(html,'sold'),'stock pricing must not change the actual-sales overview');
 });
 
+test('compact Free shows sheet-only 4x8 at 2.5mm while expanded equivalents and source values stay intact',()=>{
+  const report=summary(),m=model();
+  report.free.eq4x8=173.25;report.free.eq2_5=219.75;
+  const before=JSON.stringify({report,m}),html=api.renderKpis(report,m);
+  const compact=visibleText(overview(html,'free')),full=visibleText(details(html,'free'));
+  assert.match(compact,/เทียบ 4×8 หนา 2\.5 มม\. · เฉพาะแผ่น/);
+  assert.match(compact,/219\.75 แผ่นเทียบ/);
+  assert.doesNotMatch(compact,/173\.25|819\.75/,'do not use original thickness or add strip pieces to sheet equivalents');
+  assert.match(compact,/ไม้แถบ 600 ชิ้น/);
+  assert.match(full,/173\.25/);assert.match(full,/219\.75/);
+  assert.equal(JSON.stringify({report,m}),before,'changing the compact display must not mutate stock or prices');
+});
+
 test('other reservations show the whole demand with physical-backed and outside-stock subsets, never as all real inventory',()=>{
   const html=api.renderKpis(summary(),model()),reserved=visibleText(overview(html,'reserved'));
   assert.match(reserved,/ยอดจองอื่นทั้งหมด/);assert.match(reserved,/88/);assert.match(reserved,/12,440/);

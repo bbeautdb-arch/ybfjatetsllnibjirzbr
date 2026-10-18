@@ -375,7 +375,7 @@
       breakdown+=overviewRow('ยังต้องผลิตเพิ่ม',quantityText(part.toProduce?.byUnit))+overviewRow('มูลค่าส่วนต้องผลิต',reportMoney(part.toProduce));
       breakdown+=overviewCoverage(part.inStock)+overviewCoverage(part.toProduce);
     }
-    if(id==='free')breakdown=overviewRow('สถานะ',verified?'มีของ · ยังไม่ถูกจัดสรร':'Free ที่บันทึกไว้ · รอตรวจจัดสรร')+(main?overviewRow('เทียบ 4×8 · เฉพาะแผ่น',display(main.eq4x8)+' แผ่นเทียบ'):'');
+    if(id==='free')breakdown=overviewRow('สถานะ',verified?'มีของ · ยังไม่ถูกจัดสรร':'Free ที่บันทึกไว้ · รอตรวจจัดสรร')+(main?overviewRow('เทียบ 4×8 หนา 2.5 มม. · เฉพาะแผ่น',display(main.eq2_5)+' แผ่นเทียบ'):'');
     const basis=id==='sold'?'ไม่ใช่ราคาสต๊อก · ไม่ใช่เงินรับจริง'+(main?.byCurrency?.USD>0?' · รวม USD แปลงบาท':'')+(main?.settlement?.valueBasis==='product-line-sale-value'?' · มูลค่าสินค้า / VAT ยังไม่ยืนยัน':''):id==='reserved'&&verified?'รวมส่วนต้องผลิตซึ่งยังไม่ใช่สินค้าคงคลัง · ไม่ใช่ยอดขายจริง':id==='physical'?'รวมของที่จองแล้ว · ไม่รวมของต้องผลิตหรือโหลดออกแล้ว':id==='free'?'ราคาประเมินของพร้อมขาย · ไม่ใช่ยอดขายจริง':note;
     return `<div class="ss-card-overview"><h3>${esc(title)}</h3><div class="ss-overview-quantity"><strong>${display(main?.byUnit?.sheet)}</strong><span>แผ่น</span>${main?.byUnit?.strip?`<small>ไม้แถบ ${number(main.byUnit.strip)} ชิ้น</small>`:''}</div><div class="ss-overview-value"><span>${moneyLabel}</span><b>${money}</b>${coverage}</div><div class="ss-overview-breakdown">${breakdown}</div><small class="ss-overview-basis">${esc(basis)}</small>${!summary&&id!=='physical'?'<small class="ss-overview-warning">ยอดที่บันทึกไว้ · ยังไม่ยืนยันกับยอดขายล่าสุด</small>':''}</div>`;
   }
