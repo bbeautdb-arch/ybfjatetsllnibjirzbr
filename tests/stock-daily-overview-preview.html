@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="th">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synthetic daily overview preview</title>
+<style>
+  body{margin:0;background:#edf1f5;font-family:system-ui,sans-serif}
+  main{max-width:1260px;margin:auto;padding:20px}
+  .fixture-notice{padding:12px 20px;background:#fff3ce;color:#675015;font-size:13px}
+</style>
+<div class="fixture-notice">SYNTHETIC TEST DATA ONLY · ตัวเลขสมมติสำหรับทดสอบหน้าจอ ไม่ใช่ข้อมูลบริษัท</div>
+<main><div id="stock-summary" data-aaf-stock-summary></div></main>
+<script>
+  // All quantities and money below are invented. No customer/order evidence.
+  const bucket=(sheet,strip=0,valueTHB=sheet*80+strip/4)=>({byUnit:{sheet,strip},eq4x8:sheet,eq2_5:sheet,valueTHB,knownValueTHB:valueTHB,coverage:{complete:true,valuedSpecCount:1,knownRowCount:1,unknownRowCount:0,missingFxRowCount:0}});
+  const syntheticSummary={
+    version:2,catalog:{hasSavedCatalog:true,fxThbPerUsd:30},physical:bucket(320,1200,40000),free:bucket(200,600,22000),
+    sold:{...bucket(96,300,8640),byCurrency:{THB:8640},loaded:bucket(24,100,2160),paidUnloaded:bucket(72,200,6480),settlement:{byCurrency:{THB:{sales:8640,received:2400,outstanding:6240,unallocated:0}},knownReceivedTHB:2400,knownOutstandingTHB:6240,unallocatedTHB:0,complete:true,coverage:{receivedOrderCount:1,outstandingOrderCount:1}}},
+    partition:{status:'verified',reservationPolicy:'aaf-firm-only-20261003-v1',sold:{inStock:bucket(50,200,7000),toProduce:bucket(22)},reserved:{inStock:bucket(70,400,11000),toProduce:bucket(18,0,1440),demand:bucket(88,400,12440),byStatus:{pi:{inStock:bucket(30,100)},vessel:{inStock:bucket(40,300)}}}}
+  };
+  const row=(key,extra={})=>({key,sku:'SYNTHETIC',desc:'Invented test only',size:'Normal',w:1220,l:2440,t:2.5,grade:'B',unit:'sheet',qty:320,baseQty:320,committedQty:120,freeQty:200,d90:320,d180:0,d270:0,d360:0,dOver:0,...extra});
+  const syntheticStock={report:{reportDate:'2026-06-15',sourceRowCount:2},revision:7,updatedAt:'2026-06-15T04:00:00Z',rows:[row('SYNTHETIC-SHEET'),row('SYNTHETIC-STRIP',{w:20,l:1000,t:3.2,unit:'strip',qty:1200,baseQty:1200,committedQty:600,freeQty:600,d90:1200})]};
+  window.AAFSalesPreview={getReportSummary:()=>syntheticSummary,isReadOnly:()=>true};
+</script>
+<script src="../stock_summary.js"></script>
+<script>
+  window.AAFStockSummary.update(syntheticStock,r=>({eq:r.qty*r.w*r.l/(1220*2440)*r.t/2.5,value:r.qty*80,freeValue:r.freeQty*80,price:80,curr:'THB'}));
+</script>
+</html>

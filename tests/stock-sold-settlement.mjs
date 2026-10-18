@@ -20,7 +20,7 @@ function summary(){
     partition:{status:'verified',reservationPolicy:'aaf-firm-only-20261003-v1',sold:{inStock:bucket(7000,100),toProduce:bucket(3000,0)},reserved:{inStock:bucket(0),toProduce:bucket(0),demand:bucket(0),byStatus:{}}}
   };
 }
-const soldCard=report=>api.renderKpis(report).split('<div class="ss-kpi ss-kpi-sold">')[1].split('<div class="ss-kpi ss-kpi-reserved">')[0];
+const soldCard=report=>api.renderKpis(report).split(/<div class="ss-kpi ss-kpi-sold"[^>]*>/)[1].split(/<div class="ss-kpi ss-kpi-reserved"[^>]*>/)[0];
 const settlement=html=>html.split('<div class="ss-sales-settlement"')[1].split('<details class="ss-sales-pending-value"')[0];
 const clone=v=>JSON.parse(JSON.stringify(v));
 

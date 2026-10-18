@@ -44,6 +44,7 @@ jobs:
           node tests/stock-catalog.mjs
           node tests/stock-morning.mjs
           node tests/stock-summary.mjs
+          node --test tests/stock-daily-overview.mjs
           node tests/stock-report.mjs
           node --test tests/stock-cash.mjs
           node --test tests/stock-reservations.mjs

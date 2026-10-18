@@ -27,7 +27,7 @@ assert.equal(m.total.reservedEq4x8,20);assert.equal(m.total.reservedEq,20);
 const near=(actual,expected,message)=>assert(Math.abs(actual-expected)<1e-8,message);
 const shown=(value,digits=2)=>Number(value).toLocaleString('th-TH',{maximumFractionDigits:digits});
 const kpiCards=(markup)=>{
-  const found=[...markup.matchAll(/<div class="ss-kpi ss-kpi-(physical|sold|reserved|free)">/g)];
+  const found=[...markup.matchAll(/<div class="ss-kpi ss-kpi-(physical|sold|reserved|free)"[^>]*>/g)];
   const cards=Object.fromEntries(found.map((match,index)=>[match[1],markup.slice(match.index,found[index+1]?.index??markup.indexOf('<p class="ss-help"',match.index))]));
   return {order:found.map(match=>match[1]),cards};
 };

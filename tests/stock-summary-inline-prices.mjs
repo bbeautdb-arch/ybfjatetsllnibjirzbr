@@ -8,7 +8,7 @@ const input=(kind)=>({value:kind==='currency'?'THB':'',disabled:true,attributes:
   matches:s=>s===(kind==='price'?'[data-stock-gap-price]':'[data-stock-gap-currency]'),
   setAttribute(k,v){this.attributes[k]=v;},getAttribute(k){return this.attributes[k]??null;},closest(){return this.row;}});
 const rows=Array.from({length:2},()=>{const price=input('price'),currency=input('currency');const row={dataset:{stockPriceRow:key},querySelector:s=>s==='[data-stock-gap-price]'?price:currency};price.row=currency.row=row;return row;});
-const root={addEventListener:(name,fn)=>listeners[name]=fn,querySelector:()=>null,querySelectorAll:s=>s==='[data-stock-price-row]'?rows:s==='[data-stock-gap-price]'?rows.map(r=>r.querySelector(s)):s==='[data-stock-gap-save]'?buttons:s==='[data-stock-gap-status]'?statuses:[]};
+const root={addEventListener:(name,fn)=>{const previous=listeners[name];listeners[name]=previous?event=>Promise.all([previous(event),fn(event)]):fn;},querySelector:()=>null,querySelectorAll:s=>s==='[data-stock-price-row]'?rows:s==='[data-stock-gap-price]'?rows.map(r=>r.querySelector(s)):s==='[data-stock-gap-save]'?buttons:s==='[data-stock-gap-status]'?statuses:[]};
 const document={activeElement:null,getElementById:()=>root,createElement:()=>({}),head:{append(){}}};
 const window={};
 window.AAFSalesPreview={getPriceState:()=>state,getDraftPrice:()=>({...draft}),setDraftPrice:(k,value,currency)=>{assert.equal(k,key);if(value!==''&&(!Number.isFinite(Number(value))||Number(value)<=0))return false;draft={value:value===''?'':Number(value),currency};state.dirty=true;window.AAFStockSummary.syncPriceDrafts();return true;},savePrices:async()=>{writes++;state.dirty=false;return true;}};
@@ -20,13 +20,13 @@ const first=rows[0].querySelector('[data-stock-gap-price]'),second=rows[1].query
 document.activeElement=first;first.value='12.50';listeners.input({type:'input',target:first});
 assert.equal(draft.value,12.5);assert.equal(first.value,'12.50','active raw text is not reformatted');assert.equal(second.value,12.5,'duplicate card uses same draft');assert.equal(writes,0,'input does not save');assert(statuses[0].textContent.includes('ยังไม่เซฟ'));
 first.value='-1';listeners.input({type:'input',target:first});assert.equal(first.getAttribute('aria-invalid'),'true');assert.equal(buttons[0].disabled,true);assert.equal(draft.value,12.5);
-await listeners.click({target:{closest:()=>buttons[0]}});assert.equal(writes,0,'invalid top input blocks top save');
+await listeners.click({target:{closest:s=>s==='[data-stock-gap-save]'?buttons[0]:null}});assert.equal(writes,0,'invalid top input blocks top save');
 first.value='14';listeners.input({type:'input',target:first});assert.equal(first.getAttribute('aria-invalid'),'false');assert.equal(second.value,14);
 const currency=rows[0].querySelector('[data-stock-gap-currency]');currency.value='USD';document.activeElement=currency;listeners.change({type:'change',target:currency});assert.equal(draft.currency,'USD');assert.equal(rows[1].querySelector('[data-stock-gap-currency]').value,'USD');
 document.activeElement=null;draft.value=15;report.syncPriceDrafts();assert.equal(first.value,15,'lower catalog draft syncs up');
-await listeners.click({target:{closest:()=>buttons[0]}});assert.equal(writes,1);assert.equal(state.dirty,false);
+await listeners.click({target:{closest:s=>s==='[data-stock-gap-save]'?buttons[0]:null}});assert.equal(writes,1);assert.equal(state.dirty,false);
 state={...state,dirty:true,error:'เซฟไม่สำเร็จ'};window.AAFSalesPreview.savePrices=async()=>false;
-await listeners.click({target:{closest:()=>buttons[0]}});assert(statuses[0].textContent.includes('เซฟไม่สำเร็จ'));assert.equal(state.dirty,true);
+await listeners.click({target:{closest:s=>s==='[data-stock-gap-save]'?buttons[0]:null}});assert(statuses[0].textContent.includes('เซฟไม่สำเร็จ'));assert.equal(state.dirty,true);
 window.AAFSalesPreview.getPriceState=()=>null;report.syncPriceDrafts();assert.equal(first.disabled,true);assert.equal(buttons[0].disabled,true);
 const bucket=(qty)=>({byUnit:{sheet:qty,strip:0},eq4x8:qty,eq2_5:qty,knownValueTHB:qty*2,valueTHB:qty*2,coverage:{complete:true}});
 const spec={key,t:2.5,grade:'F',w:1220,l:2440,unit:'sheet',qty:20};
