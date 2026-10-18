@@ -12,8 +12,9 @@
   const agingKeys=['d90','d180','d270','d360','dOver'];
   const agingLabels=['0–90 วัน','91–180 วัน','181–270 วัน','271–360 วัน','เกิน 360 วัน'];
   const standardArea=1220*2440;
-  const blank=()=>({qty:0,baseQty:0,freeQty:0,committedQty:0,eq4x8:0,eq:0,value:0,freeValue:0,freeEq4x8:0,freeEq:0,reservedEq4x8:0,reservedEq:0,reservedValue:0,reservedUnpricedQty:0,agingBaseQty:0,aging90:0,aging180:0,agingOver180:0,count:0});
-  const add=(s,r)=>{for(const k of ['qty','baseQty','freeQty','committedQty','eq4x8','eq','value','freeValue','freeEq4x8','freeEq','reservedEq4x8','reservedEq','reservedValue','reservedUnpricedQty','agingBaseQty','aging90','aging180','agingOver180'])s[k]+=r[k];s.count++;return s;};
+  const blankUnit=()=>({qty:0,committedQty:0,freeQty:0,agingBaseQty:0,aging90:0,aging180:0,agingOver180:0,d90:0,d180:0,d270:0,d360:0,dOver:0,count:0});
+  const blank=()=>({qty:0,baseQty:0,freeQty:0,committedQty:0,eq4x8:0,eq:0,value:0,freeValue:0,freeEq4x8:0,freeEq:0,reservedEq4x8:0,reservedEq:0,reservedValue:0,reservedUnpricedQty:0,agingBaseQty:0,aging90:0,aging180:0,agingOver180:0,count:0,byUnit:{sheet:blankUnit(),strip:blankUnit()}});
+  const add=(s,r)=>{for(const k of ['qty','baseQty','freeQty','committedQty','eq4x8','eq','value','freeValue','freeEq4x8','freeEq','reservedEq4x8','reservedEq','reservedValue','reservedUnpricedQty','agingBaseQty','aging90','aging180','agingOver180'])s[k]+=r[k];s.count++;const unit=s.byUnit[r.unit];if(unit){for(const k of Object.keys(unit).filter(k=>k!=='count'))unit[k]+=r[k];unit.count++;}return s;};
   let latest=null,exporting=false,canvasLoader=null,headerExchangeRate=null,savedStockCatalog=null;
 
   // Saved stock prices are independent of the sales-allocation package. Exact
@@ -111,12 +112,13 @@
       }
       if(!r.grade||['w','l','t'].some(k=>!Number.isFinite(Number(r[k]))||Number(r[k])<=0))throw new Error('ขนาดหรือเกรดไม่ครบ');
       // Area equivalent at the row's original thickness, using saved Physical only.
-      result.eq4x8=r.qty*(Number(r.w)*Number(r.l)/standardArea);
+      result.eq4x8=r.unit==='strip'?0:r.qty*(Number(r.w)*Number(r.l)/standardArea);
       if(!Number.isFinite(result.eq4x8))throw new Error('ข้อมูลแปลง 4×8 ไม่ถูกต้อง');
       const v=calculate(r);
       for(const k of ['eq','value','freeValue','price']){if(!Number.isFinite(v[k])||v[k]<0)throw new Error('ข้อมูลมูลค่าไม่ครบ');result[k]=v[k];}
+      if(r.unit==='strip')result.eq=0;
       result.curr=v.curr;result.physicalAt=r.physicalOverride?.at||'';result.freeAt=r.freeOverride?.at||'';
-      const area=Number(r.w)*Number(r.l)/standardArea,thickness=Number(r.t)/2.5;
+      const area=r.unit==='strip'?0:Number(r.w)*Number(r.l)/standardArea,thickness=Number(r.t)/2.5;
       result.freeEq4x8=r.freeQty*area;result.freeEq=result.freeEq4x8*thickness;
       result.reservedEq4x8=r.committedQty*area;result.reservedEq=result.reservedEq4x8*thickness;
       result.reservedValue=r.committedQty*v.price*(v.curr==='USD'?data.exchangeRate:1);
@@ -130,7 +132,7 @@
     for(const r of rows){
       add(total,r);if(!grades.has(r.grade))grades.set(r.grade,blank());add(grades.get(r.grade),r);const t=String(Number(r.t));if(!thickness.has(t))thickness.set(t,blank());add(thickness.get(t),r);
       agingKeys.forEach((k,i)=>aging[i]+=r[k]);
-      if(r.rawSource){
+      if(r.rawSource&&r.unit!=='strip'){
         if(!agingEquivalentByThickness.has(t))agingEquivalentByThickness.set(t,agingKeys.map(()=>0));
         const ta=agingEquivalentByThickness.get(t),areaFactor=Number(r.w)*Number(r.l)/standardArea;
         agingKeys.forEach((k,i)=>{const equivalent=r[k]*areaFactor;agingEquivalent[i]+=equivalent;ta[i]+=equivalent;});
@@ -148,19 +150,31 @@
     return {rows,total,grades:[...grades],thickness:[...thickness],aging,agingEquivalent,agingEquivalentByThickness:[...agingEquivalentByThickness],reportDate:data.report.reportDate,updatedAt:data.updatedAt,importedAt:data.importedAt,revision:String(data.revision??''),exchangeRate:data.exchangeRate,sourceRowCount:data.report.sourceRowCount,renderedAt:new Date().toISOString(),cash,cashError,sold};
   }
   const cell=n=>'<td class="ss-num">'+number(n)+'</td>';
+  const stockQuantityText=(totals,field)=>totals.byUnit?.strip.count?number(totals.byUnit.sheet[field])+' แผ่น · ไม้แถบ '+number(totals.byUnit.strip[field])+' ชิ้น':number(totals[field])+' แผ่น';
+  const stockQuantityCell=(totals,field,free=false,extra='')=>'<td class="ss-num'+(free?' ss-free':'')+(extra?' '+extra:'')+'">'+(totals.byUnit?.strip.count?number(totals.byUnit.sheet[field])+' แผ่น<small style="display:block">ไม้แถบ '+number(totals.byUnit.strip[field])+' ชิ้น</small>':number(totals[field]))+'</td>';
   const equivalents=v=>`<td class="ss-num ss-equivalent">${number(v.eq4x8,2)}</td><td class="ss-num ss-equivalent">${number(v.eq,2)}</td>`;
   function groupTable(title,groups,label,total){
-    const agingCells=v=>`<td class="ss-num ss-aging-mail">${number(v.aging90)}</td><td class="ss-num ss-aging-mail">${number(v.aging180)}</td><td class="ss-num ss-aging-mail ss-aging-over">${number(v.agingOver180)}</td>`;
-    return `<section class="ss-group"><div class="ss-group-heading"><h3>${title}</h3><small>Aging เมล = ยอดต้นฉบับก่อนโยก</small></div><div class="ss-group-scroll" role="region" tabindex="0" aria-label="${esc(title)} 10 คอลัมน์ เลื่อนแนวนอนได้"><table><caption class="ss-sr">${title} · Aging เมลจากต้นฉบับ · ยอดเทียบขนาดคำนวณจาก Physical</caption><thead><tr><th scope="col" rowspan="2">${label}</th><th scope="col" rowspan="2" class="ss-num">สเปก</th><th scope="col" rowspan="2" class="ss-num">Physical</th><th scope="col" rowspan="2" class="ss-num">ยอดจอง</th><th scope="col" rowspan="2" class="ss-num">Free</th><th scope="colgroup" colspan="3" class="ss-num ss-aging-mail-group">Aging เมล</th><th scope="col" rowspan="2" class="ss-num ss-equivalent">เทียบ 4×8<br><small>หนาเดิม</small></th><th scope="col" rowspan="2" class="ss-num ss-equivalent">เทียบ 4×8<br><small>หนา 2.5 mm</small></th></tr><tr><th scope="col" class="ss-num ss-aging-mail">0–90</th><th scope="col" class="ss-num ss-aging-mail">91–180</th><th scope="col" class="ss-num ss-aging-mail ss-aging-over">&gt;180 วัน</th></tr></thead><tbody>${groups.map(([k,v])=>`<tr><th scope="row">${esc(k)}</th>${cell(v.count)}${cell(v.qty)}${cell(v.committedQty)}<td class="ss-num ss-free">${number(v.freeQty)}</td>${agingCells(v)}${equivalents(v)}</tr>`).join('')}</tbody><tfoot><tr><th scope="row">รวม</th>${cell(total.count)}${cell(total.qty)}${cell(total.committedQty)}<td class="ss-num ss-free">${number(total.freeQty)}</td>${agingCells(total)}${equivalents(total)}</tr></tfoot></table></div></section>`;
+    const agingCells=v=>stockQuantityCell(v,'aging90',false,'ss-aging-mail')+stockQuantityCell(v,'aging180',false,'ss-aging-mail')+stockQuantityCell(v,'agingOver180',false,'ss-aging-mail ss-aging-over');
+    return `<section class="ss-group"><div class="ss-group-heading"><h3>${title}</h3><small>Aging เมล = ยอดต้นฉบับก่อนโยก</small></div><div class="ss-group-scroll" role="region" tabindex="0" aria-label="${esc(title)} 10 คอลัมน์ เลื่อนแนวนอนได้"><table><caption class="ss-sr">${title} · Aging เมลจากต้นฉบับ · ยอดเทียบขนาดคำนวณจาก Physical</caption><thead><tr><th scope="col" rowspan="2">${label}</th><th scope="col" rowspan="2" class="ss-num">สเปก</th><th scope="col" rowspan="2" class="ss-num">Physical</th><th scope="col" rowspan="2" class="ss-num">ยอดจอง</th><th scope="col" rowspan="2" class="ss-num">Free</th><th scope="colgroup" colspan="3" class="ss-num ss-aging-mail-group">Aging เมล</th><th scope="col" rowspan="2" class="ss-num ss-equivalent">เทียบ 4×8<br><small>หนาเดิม</small></th><th scope="col" rowspan="2" class="ss-num ss-equivalent">เทียบ 4×8<br><small>หนา 2.5 mm</small></th></tr><tr><th scope="col" class="ss-num ss-aging-mail">0–90</th><th scope="col" class="ss-num ss-aging-mail">91–180</th><th scope="col" class="ss-num ss-aging-mail ss-aging-over">&gt;180 วัน</th></tr></thead><tbody>${groups.map(([k,v])=>`<tr><th scope="row">${esc(k)}</th>${cell(v.count)}${stockQuantityCell(v,'qty')}${stockQuantityCell(v,'committedQty')}${stockQuantityCell(v,'freeQty',true)}${agingCells(v)}${equivalents(v)}</tr>`).join('')}</tbody><tfoot><tr><th scope="row">รวม</th>${cell(total.count)}${stockQuantityCell(total,'qty')}${stockQuantityCell(total,'committedQty')}${stockQuantityCell(total,'freeQty',true)}${agingCells(total)}${equivalents(total)}</tr></tfoot></table></div></section>`;
   }
   function memo(r,key,title){return `<div><b>${title}</b><div class="ss-text">${esc(r[key]||'—')}</div>${r[key+'At']?`<small>${esc(r[key+'By']||'ไม่ระบุผู้บันทึก')} · ${esc(when(r[key+'At']))}</small>`:''}</div>`;}
   function provenance(r){
-    if(r.rawSource)return `ยอดเมล ${number(r.baseQty)} · Aging: ${agingKeys.map((k,i)=>agingLabels[i]+' = '+number(r[k])).join(' / ')} แผ่น`;
+    if(r.rawSource)return `ยอดเมล ${number(r.baseQty)} · Aging: ${agingKeys.map((k,i)=>agingLabels[i]+' = '+number(r[k])).join(' / ')} ${r.unit==='strip'?'ชิ้นไม้แถบ':'แผ่น'}`;
     if(r.retained)return 'เก็บรายการสินค้าเดิม · ไม่พบในเมลวันนี้ · ยอดเมลและ Aging = 0 · ยังคงรหัส ราคา หมายเหตุและการติดตาม';
     return 'สเปกหลังโยก/ต้องผลิต — ไม่มี SKU หรือ Aging ของตัวเองในเมลต้นฉบับ';
   }
   // Existing report chart, kept dependency-free so it also renders in long PNG exports.
   const agingPalette=['#0072B2','#E69F00','#009E73','#D55E00','#CC79A7','#56B4E9','#F0E442','#000000','#6A3D9A','#1B9E77','#E31A1C','#A6761D','#1F78B4','#B15928','#33A02C','#7570B3'];
+  function agingPanel(m){
+    const t=m.total,mixed=t.byUnit?.strip.count>0;
+    const cells=m.aging.map((n,i)=>{
+      if(!mixed)return `<div><small>${agingLabels[i]}</small><b>${number(n)}</b><span>${t.agingBaseQty?number(n/t.agingBaseQty*100,1):'0'}%</span></div>`;
+      const sheet=t.byUnit.sheet,strip=t.byUnit.strip,key=agingKeys[i];
+      return `<div><small>${agingLabels[i]}</small><b>${number(sheet[key])}</b><span>แผ่น · ${sheet.agingBaseQty?number(sheet[key]/sheet.agingBaseQty*100,1):'0'}%</span><small>ไม้แถบ ${number(strip[key])} ชิ้น · ${strip.agingBaseQty?number(strip[key]/strip.agingBaseQty*100,1):'0'}%</small></div>`;
+    }).join('');
+    const basis=mixed?'ฐาน Aging เมลต้นฉบับแยกหน่วย '+stockQuantityText(t,'agingBaseQty'):'ฐาน Aging '+number(m.aging.reduce((a,b)=>a+b,0))+' / ยอดเมลต้นฉบับ '+number(t.agingBaseQty)+' หน่วย';
+    return `<div class="ss-aging"><h3>Aging ตามรายงานเมลต้นฉบับ</h3><div class="ss-aging-grid">${cells}</div><p>${basis} · ไม่กระจายยอดปรับระหว่างวันเข้าอายุสินค้า · กราฟและยอดเทียบแผ่นไม่นับไม้แถบ</p>${agingChart(m)}</div>`;
+  }
   function agingChart(m){
     const groups=m.agingEquivalentByThickness.slice().sort((a,b)=>Number(a[0])-Number(b[0])).map(([t,values],i)=>({t,values,color:agingPalette[i%agingPalette.length]}));
     const max=Math.max(...m.agingEquivalent,1),width=760,height=270,left=108,right=18,top=22,bottom=46,innerW=width-left-right,innerH=height-top-bottom;
@@ -267,7 +281,11 @@
     return cards.map(([id,label,b])=>`<div class="ss-kpi ss-kpi-${id}" data-basic-stock="${id}"><div class="ss-physical-main"><h3>${label}</h3><strong>${display(b?.byUnit.sheet)}</strong><small>${b?'แผ่น · ข้อมูลส่วนกลางที่บันทึกแล้ว':'รอชุดยอดขายที่ตรวจตรงกับสต๊อก'}</small>${b?`<div class="ss-strip-quantity">ไม้แถบ <b>${number(b.byUnit.strip)}</b> ชิ้น</div>`:''}</div>${b?`<dl class="ss-physical-equivalents"><div><dt>เฉพาะแผ่น · เทียบ 4×8</dt><dd>${display(b.eq4x8)} <small>แผ่น</small></dd></div><div><dt>เฉพาะแผ่น · เทียบ 2.5 มม.</dt><dd>${display(b.eq2_5)} <small>แผ่น</small></dd></div></dl>`:''}<div class="ss-kpi-value"><span>${id==='sold'?'มูลค่าการขาย':'มูลค่าสต๊อก'}</span>${id==='physical'?savedPhysicalValueHTML(m):`<b>—</b><small>${id==='sold'?'รอราคาขายจริงและข้อมูลจัดสรร':'รอยืนยันชุดราคาสต๊อก · ไม่ใช้ราคาขายหรือศูนย์แทน'}</small>`}</div>${['reserved','free'].includes(id)?'<small class="ss-demand-note">ยอดตามที่บันทึกไว้ · ยังไม่ยืนยันกับยอดขายล่าสุด ไม่ใช่การตัดสต๊อกรอบใหม่</small>':''}</div>`).join('');
   }
   function summarySourceText(summary,m){
-    if(summary)return summary.catalog?.automaticFx?'อ้างอิงหัวข้อ 02 · ราคาที่เซฟแล้ว + เรท ธปท. อัตโนมัติ':'อ้างอิงหัวข้อ 02 · ใช้ราคาและเรทที่เซฟแล้ว';
+    if(summary){
+      const e=summary.evidence,dated=e?.version===1&&e.stockReportDate===m?.reportDate&&/^\d{4}-\d{2}-\d{2}$/.test(e.salesReportDate||'')&&e.sourceIsLive===false;
+      const source=dated?'สต๊อก '+e.stockReportDate+' · '+(e.financialEvidence==='unavailable-plan-only'?'จำนวน/สถานะขายจากชุดที่บันทึก ':'ยอดขาย/รับเงินตามหลักฐาน ')+e.salesReportDate+(e.salesCapturedAt?' (อ่านต้นทาง '+when(e.salesCapturedAt)+')':'')+' · จัดสรรใหม่กับสต๊อกปัจจุบัน · '+(e.needsSalesRefresh?'ยังไม่ได้อ่านยอดขายใหม่จากหน้า 09':'เป็นชุดยอดขายที่บันทึกไว้ ไม่ใช่ข้อมูลสด')+' · '+(e.financialEvidence==='unavailable-plan-only'?'ยังไม่มีราคาขาย/ยอดรับเงินที่ตรงกับชุดนี้ '+number(e.financialMissingLineCount)+' รายการ · ไม่ใช้เงินชุดเก่าหรือ 0 แทน · ':''):'';
+      return source+(summary.catalog?.automaticFx?'ราคาสต๊อกที่เซฟแล้ว + เรท ธปท. อัตโนมัติ':'ใช้ราคาและเรทที่เซฟแล้ว')+' · มูลค่าการขายใช้ราคาขายจริง ไม่ใช่ราคาสต๊อก · ยอดเทียบแผ่นไม่รวมไม้แถบ';
+    }
     const status=window.AAFSalesPreview?.getReportLoadStatus?.();
     return 'แสดงสต๊อกส่วนกลางตามรายงาน '+reportDay(m?.reportDate)+(m?.savedCatalog?' · ราคาประเมินจากชุดที่บันทึกตามสเปก แยกจากยอดขาย':' · กำลังตรวจชุดราคาที่บันทึก')+' · ยอดขายและมูลค่าการขายยังรอตรวจชุดข้อมูล'+(status?.message?' · '+status.message:'');
   }
@@ -344,12 +362,12 @@
       <div class="ss-kpis">${kpiHTML(m.salesSummary,m)}</div>
       <div class="ss-section-title"><span>01</span><h3>ภาพรวมแยกเกรดและความหนา</h3></div>
       <div class="ss-groups">${groupTable('แยกตามเกรด',m.grades,'เกรด',t)}${groupTable('แยกตามความหนา',m.thickness.filter(([,totals])=>totals.qty>0).map(([thick,totals])=>[thicknessLabel(thick),totals]),'หนา (mm)',t)}</div>
-      <div class="ss-aging"><h3>Aging ตามรายงานเมลต้นฉบับ</h3><div class="ss-aging-grid">${m.aging.map((n,i)=>`<div><small>${agingLabels[i]}</small><b>${number(n)}</b><span>${t.agingBaseQty?number(n/t.agingBaseQty*100,1):'0'}%</span></div>`).join('')}</div><p>ฐาน Aging ${number(m.aging.reduce((a,b)=>a+b,0))} / ยอดเมลต้นฉบับ ${number(t.agingBaseQty)} หน่วย · ไม่กระจายยอดปรับระหว่างวันเข้าอายุสินค้า</p>${agingChart(m)}</div>
+      ${agingPanel(m)}
       <section class="ss-sales-block" data-html2canvas-ignore><div class="ss-section-title"><span>02</span><h3>ยอดขายและสต๊อก</h3></div><div id="stock-sales-preview-slot"></div></section>
       <div class="ss-section-title"><span>03</span><h3>รายละเอียดครบทุกสเปก</h3><small>ปรับเอง ${number(overrides)} สเปก · มีติดตาม ${number(followed)} สเปก</small></div>
       <p class="ss-help">เรียงความหนา → กว้าง → ยาว → เกรด • แสดง SKU, อายุสินค้า, ข้อความติดตาม และหมายเหตุครบ ไม่ตัดข้อความ</p>
-      ${m.thickness.map(([thick,totals])=>`<section class="ss-detail-group"><div class="ss-band"><h4>ความหนา ${esc(thick)} mm</h4><span>${totals.count} สเปก · Physical ${number(totals.qty)} · Free ${number(totals.freeQty)} แผ่น</span></div><table class="ss-detail"><caption class="ss-sr">รายละเอียดความหนา ${esc(thick)} mm</caption><colgroup><col style="width:4%"><col style="width:18%"><col style="width:6%"><col style="width:11%"><col style="width:9%"><col style="width:11%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:10%"></colgroup><thead><tr><th>#</th><th>กว้าง × ยาว × หนา<br><small>หน่วย mm</small></th><th>เกรด</th><th class="ss-num">Physical</th><th class="ss-num">ยอดจอง</th><th class="ss-num">Free</th><th class="ss-num">เทียบ 2.5</th><th class="ss-num">ราคา/แผ่น</th><th class="ss-num">มูลค่า (฿)</th><th class="ss-num">Free (฿)</th></tr></thead><tbody>${m.rows.filter(r=>String(Number(r.t))===thick).map(r=>`<tr class="ss-stock-row" data-stock-row-key="${esc(r.key)}"><td>${++index}</td><th>${number(r.w,3)} × ${number(r.l,3)} × ${number(r.t,3)}</th><td><b class="ss-grade">${esc(r.grade)}</b></td>${cell(r.qty)}${cell(r.committedQty)}<td class="ss-num ss-free">${number(r.freeQty)}</td>${cell(r.eq)}${stockPriceCells(r)}</tr><tr class="ss-description"><td colspan="10"><div><b>SKU</b> ${esc(r.sku||'—')} <span>· ${esc(r.desc)} · ${esc(r.size)}</span></div><div>${provenance(r)}</div>${r.physicalAt||r.freeAt?`<div class="ss-manual">${r.physicalAt?'ปรับ Physical '+esc(when(r.physicalAt)):''}${r.physicalAt&&r.freeAt?' · ':''}${r.freeAt?'ปรับ Free '+esc(when(r.freeAt)):''}</div>`:''}<div class="ss-memos">${memo(r,'followup','การติดตามยอดขาย')}${memo(r,'note','หมายเหตุ / แนวทางจัดการสต๊อก')}</div></td></tr>`).join('')}</tbody></table></section>`).join('')}
-      <div class="ss-grand"><b>รวมครบ ${number(t.count)} สเปก</b><span>Physical <strong>${number(t.qty)}</strong></span><span>ยอดจอง <strong>${number(t.committedQty)}</strong></span><span>Free <strong>${number(t.freeQty)}</strong></span></div>
+      ${m.thickness.map(([thick,totals])=>`<section class="ss-detail-group"><div class="ss-band"><h4>ความหนา ${esc(thick)} mm</h4><span>${totals.count} สเปก · Physical ${stockQuantityText(totals,'qty')} · Free ${stockQuantityText(totals,'freeQty')}</span></div><table class="ss-detail"><caption class="ss-sr">รายละเอียดความหนา ${esc(thick)} mm</caption><colgroup><col style="width:4%"><col style="width:18%"><col style="width:6%"><col style="width:11%"><col style="width:9%"><col style="width:11%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:10%"></colgroup><thead><tr><th>#</th><th>กว้าง × ยาว × หนา<br><small>หน่วย mm</small></th><th>เกรด</th><th class="ss-num">Physical</th><th class="ss-num">ยอดจอง</th><th class="ss-num">Free</th><th class="ss-num">เทียบ 2.5</th><th class="ss-num">ราคา/หน่วย</th><th class="ss-num">มูลค่า (฿)</th><th class="ss-num">Free (฿)</th></tr></thead><tbody>${m.rows.filter(r=>String(Number(r.t))===thick).map(r=>`<tr class="ss-stock-row" data-stock-row-key="${esc(r.key)}"><td>${++index}</td><th>${number(r.w,3)} × ${number(r.l,3)} × ${number(r.t,3)}</th><td><b class="ss-grade">${esc(r.grade)}</b></td>${cell(r.qty)}${cell(r.committedQty)}<td class="ss-num ss-free">${number(r.freeQty)}</td>${cell(r.eq)}${stockPriceCells(r)}</tr><tr class="ss-description"><td colspan="10"><div><b>SKU</b> ${esc(r.sku||'—')} <span>· ${esc(r.desc)} · ${esc(r.size)}</span></div><div>${provenance(r)}</div>${r.physicalAt||r.freeAt?`<div class="ss-manual">${r.physicalAt?'ปรับ Physical '+esc(when(r.physicalAt)):''}${r.physicalAt&&r.freeAt?' · ':''}${r.freeAt?'ปรับ Free '+esc(when(r.freeAt)):''}</div>`:''}<div class="ss-memos">${memo(r,'followup','การติดตามยอดขาย')}${memo(r,'note','หมายเหตุ / แนวทางจัดการสต๊อก')}</div></td></tr>`).join('')}</tbody></table></section>`).join('')}
+      <div class="ss-grand"><b>รวมครบ ${number(t.count)} สเปก</b><span>Physical <strong>${stockQuantityText(t,'qty')}</strong></span><span>ยอดจอง <strong>${stockQuantityText(t,'committedQty')}</strong></span><span>Free <strong>${stockQuantityText(t,'freeQty')}</strong></span></div>
       <footer class="ss-footer"><div><b>จบรายงาน · แสดงครบ ${number(t.count)} / ${number(t.count)} สเปก</b><br>แหล่งข้อมูล: Stock AAF ส่วนกลาง${m.sourceRowCount?' · ต้นฉบับ '+number(m.sourceRowCount)+' แถว':''}<br>bbeautdb-arch.github.io/ybfjatetsllnibjirzbr/stock_manager.html</div><div>สร้างมุมมอง ${esc(when(m.renderedAt))}<br>ข้อมูลบันทึกล่าสุด ${esc(when(m.updatedAt))}<br>รายงานสำหรับใช้ภายในบริษัท</div></footer>
       </div></article>`;
   }
@@ -443,7 +461,7 @@
     [data-aaf-stock-summary] .ss-kpi-sold{background:#eff6ff;border-color:#bdd2ef;color:#24528a}
     [data-aaf-stock-summary] .ss-kpi-reserved{background:#fff9ed;border-color:#e5d5ad;color:#785b24}
     [data-aaf-stock-summary] .ss-kpi-free{background:#e4f6f0;border-color:#8bcdba;color:#06634e}
-    [data-aaf-stock-summary] .ss-sales-summary-source{font-size:12px;color:#52657a;margin:0 0 10px}
+    [data-aaf-stock-summary] .ss-sales-summary-source{font-size:13px;color:#334e68;margin:0 0 12px;padding:11px 14px;background:#f0f6fb;border-left:4px solid #48799b;border-radius:4px;line-height:1.75}
     [data-aaf-stock-summary] .ss-strip-quantity{font-size:13px;margin-top:6px;color:#52657a}
     [data-aaf-stock-summary] .ss-sold-loading{display:grid;grid-template-columns:1fr 1fr;gap:10px;grid-column:1/-1;border-top:1px solid #bdd2ef;padding-top:10px}
     [data-aaf-stock-summary] .ss-sold-loading div{display:flex;flex-direction:column;gap:4px;background:#ffffffa6;border:1px solid #d3e2f4;border-radius:8px;padding:8px 10px;min-width:0}

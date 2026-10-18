@@ -20,6 +20,11 @@ const central=()=>({salesMode:false,revision,reportDate:day,rows:[
 const catalog=(stock=central())=>({ok:true,revision:stock.revision,stockReportDate:stock.reportDate,catalogRevision:4,widgetState:{privateContent:{...canonicalState(1.95).privateContent,notesBySpec:{'2.5|AAA|1220|2440|sheet':'saved spec note'},notesByThickness:{'2.5':'saved thickness note'}}}});
 const full=(stock=central())=>({...response('full-current',{revision:stock.revision}),...catalog(stock),permissions:{pricesAndNotes:true},salesReportDate:day,preview:{...response('full-current').preview,source:{stockReportDate:stock.reportDate},stockRows:stock.rows.map(({qty,...row})=>({...row,physical:qty}))}});
 const stale=(stock=central())=>{const result=full(stock);result.preview.source.stockReportDate='2026-10-12';return result;};
+const projected=(stock=central())=>{
+  const data=full(stock);delete data.preview.source;data.salesReportDate='2026-10-12';data.salesCapturedAt='2026-10-12T08:47:19.198Z';
+  data.readModel={version:1,kind:'current-stock-saved-sales-ledger',stockReportDate:stock.reportDate,sourceStockReportDate:'2026-10-12',salesCapturedAt:data.salesCapturedAt,planReportDate:'2026-10-12',salesPlanChecksum:'synthetic-checked-ledger',needsSalesRefresh:true,sourceIsLive:false};
+  return data;
+};
 const status=code=>({ok:false,httpOk:false,status:code,error:'PRIVATE SERVER DETAIL'});
 const readText=slot=>descendants(slot).map(node=>node.textContent).filter(Boolean).join('\n');
 const fallbackRows=slot=>descendants(slot).filter(node=>node.getAttribute('data-saved-stock-key'));
@@ -56,6 +61,39 @@ test('matching full report still mounts existing view and publishes only identit
   const r=setup();r.enqueue(full());await r.api.attach(r.slot);
   assert.equal(r.mounts.length,1);assert.equal(r.api.getReportLoadStatus().state,'ready');assert.equal(r.api.getReportSummary().label,'full-current');
   const value=r.catalogs.at(-1);assert.equal(value.revision,revision);assert.equal(value.reportDate,day);assert.equal(value.rows.length,3);assert.equal(value.rows[0].price,1.95);assert.equal(value.rows[1].price,null);assertReadOnly(r);
+});
+
+test('current-stock projection restores complete sales view and editable catalog, while prominently retaining the older sales evidence date',async()=>{
+  for(const salesMode of [false,true]){
+    const stock={...central(),salesMode};
+    stock.rows.push(...Array.from({length:138},(_,index)=>({key:'retained-'+index,sku:'SYNTHETIC-'+index,w:2000+index,l:2440,t:2.5,grade:'AAA',unit:'sheet',qty:index===137?407:0,committedQty:0,freeQty:index===137?407:0})));
+    const data=projected(stock),before=JSON.stringify(data),r=setup(stock);r.enqueue(data);await r.api.attach(r.slot);
+    assert.equal(r.api.getReportLoadStatus().state,'ready');assert.equal(r.mounts.length,1);assert.equal(r.mounts[0].model.stockRows.length,141);
+    assert.equal(r.mounts[0].model.salesRows[0].id,'sale-full-current');assert.equal(r.api.isReadOnly(),false);assert.equal(r.mounts[0].options.priceNotesOnly,salesMode);
+    assert.equal(r.catalogs.at(-1).rows.length,141);assert.equal(r.catalogs.at(-1).rows[140].qty,407);assert.equal(r.catalogs.at(-1).rows[140].price,null);
+    assert.equal(r.api.setDraftPrice('2.5|AAA|2137|2440|sheet',12,'THB'),true,'catalog forms remain editable for an authorized dated report');
+    const evidence=r.api.getReportSummary().evidence;assert.equal(evidence.stockReportDate,day);assert.equal(evidence.salesReportDate,'2026-10-12');assert.equal(evidence.salesCapturedAt,data.salesCapturedAt);assert.equal(evidence.sourceIsLive,false);assert.equal(evidence.needsSalesRefresh,true);
+    const state=find(r.slot,node=>node.className==='preview-state');assert.equal(state.hidden,false);assert.match(state.textContent,/สต๊อก 2026-10-18/);assert.match(state.textContent,/2026-10-12/);assert.match(state.textContent,/ยังไม่ได้อ่านยอดขายใหม่จากหน้า 09/);
+    r.mounts[0].options.onReportSummary({label:'saved-after-edit'});assert.equal(r.api.getReportSummary().evidence.salesCapturedAt,data.salesCapturedAt,'price updates do not advance sales evidence date');
+    assert.equal(JSON.stringify(data),before);assertReadOnly(r);
+  }
+});
+
+test('current-stock projection cannot omit even zero-quantity catalog specs in owner or shared mode',async()=>{
+  for(const salesMode of [false,true]){const stock={...central(),salesMode},data=projected(stock);data.preview.stockRows.splice(1,1);const r=setup(stock);r.enqueue(data);r.enqueue(catalog(stock));await r.api.attach(r.slot);assert.equal(r.mounts.length,0);assert.equal(r.api.getReportLoadStatus().state,'pending');assert.equal(fallbackRows(r.slot).length,3);assertReadOnly(r);}
+});
+
+test('a verified plan-only quantity report is clearly marked as lacking matching sale money and receipt evidence',async()=>{
+  const data=projected();data.readModel.financialEvidence='unavailable-plan-only';data.readModel.financialMissingLineCount=70;
+  const r=setup();r.enqueue(data);await r.api.attach(r.slot);assert.equal(r.api.getReportLoadStatus().state,'ready');assert.equal(r.mounts.length,1);
+  const evidence=r.api.getReportSummary().evidence;assert.equal(evidence.financialEvidence,'unavailable-plan-only');assert.equal(evidence.financialMissingLineCount,70);
+  const state=find(r.slot,node=>node.className==='preview-state');assert.match(state.textContent,/ยังไม่มีราคาขาย\/ยอดรับเงินที่ตรงกับชุดนี้ 70 รายการ/);assert.match(state.textContent,/ไม่ใช้เงินชุดเก่าหรือ 0 แทน/);assertReadOnly(r);
+});
+
+test('invalid or falsely live reprojection provenance never restores a report',async()=>{
+  for(const change of [{stockReportDate:'2026-10-12'},{sourceIsLive:true},{salesCapturedAt:'2026-10-18T00:00:00Z'},{planReportDate:'unknown'},{needsSalesRefresh:'false'}]){
+    const data=projected();Object.assign(data.readModel,change);const r=setup();r.enqueue(data);r.enqueue(catalog());await r.api.attach(r.slot);assert.equal(r.mounts.length,0);assert.equal(r.api.getReportSummary(),null);assert.equal(r.api.getReportLoadStatus().state,'pending');assertReadOnly(r);
+  }
 });
 
 test('shared report 409 reads catalog independently and never substitutes owner preview or hidden sales data',async()=>{
@@ -122,6 +160,13 @@ test('late catalog after session replacement or invalidation cannot republish pr
 test('pending shared report retries at same revision; no independent catalog contaminates later valid full report',async()=>{
   const stock={...central(),salesMode:true},r=setup(stock);r.enqueue(status(409));r.enqueue(catalog(stock));await r.api.attach(r.slot);assert.equal(fallbackRows(r.slot).length,3);
   r.enqueue(full(stock));await r.api.attach(r.slot);assert.equal(fallbackRows(r.slot).length,0);assert.equal(r.mounts.length,1);assert.equal(r.api.getReportLoadStatus().state,'ready');assertReadOnly(r);
+});
+
+test('explicit refresh reloads a ready same-revision guarded report but never discards unsaved catalog edits',async()=>{
+  const r=setup();r.enqueue(projected());await r.api.attach(r.slot);
+  const second=projected();second.salesCapturedAt='2026-10-12T09:00:00Z';second.readModel.salesCapturedAt=second.salesCapturedAt;
+  r.api.setAccess({...central(),refreshReport:true});r.enqueue(second);await r.api.attach(r.slot);assert.equal(r.mounts.length,2);assert.equal(r.api.getReportSummary().evidence.salesCapturedAt,second.salesCapturedAt);assert.equal(r.mounts[0].controller.destroyed,true);
+  r.api.setDraftPrice('2.5|AAA|1220|2440|sheet',9,'THB');r.api.setAccess({...central(),refreshReport:true});await r.api.attach(r.slot);assert.equal(r.mounts.length,2);assert.equal(r.api.isDirty(),true);assert.equal(r.api.getDraftPrice('2.5|AAA|1220|2440|sheet').value,9);assertReadOnly(r);
 });
 
 test('central revision change preserves dirty full-view drafts but cannot publish stale report/catalog',async()=>{

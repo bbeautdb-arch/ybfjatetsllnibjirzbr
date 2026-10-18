@@ -230,10 +230,10 @@ function equivalentSummary(rows) {
     const equivalent = row.qty * row.w * row.l * row.t / (1220 * 2440 * 2.5);
     addNumber(byUnit, row.unit, equivalent);
   });
-  const total = Object.values(byUnit).reduce((sum, value) => sum + value, 0);
+  const total = byUnit.sheet || 0;
   return {
     byUnit,
-    // `sheet` is retained as the legacy UI field: total 4x8 @ 2.5 equivalents.
+    // Sheet equivalents exclude strip pieces; native quantities stay by unit.
     sheet: total,
     total,
     unsupportedUnits: [...unsupportedUnits].sort(),
@@ -934,6 +934,7 @@ module.exports = {
     // Reference evidence is display-only: never seed or overwrite the saved catalog.
     const historicalFreePriceReferences = options.historicalFreePriceReferences || {};
     const receiptBreakdown = options.receiptBreakdown;
+    const financialEvidenceUnavailable = options.financialEvidenceUnavailable === true;
     const pricingContext = 'aaf-sales-stock-preview|free-price-catalog';
     const paidOverrideRefs = new Set(options.paidOverrideRefs || model.meta?.paidOverrideRefs || []);
     const sourceCurrencyNoteIncludes = ['ต้นทางแสดง USD','สกุลเงิน',...(Array.isArray(options.sourceCurrencyNoteIncludes) ? options.sourceCurrencyNoteIncludes : [])].filter(value => typeof value === 'string' && value);
@@ -1222,6 +1223,7 @@ module.exports = {
       rows.forEach(row => {
         const qty = Number(quantityOf(row));if (!Number.isFinite(qty)) return;
         addReportUnit(byUnit,row.unit,qty);
+        if (row.unit !== 'sheet') return;
         const areaEquivalent = qty*row.w*row.l/(1220*2440);
         eq4x8 += areaEquivalent;eq2_5 += areaEquivalent*row.t/2.5;
       });
@@ -1320,6 +1322,7 @@ module.exports = {
     }
     function soldReport(rows) {
       const quantities = reportQuantities(rows,row => row.qty), byCurrency = {};
+      if (financialEvidenceUnavailable) return {...quantities,valueBasis:'actual-sale-evidence-unavailable',valueTHB:null,knownValueTHB:0,byCurrency,coverage:{complete:false,knownRowCount:0,unknownRowCount:rows.length,missingFxRowCount:0,totalRowCount:rows.length,orderCount:new Set(rows.map(row => row.orderKey)).size}};
       let knownValueTHB = 0, knownRowCount = 0, unknownRowCount = 0, missingFxRowCount = 0;
       rows.forEach(row => {
         const amount = host.AafAllModel.actualSaleAmount(row,model.salesRows);
@@ -1350,11 +1353,13 @@ module.exports = {
     const quantitiesText = totals => unitText(totals?.quantities?.byUnit);
     const stockText = (stock, field) => unitText(Object.fromEntries(Object.entries(stock.unitTotals || {}).map(([unit,totals]) => [unit,totals[field]])));
     function moneyNative(money) {
+      if (financialEvidenceUnavailable) return 'รอหลักฐานมูลค่าที่ตรงกับชุดยอดขายนี้';
       const known = Object.entries(money?.byCurrency || {}).map(([code,value]) => fmt(value)+' '+code).join(' + ');
       if (!money?.totalRows) return '≈ 0';
       return (known ? '≈ '+known : 'รอมูลค่า')+(money.unknownRows ? ' · ยังไม่รวม '+money.unknownRows+' บรรทัด' : '');
     }
     function moneyMarkup(money) {
+      if (financialEvidenceUnavailable) return '<span class="sp-value-line">รอหลักฐานมูลค่าที่ตรงกับชุดยอดขายนี้</span>';
       const known = Object.entries(money?.byCurrency || {});
       const values = known.length ? known.map(([code,value]) => '<span class="sp-value-line">≈ '+fmt(value)+' '+esc(code)+'</span>').join('') : '<span class="sp-value-line">'+(money?.totalRows ? 'รอมูลค่า' : '≈ 0')+'</span>';
       return values+(money?.unknownRows ? '<small class="sp-money-partial">ยังไม่รวม '+fmt(money.unknownRows)+' บรรทัด</small>' : '');
@@ -1370,6 +1375,7 @@ module.exports = {
       return {byCurrency,unknownRows,totalRows:rows.length};
     }
     function moneyBaht(money, decimals = 0) {
+      if (financialEvidenceUnavailable) return 'รอหลักฐานมูลค่าที่ตรงกับชุดยอดขายนี้';
       let known = 0, hasKnown = false, unknownCurrency = 0;
       Object.entries(money?.byCurrency || {}).forEach(([code,amount]) => {
         if (code === 'THB') {known += amount; hasKnown = true;}
@@ -1546,6 +1552,7 @@ module.exports = {
       return Number.isFinite(event.amount) && event.currency ? (event.approximate ? '≈ ' : '')+fmt(event.amount)+' '+event.currency : 'รอมูลค่า';
     }
     function receiptBreakdownMarkup(id) {
+      if (id === 'sp-money-all' && financialEvidenceUnavailable) return '<p class="sp-receipt-basis" role="status">ยังไม่มีหลักฐานรับเงินที่ตรงกับชุดยอดขายนี้ · ไม่ใช่ยอดรับเงินเป็นศูนย์ และไม่ใช้รายการรับเงินชุดเก่าแทน</p>';
       if (id !== 'sp-money-all' || !receiptBreakdown?.buckets) return '';
       const labels = {
         currentMonth:'เดือนนี้ · '+receiptMonthText(receiptBreakdown.month),

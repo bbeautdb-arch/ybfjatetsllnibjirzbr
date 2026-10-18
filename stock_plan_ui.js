@@ -72,10 +72,27 @@
       finally{morningSubmitting=false;confirmSubmit.disabled=false;confirmCancel.disabled=false;render();}
     };
     document.getElementById('plan-sales-export').onclick=()=>window.downloadSales04Stock();
-    dialog=document.createElement('dialog');dialog.id='plan-dialog';dialog.innerHTML='<h2>บันทึกแผนโยกและยอดจองทั้งชุด</h2><p>ใช้สต๊อกเมลต้นฉบับแล้วโยกตามสองกติกา ยอดจองใหม่แทนแผนเดิม ไม่บวกซ้ำ หากมีค่าปรับมือของรายงานวันนี้ ระบบจะหยุดให้ตรวจสอบก่อน</p><textarea id="plan-json" aria-label="JSON แผนโยกและยอดจอง" spellcheck="false"></textarea><p id="plan-import-state"></p><button id="plan-apply" class="shared-btn">ตรวจสอบและบันทึกส่วนกลาง</button> <button id="plan-cancel" class="shared-btn shared-secondary">ปิด</button>';
+    dialog=document.createElement('dialog');dialog.id='plan-dialog';dialog.innerHTML='<h2>บันทึกแผนโยกและยอดจองทั้งชุด</h2><p>ใช้สต๊อกเมลต้นฉบับแล้วโยกตามกติกาที่เจ้าของยืนยัน ยอดจองใหม่แทนแผนเดิม ไม่บวกซ้ำ หากมีค่าปรับมือของรายงานวันนี้ ระบบจะหยุดให้ตรวจสอบก่อน</p><label>เลือกไฟล์ JSON แผนที่ตรวจแล้ว <input id="plan-file" type="file" accept=".json,application/json"></label><p>เลือกไฟล์เป็นการอ่านในหน้านี้เท่านั้น ยังไม่บันทึกจนกดตรวจสอบและบันทึกส่วนกลาง</p><textarea id="plan-json" aria-label="JSON แผนโยกและยอดจอง" spellcheck="false"></textarea><p id="plan-import-state" role="status" aria-live="polite"></p><button id="plan-apply" class="shared-btn">ตรวจสอบและบันทึกส่วนกลาง</button> <button id="plan-cancel" class="shared-btn shared-secondary">ปิด</button>';
     document.body.append(dialog);document.getElementById('plan-open').onclick=()=>{document.getElementById('plan-import-state').textContent='';dialog.showModal();};document.getElementById('plan-cancel').onclick=()=>dialog.close();document.getElementById('plan-filter').onchange=render;
+    const planFile=document.getElementById('plan-file'),planText=document.getElementById('plan-json'),planApply=document.getElementById('plan-apply');
+    let readingPlan=false;
+    planFile.onchange=async()=>{
+      const message=document.getElementById('plan-import-state'),file=planFile.files?.[0];
+      if(!file||readingPlan||planApply.disabled||!data?.permissions.adjust)return;
+      if(planText.value.trim()){message.textContent='มีร่าง JSON อยู่แล้ว กรุณาตรวจและล้างร่างก่อนเลือกไฟล์ใหม่';planFile.value='';return;}
+      readingPlan=true;planFile.disabled=true;planText.disabled=true;planApply.disabled=true;
+      try{
+        if(file.size>4*1024*1024)throw Error('ไฟล์ใหญ่เกิน 4 MB');
+        const text=await file.text(),parsed=JSON.parse(text);
+        if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Error('ไฟล์ต้องเป็น JSON แผนหนึ่งชุด');
+        if(!dialog.open)return;
+        if(!data?.permissions.adjust)throw Error('สิทธิ์เปลี่ยน กรุณาโหลดข้อมูลล่าสุด');
+        planText.value=text;message.textContent='อ่านไฟล์ '+file.name+' แล้ว · ยังไม่บันทึกส่วนกลาง';
+      }catch(e){message.textContent='อ่านไฟล์ไม่สำเร็จ: '+e.message;}
+      finally{readingPlan=false;planFile.disabled=false;planText.disabled=false;planApply.disabled=false;planFile.value='';}
+    };
     document.getElementById('plan-apply').onclick=async()=>{
-      const button=document.getElementById('plan-apply'),message=document.getElementById('plan-import-state');if(!data?.permissions.adjust)return;
+      const button=document.getElementById('plan-apply'),message=document.getElementById('plan-import-state');if(readingPlan||button.disabled||!dialog.open||!data?.permissions.adjust)return;
       let plan;try{plan=JSON.parse(document.getElementById('plan-json').value);if(plan.reportDate!==data.report.reportDate)throw Error('วันที่แผนไม่ตรงเมลล่าสุด');if(plan.rules!=='aaf-sellable-20260910-v2')throw Error('กติกาแผนไม่ถูกต้อง');}catch(e){message.textContent=e.message;return;}
       button.disabled=true;try{const ok=await save({action:'applySellablePlan',plan});message.textContent=ok?'บันทึกสำเร็จ ตรวจยอดในตารางด้านล่างได้':'ยังไม่บันทึก ดูสาเหตุในข้อความสถานะด้านบน';if(ok)dialog.close();}finally{button.disabled=false;}
     };

@@ -129,12 +129,23 @@
     if(!snapshotRequired)return true; // Compatibility with isolated legacy callers.
     const stock=stockSnapshot;
     if(!stock||stock.auth!==token()||data.revision!==stock.revision||data.stockReportDate!==stock.reportDate)return false;
-    if(salesMode)return true; // The salesReport endpoint validates its complete ledger.
     const preview=data.preview,sourceDay=preview?.source?.stockReportDate||(guardedReports.has(data)?data.stockReportDate:preview?.options?.receiptBreakdown?.asOf?.slice?.(0,10));
     if(sourceDay!==stock.reportDate||!Array.isArray(preview?.stockRows))return false;
     const totals=(rows,field)=>{const result=new Map();for(const row of rows){if(!validSpec(row)||!finiteQty(row[field]))return null;const key=exactKey(row);result.set(key,(result.get(key)||0)+row[field]);}return result;};
     const expected=totals(preview.stockRows,'physical'),actual=totals(stock.rows,'qty');
-    return !!expected&&!!actual&&[...new Set([...expected.keys(),...actual.keys()])].every(key=>Math.abs((expected.get(key)||0)-(actual.get(key)||0))<1e-7);
+    return !!expected&&!!actual&&expected.size===actual.size&&[...actual.keys()].every(key=>expected.has(key)&&Math.abs(expected.get(key)-actual.get(key))<1e-7);
+  }
+  // Current Physical can be reprojected from a previously verified sales ledger.
+  // That is not a new Page09 read: keep both evidence clocks visible everywhere.
+  function reportEvidence(data){
+    if(!guardedReports.has(data)||!validDay(data.stockReportDate)||!validDay(data.salesReportDate))return null;
+    const r=data.readModel,capturedAt=data.salesCapturedAt;
+    if(r&&(r.version!==1||r.kind!=='current-stock-saved-sales-ledger'||r.sourceIsLive!==false||r.stockReportDate!==data.stockReportDate||r.salesCapturedAt!==capturedAt||!validDay(r.sourceStockReportDate)||!validDay(r.planReportDate)||typeof r.needsSalesRefresh!=='boolean'||typeof capturedAt!=='string'||!Number.isFinite(Date.parse(capturedAt))||r.financialEvidence!==undefined&&!['matched-verified-source','unavailable-plan-only'].includes(r.financialEvidence)||r.financialEvidence==='unavailable-plan-only'&&(!Number.isSafeInteger(r.financialMissingLineCount)||r.financialMissingLineCount<0)))throw readError('report-pending');
+    return Object.freeze({version:1,kind:r?.kind||'verified-saved-sales-report',stockReportDate:data.stockReportDate,salesReportDate:data.salesReportDate,salesCapturedAt:typeof capturedAt==='string'&&Number.isFinite(Date.parse(capturedAt))?capturedAt:null,needsSalesRefresh:r?.needsSalesRefresh===true||data.salesReportDate!==data.stockReportDate,sourceIsLive:false,financialEvidence:r?.financialEvidence||'matched-verified-source',financialMissingLineCount:r?.financialMissingLineCount||0});
+  }
+  function evidenceText(e){
+    if(!e)return '';
+    return 'สต๊อก '+e.stockReportDate+' · '+(e.financialEvidence==='unavailable-plan-only'?'จำนวน/สถานะขายจากชุดที่บันทึก':'ข้อมูลขาย/รับเงินที่ตรวจไว้')+' '+e.salesReportDate+(e.salesCapturedAt?' · อ่านต้นทาง '+new Date(e.salesCapturedAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}):'')+' · จัดสรรกับสต๊อกปัจจุบัน'+(e.needsSalesRefresh?' · ยังไม่ได้อ่านยอดขายใหม่จากหน้า 09':' · ใช้หลักฐานยอดขายที่บันทึกไว้ ไม่ใช่ข้อมูลสด')+(e.financialEvidence==='unavailable-plan-only'?' · ยังไม่มีราคาขาย/ยอดรับเงินที่ตรงกับชุดนี้ '+e.financialMissingLineCount+' รายการ · ไม่ใช้เงินชุดเก่าหรือ 0 แทน':'');
   }
   function savedCatalogRows(stock,response){
     if(response?.revision!==stock.revision||response.stockReportDate!==stock.reportDate||!Number.isSafeInteger(response.catalogRevision))throw readError('snapshot-changed');
@@ -258,6 +269,7 @@
     if(salesMode&&data.permissions?.pricesAndNotes!==true)throw readError('permission-denied');
     if(salesMode&&stockRevision!==null&&data.revision!==stockRevision)throw new Error('ข้อมูลเปลี่ยนระหว่างโหลด · กรุณากดโหลดล่าสุดอีกครั้ง');
     if(!previewMatchesStock(data))throw readError('report-pending');
+    const evidence=reportEvidence(data),withEvidence=summary=>summary&&evidence?{...summary,evidence}:summary;
     mountedSnapshotStamp=stockSnapshot?.stamp??null;
     readOnly=false;accessError=null;blockedSaveError=null;reconciliationError=null;
     if(!p||!window.AafAllModel||!window.mountAllThickness)throw new Error('โหลดตัวแสดงพรีวิวไม่ครบ กรุณารีเฟรช');
@@ -307,14 +319,14 @@
     }};
     // Both grouping and financial arithmetic remain in the original model/view.
     const model=window.AafAllModel.buildModel(p.salesRows,p.stockRows,p.modelOptions);
-    const mountedView=window.mountAllThickness(root,model,{...p.options,automaticFx:true,fxReference:{...p.options?.fxReference,url:'https://www.bot.or.th/th/statistics/exchange-rate.html',sourceLabel:'ธปท. · อัตราซื้อเงินโอน USD รายวัน'},readOnly,priceNotesOnly:salesMode,store,persistenceLabel:salesMode?'ฝ่ายขาย · เซฟราคาและหมายเหตุร่วมกับเจ้าของ · ไม่แก้ยอดสต๊อก':'เก็บราคา สกุลเงิน และหมายเหตุในระบบ · ไม่เปลี่ยนยอดสต๊อกหรือใบขาย',onReportSummary:summary=>{if(current(version,currentHost,auth)&&view===mountedView)publishReportSummary(summary);},onPriceDraftChange:change=>{if(current(version,currentHost,auth)&&view===mountedView)publishPriceDraftChange(change);}});view=mountedView;viewGeneration=version;
+    const mountedView=window.mountAllThickness(root,model,{...p.options,financialEvidenceUnavailable:evidence?.financialEvidence==='unavailable-plan-only',automaticFx:true,fxReference:{...p.options?.fxReference,url:'https://www.bot.or.th/th/statistics/exchange-rate.html',sourceLabel:'ธปท. · อัตราซื้อเงินโอน USD รายวัน'},readOnly,priceNotesOnly:salesMode,store,persistenceLabel:salesMode?'ฝ่ายขาย · เซฟราคาและหมายเหตุร่วมกับเจ้าของ · ไม่แก้ยอดสต๊อก':'เก็บราคา สกุลเงิน และหมายเหตุในระบบ · ไม่เปลี่ยนยอดสต๊อกหรือใบขาย',onReportSummary:summary=>{if(current(version,currentHost,auth)&&view===mountedView)publishReportSummary(withEvidence(summary));},onPriceDraftChange:change=>{if(current(version,currentHost,auth)&&view===mountedView)publishPriceDraftChange(change);}});view=mountedView;viewGeneration=version;
     if(mountedView.ready&&(await mountedView.ready)===false){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}throw new Error('โหลดราคาที่เซฟไว้ไม่สำเร็จ · ยังไม่แสดงยอดสรุป');}
     if(!current(version,currentHost,auth)){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}return;}
-    if(mountedView.getReportSummary)publishReportSummary(mountedView.getReportSummary());
+    if(mountedView.getReportSummary)publishReportSummary(withEvidence(mountedView.getReportSummary()));
     if(stockSnapshot)try{publishSavedCatalog(savedCatalogRows(stockSnapshot,data));}catch{clearSavedStockCatalog();}
     startAutomaticFx(version,currentHost,auth);
     setReportLoadStatus('ready');
-    message(state,salesMode?'ฝ่ายขาย · แก้ราคาและหมายเหตุได้ · สต๊อก '+data.stockReportDate+' · ข้อมูลฝ่ายขาย '+data.salesReportDate:'');state.hidden=!salesMode;
+    message(state,evidence?evidenceText(evidence)+(salesMode?' · แก้ราคาและหมายเหตุได้':''):salesMode?'ฝ่ายขาย · แก้ราคาและหมายเหตุได้ · สต๊อก '+data.stockReportDate+' · ข้อมูลฝ่ายขาย '+data.salesReportDate:'');state.hidden=!evidence&&!salesMode;
   }
   function attach(slot){
     if(!slot)return;
@@ -338,7 +350,7 @@
   const saveBlockage=()=>!token()?saveError('auth-required'):view&&session!==token()?saveError('session-changed'):reconciliationError||accessError||readOnly&&saveError('read-only')||saveError('catalog-unavailable');
   const getSaveStatus=()=>{const active=sameSessionView(),state=active?.getPriceState?.(),cause=active&&reconciliationError||blockedSaveError||accessError,uncertain=uncertainCodes.has(cause?.code||state?.errorCode);return {error:cause?.message||state?.error||'',errorCode:cause?.code||state?.errorCode||'',blocked:!!cause||uncertain,uncertain};};
   window.AAFSalesPreview={
-    setAccess:access=>{const mode=window.AAFStockAccess?.isShared()===true||access.salesMode===true;const required=Object.hasOwn(access,'rows')||Object.hasOwn(access,'reportDate'),snapshot=required?centralSnapshot(access):null;if(mode!==salesMode||stockRevision!==(access.revision??null)||stockSnapshot?.stamp!==snapshot?.stamp){accessEpoch++;clearSavedStockCatalog();}snapshotRequired=required;stockSnapshot=snapshot;if(mode!==salesMode){salesMode=mode;readOnly=mode;publishReportSummary(null);}stockRevision=access.revision??null;},
+    setAccess:access=>{const price=view?.getPriceState?.(),refreshReport=access.refreshReport===true&&!price?.dirty&&!price?.saving;const mode=window.AAFStockAccess?.isShared()===true||access.salesMode===true;const required=Object.hasOwn(access,'rows')||Object.hasOwn(access,'reportDate'),snapshot=required?centralSnapshot(access):null;if(refreshReport||mode!==salesMode||stockRevision!==(access.revision??null)||stockSnapshot?.stamp!==snapshot?.stamp){accessEpoch++;clearSavedStockCatalog();}if(refreshReport){loadFailed=true;mountedSnapshotStamp=null;publishReportSummary(null);}snapshotRequired=required;stockSnapshot=snapshot;if(mode!==salesMode){salesMode=mode;readOnly=mode;publishReportSummary(null);}stockRevision=access.revision??null;},
     invalidate:text=>{accessEpoch++;readOnly=true;loadFailed=true;accessError=saveError(/เข้าสู่ระบบ/.test(String(text))?'auth-expired':'access-invalidated');setReportLoadStatus('unavailable',readError('auth-expired'));sameSessionView()?.setPersistenceError?.(accessError);denyAutomaticFx();publishReportSummary(null);if(statusNode){statusNode.hidden=false;message(statusNode,accessError.message,true);}},
     isReadOnly:()=>readOnly,
     attach,

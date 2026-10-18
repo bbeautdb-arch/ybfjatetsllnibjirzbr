@@ -36,7 +36,7 @@
       if(!window.AAFStockSummary)throw new Error('โหลดส่วนแสดงรายงานไม่สำเร็จ กรุณารีเฟรชหน้านี้');
       // The API remains the authorization authority; the client role is never a grant.
       if(force||revision===null||String(data.revision)!==revision){
-        window.AAFSalesPreview?.setAccess?.({salesMode:data.actor?.owner!==true,revision:data.revision,reportDate:data.report?.reportDate,rows:data.rows});
+        window.AAFSalesPreview?.setAccess?.({refreshReport:force,salesMode:data.actor?.owner!==true,revision:data.revision,reportDate:data.report?.reportDate,rows:data.rows});
         window.AAFStockSummary.update(data,r=>values(r,data));revision=String(data.revision);
       }
       signin.hidden=true;authRequired=false;

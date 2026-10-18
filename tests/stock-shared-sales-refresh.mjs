@@ -7,7 +7,7 @@ const source=fs.readFileSync(new URL('../stock_shared.js',import.meta.url),'utf8
 const helpers=source.slice(source.indexOf('  function denySharedAccess('),source.indexOf('  async function request('));
 const request=source.slice(source.indexOf('  async function request('),source.indexOf('  function header('));
 const poll=source.slice(source.indexOf('      setInterval(async()=>'),source.indexOf('\n    }catch(e){banner(e.message,true);if(e.status===401'));
-const acceptPrefix=source.slice(source.indexOf('  function accept(data){'),source.indexOf("\n    $('stock-summary').hidden=false;window.AAFStockLinks"))+'\n}';
+const acceptPrefix=source.slice(source.indexOf('  function accept(data,refreshReport=false){'),source.indexOf("\n    $('stock-summary').hidden=false;window.AAFStockLinks"))+'\n}';
 const deferred=()=>{let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};};
 const ok=revision=>({ok:true,status:200,json:async()=>({ok:true,revision,rows:[],actor:{owner:false},exchangeRate:33})});
 function runtime(overrides={}){
@@ -28,7 +28,8 @@ test('sales toolbar is outside hidden workbench and both account and capability 
   assert.match(source,/\$\('stock-sales-reload'\).onclick=refresh/);
   assert.match(source,/id="stock-sales-state" role="status"/);
   assert.match(source,/โหลดจากส่วนกลางล่าสุด/);
-  assert.match(source,/setAccess\?\.\(controllerEvidence\(data\)\)/);
+  assert.match(source,/setAccess\?\.\(\{\.\.\.controllerEvidence\(data\),refreshReport\}\)/);
+  assert.match(source,/drafts\.clear\(\);dirty=false;accept\(fresh,true\)/,'manual refresh opts into current same-revision report reload only after existing draft guards');
 });
 test('controller evidence is a detached whitelist of current rows, exact dimensions, quantities and annotations',()=>{
   const {c}=runtime();const data={revision:58,report:{reportDate:'2026-10-18',private:'hidden'},actor:{owner:true},rows:[{

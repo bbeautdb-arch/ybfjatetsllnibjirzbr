@@ -71,3 +71,14 @@ assert(!modal.open,'success closes the review');assert(open.disabled,'enabled ru
 assert.equal(JSON.stringify(owner),immutableOwner,'confirmation cannot alter source data');
 console.log('Morning UI/export checks passed: current saved Physical, no reservation double-deduction, separate units, codes/prices/generation gates, preserved data and owner-only controls.');
 console.log('HTML confirmation checks passed: explicit review/cancel, owner and stale-source guards, one in-flight submit, rejected save retained, no native dialog or stock writes.');
+// A selected JSON file is local preparation only, never an implicit central save.
+controller.update(owner,saveStub);nodes.get('plan-open').onclick();
+const planFile=nodes.get('plan-file'),planText=nodes.get('plan-json'),planMessage=nodes.get('plan-import-state'),planApply=nodes.get('plan-apply');
+const savesBeforeFile=saves.length,planJson=JSON.stringify({reportDate:owner.report.reportDate,rules:'aaf-sellable-20260910-v2',orders:[]});
+planFile.files=[{name:'verified.json',size:planJson.length,text:async()=>planJson}];
+await planFile.onchange();assert.equal(planText.value,planJson);assert.equal(saves.length,savesBeforeFile);assert(planMessage.textContent.includes('ยังไม่บันทึกส่วนกลาง'));
+planFile.files=[{name:'replacement.json',size:2,text:async()=>'{}'}];await planFile.onchange();assert.equal(planText.value,planJson);assert(planMessage.textContent.includes('มีร่าง JSON'));
+planText.value='';planFile.files=[{name:'bad.json',size:4,text:async()=>'{bad'}];await planFile.onchange();assert.equal(planText.value,'');assert(planMessage.textContent.includes('ไม่สำเร็จ'));
+planFile.files=[{name:'large.json',size:4*1024*1024+1,text:async()=>{throw Error('must not read oversized file');}}];await planFile.onchange();assert(planMessage.textContent.includes('4 MB'));assert(!planApply.disabled);assert.equal(saves.length,savesBeforeFile);
+let finishRead;planFile.files=[{name:'slow.json',size:2,text:()=>new Promise(resolve=>{finishRead=resolve;})}];const fileReading=planFile.onchange();assert(planApply.disabled);await planApply.onclick();assert.equal(saves.length,savesBeforeFile);nodes.get('plan-cancel').onclick();finishRead('{}');await fileReading;assert.equal(planText.value,'');assert(!planApply.disabled);
+console.log('JSON plan file checks passed: local-only read, explicit save, preserved existing draft, malformed/oversized rejection, close/read race and no implicit writes.');
