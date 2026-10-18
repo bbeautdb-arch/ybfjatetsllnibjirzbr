@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url),{model:api}=require('../stock_sales_preview.js');
+const source={id:'line1',orderId:'order1',ref:'PI',customer:'test',w:1220,l:2440,t:2.5,grade:'AAA',qty:10,unit:'sheet',amount:null,currency:'USD',sourceStatus:'ออก INV',productStatus:'โหลดแล้ว',payment:'รอเก็บ TT / LC',term:'LC',actualSale:{version:1,verified:true,amountBasis:'line',amount:35,currency:'USD',unitPrice:3.5}};
+const make=(changes={})=>api.buildModel([{...source,...changes}],[],{strict:true});
+test('actual Page02 product sale value does not mutate receipt/finance amount',()=>{const m=make(),r=m.salesRows[0];assert.equal(api.actualSaleAmount(r,m.salesRows),35);assert.equal(r.amount,null);assert.equal(r.grossAmount,null);assert.equal(r.status,'loaded');});
+test('unverified, inconsistent or currency-mismatched price is rejected',()=>{for(const change of [{verified:false},{amount:36},{currency:'THB'},{unitPrice:-1}]){const m=make({actualSale:{...source.actualSale,...change}});assert.equal(api.actualSaleAmount(m.salesRows[0],m.salesRows),null);}});
+const settlement={version:1,verified:true,asOf:'2026-10-19',orders:[{orderKey:'order1',sourceRowIds:['line1'],currency:'USD',saleAmount:35,receivedAmount:10,pendingAmount:25,unconfirmedAmount:0}]};
+test('settlement uses one order once and actual sale native currencies',()=>{const m=make(),s=api.summarizeSoldSettlement(m,settlement,33);assert.equal(s.knownReceivedTHB,330);assert.equal(s.knownOutstandingTHB,825);assert.equal(s.complete,true);assert.equal(s.byCurrency.USD.sales,35);});
+test('unknown receipt never becomes outstanding by subtraction',()=>{const s=api.summarizeSoldSettlement(make(),{...settlement,orders:[{...settlement.orders[0],receivedAmount:null,pendingAmount:null,unconfirmedAmount:35}]},33);assert.equal(s.complete,false);assert.equal(s.unallocatedTHB,1155);assert.equal(s.coverage.receivedOrderCount,0);assert.equal(s.coverage.outstandingOrderCount,0);});
+test('duplicate, stale, mismatching, missing and unverified settlement fail closed',()=>{for(const e of [{...settlement,verified:false},{...settlement,orders:[]},{...settlement,orders:[...settlement.orders,...settlement.orders]},{...settlement,orders:[{...settlement.orders[0],saleAmount:36}]},{...settlement,orders:[{...settlement.orders[0],orderKey:'wrong'}]}])assert.equal(api.summarizeSoldSettlement(make(),e,33),null);});
+test('missing FX retains native amounts without fabricating THB',()=>{const s=api.summarizeSoldSettlement(make(),settlement,null);assert.equal(s.knownReceivedTHB,null);assert.equal(s.byCurrency.USD.received,10);assert.equal(s.complete,false);});

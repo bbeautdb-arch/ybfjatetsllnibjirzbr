@@ -609,6 +609,14 @@ function normalizeSalesRows(salesRows, options, invalidRows) {
       amount: effectiveAmount,
       rawAmount,
       grossAmount: rawAmount,
+      // A separately authenticated Page02 product-line price must never become
+      // the finance/payment amount. Keep those source fields unchanged.
+      actualSale: source.actualSale?.version === 1 && source.actualSale?.verified === true
+        && source.actualSale.amountBasis === 'line' && source.actualSale.currency === currency
+        && Number.isFinite(source.actualSale.amount) && source.actualSale.amount >= 0
+        && Number.isFinite(source.actualSale.unitPrice) && source.actualSale.unitPrice >= 0
+        && Math.abs(Math.round(source.actualSale.unitPrice * qty * 100) / 100 - source.actualSale.amount) <= 0.005
+        ? {...source.actualSale} : null,
       unresolvedAmount: null,
       currency,
       amountBasis: isDeposit && netReceivableAmount !== null
@@ -881,6 +889,7 @@ function buildModel(salesRows = [], stockRows = [], opts = {}) {
 // balance used by receipt tracking. Never split a repeated invoice total by
 // quantity or reuse it for multiple source lines without line-level evidence.
 function actualSaleAmount(row, allRows) {
+  if (row?.actualSale?.verified === true) return row.actualSale.amount;
   if (!row || !Number.isFinite(row.grossAmount) || row.grossAmount < 0) return null;
   if (row.amountReasons?.includes('mixed-invoice-across-specs')) return null;
   const invoiceRows = allRows.filter(candidate => candidate.invoiceKey === row.invoiceKey);
@@ -888,9 +897,50 @@ function actualSaleAmount(row, allRows) {
   return row.grossAmount;
 }
 
+// Order-scoped settlement evidence is independent of loading, reservations and
+// inventory prices. Never repeat an invoice receipt once per product line.
+function summarizeSoldSettlement(model, evidence, fx) {
+  if (evidence?.version !== 1 || evidence.verified !== true || !Array.isArray(evidence.orders)) return null;
+  const rows = model.salesRows.filter(r => ['loaded','paid'].includes(r.status));
+  const byId = new Map(rows.map(r => [r.id,r])), used = new Set(), seenOrders = new Set();
+  const byCurrency = {}, coverage = {totalOrderCount:0,receivedOrderCount:0,outstandingOrderCount:0,unallocatedOrderCount:0};
+  const isMoney = v => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+  const close = (a,b) => Math.abs(a-b) <= .005;
+  try {
+    for (const order of evidence.orders) {
+      if (!order || seenOrders.has(order.orderKey) || !Array.isArray(order.sourceRowIds) || !order.sourceRowIds.length || !['THB','USD'].includes(order.currency)) return null;
+      seenOrders.add(order.orderKey);
+      let sale = 0;
+      for (const id of order.sourceRowIds) {
+        const row = byId.get(id), amount = actualSaleAmount(row,model.salesRows);
+        if (!row || used.has(id) || row.orderKey !== order.orderKey || row.currency !== order.currency || amount === null) return null;
+        used.add(id);sale += amount;
+      }
+      if (!isMoney(order.saleAmount) || !close(sale,order.saleAmount) || !isMoney(order.unconfirmedAmount)
+        || ![order.receivedAmount,order.pendingAmount].every(v => v === null || isMoney(v))
+        || !close(sale,(order.receivedAmount ?? 0)+(order.pendingAmount ?? 0)+order.unconfirmedAmount)) return null;
+      const b = byCurrency[order.currency] ||= {sales:0,received:0,outstanding:0,unallocated:0,coverage:{receivedOrderCount:0,outstandingOrderCount:0,unallocatedOrderCount:0}};
+      b.sales += sale;b.received += order.receivedAmount ?? 0;b.outstanding += order.pendingAmount ?? 0;b.unallocated += order.unconfirmedAmount;
+      for (const [kind,value] of [['received',order.receivedAmount],['outstanding',order.pendingAmount],['unallocated',order.unconfirmedAmount]]) {
+        if (value !== null && (kind !== 'unallocated' || value > 0)) {coverage[kind+'OrderCount']++;b.coverage[kind+'OrderCount']++;}
+      }
+      coverage.totalOrderCount++;
+    }
+    if (used.size !== rows.length) return null;
+    const validFx = isMoney(fx) && fx > 0;
+    const equivalent = field => Object.entries(byCurrency).reduce((sum,[code,b]) => code === 'USD' && !validFx ? NaN : sum+b[field]*(code === 'USD' ? fx : 1),0);
+    const asMoney = value => Number.isFinite(value) ? value : null;
+    const knownReceivedTHB = asMoney(equivalent('received')), knownOutstandingTHB = asMoney(equivalent('outstanding')), unallocatedTHB = asMoney(equivalent('unallocated'));
+    return {version:1,asOf:evidence.asOf,basis:evidence.basis,valueBasis:evidence.valueBasis,byCurrency,knownReceivedTHB,knownOutstandingTHB,unallocatedTHB,coverage,
+      complete:unallocatedTHB === 0 && evidence.orders.every(o => o.receivedAmount !== null && o.pendingAmount !== null),
+      orders:evidence.orders};
+  } catch {return null;}
+}
+
 module.exports = {
   buildModel,
   actualSaleAmount,
+  summarizeSoldSettlement,
   exactSpecKey,
   allocationPoolKey,
   canonicalNumber,
@@ -1339,7 +1389,7 @@ module.exports = {
     function getReportSummary() {
       const loadedRows = model.salesRows.filter(row => row.status === 'loaded');
       const paidUnloadedRows = model.salesRows.filter(row => row.status === 'paid');
-      return {version:2,catalog:{hasSavedCatalog:hasSavedState,fxThbPerUsd:effectiveFx(true),savedAt:committed.savedAt || null,...(automaticFx?{automaticFx:true,fxStatus:fxStatusText(),fxDate:autoFx?.date||null}:{})},partition:inventoryPartition(),physical:inventoryReport('physical'),reserved:inventoryReport('reserved'),free:inventoryReport('free'),sold:{...soldReport([...loadedRows,...paidUnloadedRows]),loaded:soldReport(loadedRows),paidUnloaded:soldReport(paidUnloadedRows)}};
+      return {version:2,catalog:{hasSavedCatalog:hasSavedState,fxThbPerUsd:effectiveFx(true),savedAt:committed.savedAt || null,...(automaticFx?{automaticFx:true,fxStatus:fxStatusText(),fxDate:autoFx?.date||null}:{})},partition:inventoryPartition(),physical:inventoryReport('physical'),reserved:inventoryReport('reserved'),free:inventoryReport('free'),sold:{...soldReport([...loadedRows,...paidUnloadedRows]),settlement:financialEvidenceUnavailable?null:host.AafAllModel.summarizeSoldSettlement(model,options.soldSettlement,effectiveFx(true)),loaded:soldReport(loadedRows),paidUnloaded:soldReport(paidUnloadedRows)}};
     }
     function notifyReportSummary(reason) {
       if (destroyed) return;

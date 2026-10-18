@@ -242,12 +242,68 @@
   }
   // Commercial money comes only from actual sale rows, never the stock catalog.
   // The pending bucket is not total sales minus an estimated stock valuation.
+  const validSaleMoney=v=>typeof v==='number'&&Number.isFinite(v)&&v>=0;
+  const nearSaleMoney=(a,b)=>validSaleMoney(a)&&validSaleMoney(b)&&Math.abs(a-b)<=Math.max(.005,Math.max(a,b)*1e-10);
+  function soldSettlementState(sold){
+    const s=sold?.settlement,byCurrency=s?.byCurrency||{},sales=sold?.byCurrency||{};
+    const codes=['THB','USD'].filter(code=>Object.hasOwn(sales,code)||Object.hasOwn(byCurrency,code));
+    const currencies=codes.map(code=>{
+      const b=byCurrency[code],valid=b&&['sales','received','outstanding','unallocated'].every(k=>validSaleMoney(b[k]));
+      const matchesSales=!!(valid&&nearSaleMoney(b.sales,sales[code]));
+      return {code,b,matchesSales,reconciled:!!(matchesSales&&nearSaleMoney(b.sales,b.received+b.outstanding+b.unallocated))};
+    });
+    const unsupported=[...Object.keys(sales),...Object.keys(byCurrency)].some(code=>!['THB','USD'].includes(code));
+    const reconciled=!!(s&&currencies.length&&!unsupported&&currencies.every(c=>c.reconciled));
+    const totalsValid=s&&['knownReceivedTHB','knownOutstandingTHB','unallocatedTHB'].every(k=>validSaleMoney(s[k]));
+    const equivalentReconciled=!!(totalsValid&&nearSaleMoney(sold?.valueTHB,s.knownReceivedTHB+s.knownOutstandingTHB+s.unallocatedTHB));
+    const complete=!!(s?.complete===true&&sold?.coverage?.complete===true&&reconciled&&equivalentReconciled&&currencies.every(c=>c.b.unallocated===0)&&s.unallocatedTHB===0);
+    return {s,currencies,reconciled,complete};
+  }
+  function soldSettlementHTML(sold){
+    const state=soldSettlementState(sold),{s,complete}=state;
+    const hasCount=(c,kind)=>[kind+'OrderCount',kind+'RowCount'].some(k=>typeof c?.[k]==='number'&&Number.isFinite(c[k])&&c[k]>0);
+    // Partial zero is not evidence of no receipts. It needs explicit coverage;
+    // never infer cash received from a paid/loaded status or a remaining balance.
+    const known=(value,kind,c)=>validSaleMoney(value)&&(value>0||complete||hasCount(c,kind));
+    const native=(field,kind)=>state.currencies.filter(({b})=>known(b?.[field],kind,b?.coverage)).map(({code,b})=>`${code} ${number(b[field])}`).join(' · ');
+    const amount=(field,kind)=>known(s?.[field],kind,s?.coverage)?'฿ '+number(s[field])+(complete?'':' · ยอดที่ยืนยันได้บางส่วน'):'ยังยืนยันไม่ได้';
+    const row=(field,kind,title)=>{const source=native(kind,kind);return `<div class="ss-settlement-${kind}"><span>${title}</span><b>${amount(field,kind)}</b>${source?`<small>ต้นทาง ${source}${complete?'':' · เฉพาะยอดที่ยืนยันได้'}</small>`:''}</div>`;};
+    const unallocatedNative=native('unallocated','unallocated'),unallocated=validSaleMoney(s?.unallocatedTHB)&&s.unallocatedTHB>0?'฿ '+number(s.unallocatedTHB):'ยังระบุยอดไม่ได้';
+    const hasUnallocated=state.currencies.some(({b})=>validSaleMoney(b?.unallocated)&&b.unallocated>0);
+    const unknown=!complete&&(!state.reconciled||hasUnallocated)?`<div class="ss-settlement-unallocated"><span>ยอดขายที่ยังแยกรับแล้ว / รอรับไม่ได้</span><b>${unallocated}</b>${unallocatedNative?`<small>ต้นทาง ${unallocatedNative}</small>`:''}<small>ยังไม่ใช่ยอดค้างรับที่ยืนยันแล้ว · ไม่ถือว่ารับครบหรือใช้ 0 แทน</small></div>`:'';
+    const warning=!s?'ยังไม่มีหลักฐานรับเงินที่ตรงกับชุดยอดขายนี้':!state.reconciled?'หลักฐานมูลค่ายังตรวจยอดรวมไม่ครบหรือไม่ตรงกัน · ยังไม่ยืนยันยอดรับเงินครบ':!complete?'หลักฐานรับเงินยังไม่ครบทุกออเดอร์ · แสดงเฉพาะส่วนที่ยืนยันได้':'';
+    const equation=state.reconciled?`<small class="ss-settlement-equation">${complete?'มูลค่าการขาย = รับเงินแล้ว + เหลือรอรับเงิน':'เฉพาะมูลค่าที่มีหลักฐาน: รับแล้ว + รอรับ + ยังไม่ยืนยันการรับเงิน = มูลค่าการขาย'}</small>`:'';
+    const reasons={
+      'domestic-vat-basis-unconfirmed':'ยอดในประเทศยังไม่ยืนยันฐาน VAT',
+      'ambiguous-current-cash-details':'รายละเอียดรับเงินปัจจุบันยังไม่ชัดเจน',
+      'current-cash-details-missing':'ยังไม่มีรายละเอียดรับเงินปัจจุบัน',
+      'goods-only-excludes-document-adjustments':'มูลค่าสินค้าไม่รวมค่าธรรมเนียมหรือรายการปรับในเอกสาร',
+      'master-contract-cash-allocation-unconfirmed':'ยังยืนยันการแบ่งยอดรับเงินจากสัญญา / Invoice หลักมาออเดอร์นี้ไม่ได้',
+      'lc-obtained-is-not-cash-settlement':'การได้ LC ยังไม่ใช่หลักฐานรับเงินสด',
+      'received-date-in-future':'วันรับเงินอยู่ในอนาคต ต้องตรวจหลักฐาน',
+      'receipt-date-disagrees-between-current-sources':'วันที่รับเงินจากต้นทางปัจจุบันไม่ตรงกัน',
+      'deposit-allocation-or-invoice-basis-unconfirmed':'ยังไม่ยืนยันการจัดสรรมัดจำหรือฐานยอด Invoice',
+      'deposit-history-unconfirmed':'ประวัติมัดจำยังไม่ยืนยัน',
+      'received-date-unconfirmed-not-invented':'ยังไม่ยืนยันวันรับเงิน จึงไม่ใส่วันที่เอง',
+      'old-source-receipt-year-retained':'คงปีรับเงินตามต้นทางเดิมไว้ รอตรวจยืนยัน',
+      'source-payment-note-review':'ต้องตรวจหมายเหตุการรับเงินต้นทาง',
+      'remaining-cash-receivable-unconfirmed':'ยังไม่ยืนยันยอดเงินที่เหลือรอรับ',
+      'receipt-or-net-outstanding-amount-unconfirmed':'ยังไม่ยืนยันยอดรับแล้วหรือยอดคงค้างสุทธิ'
+    };
+    const unconfirmedOrders=(Array.isArray(s?.orders)?s.orders:[]).filter(o=>o&&typeof o==='object'&&validSaleMoney(o.unconfirmedAmount)&&o.unconfirmedAmount>0);
+    const details=unconfirmedOrders.length?`<details class="ss-settlement-details" data-stock-gap-group="sold-settlement-unknown"><summary>ดูรายการรับเงินที่ยังไม่ยืนยัน · ${number(unconfirmedOrders.length)} ออเดอร์</summary>${unconfirmedOrders.map(o=>{
+      const explanation=[...new Set((Array.isArray(o.reasons)?o.reasons:[]).map(reason=>Object.hasOwn(reasons,reason)?reasons[reason]:'รอตรวจหลักฐานการรับเงินของออเดอร์นี้'))];
+      const value=validSaleMoney(o.unconfirmedAmount)&&o.unconfirmedAmount>0&&['THB','USD'].includes(o.currency)?o.currency+' '+number(o.unconfirmedAmount):'ยังระบุยอดไม่ได้';
+      return `<div><b>${esc(o.ref||o.orderKey||'ไม่ระบุเลขใบขาย')}</b>${o.customer?`<span>${esc(o.customer)}</span>`:''}<span>ส่วนที่ยังไม่ยืนยัน: ${value}</span><small>${esc(explanation.length?explanation.join(' · '):'รอตรวจหลักฐานการรับเงินของออเดอร์นี้')}</small></div>`;
+    }).join('')}</details>`:'';
+    const basis=s?.valueBasis==='product-line-sale-value'?'รับแล้ว / รอรับตามบันทึก Sales เฉพาะส่วนมูลค่าสินค้า · ไม่ใช่การยืนยันยอดเงินเข้าบัญชีธนาคาร':'รับแล้ว / รอรับอิงหลักฐานจาก Sales · ไม่ใช่การยืนยันยอดเงินเข้าบัญชีธนาคาร';
+    return `<div class="ss-sales-settlement" aria-label="การรับเงินของยอดขาย"><small>แยกตามหลักฐานการรับเงิน · ไม่อิงสถานะโหลด</small>${row('knownReceivedTHB','received','รับเงินแล้ว')}${row('knownOutstandingTHB','outstanding','เหลือรอรับเงิน')}${unknown}${equation}${warning?`<small class="ss-sales-value-warning" role="status">${warning}</small>`:''}${details}<small class="ss-settlement-basis">${basis}</small></div>`;
+  }
   function soldSalesValuesHTML(summary){
     const breakdown=soldLoadingBreakdown(summary),pending=summary?.sold?.paidUnloaded;
     const validPending=breakdown.remaining&&pending?.byUnit&&['sheet','strip'].every(unit=>typeof pending.byUnit[unit]==='number'&&Number.isFinite(pending.byUnit[unit])&&Math.abs(pending.byUnit[unit]-breakdown.remaining[unit])<0.000001);
     const money=b=>{
-      const valid=v=>typeof v==='number'&&Number.isFinite(v)&&v>=0;
-      const value=valid(b?.valueTHB)?b.valueTHB:b?.coverage?.knownRowCount>0&&valid(b?.knownValueTHB)?b.knownValueTHB:null;
+      const value=validSaleMoney(b?.valueTHB)?b.valueTHB:b?.coverage?.knownRowCount>0&&validSaleMoney(b?.knownValueTHB)?b.knownValueTHB:null;
       return value===null?'ยังระบุมูลค่าไม่ได้':'฿ '+number(value)+(b?.coverage?.complete?'':' · ยอดที่ยืนยันได้บางส่วน');
     };
     const coverage=b=>{
@@ -259,7 +315,10 @@
       const sourceCurrencies=c.missingFxRowCount>0?Object.entries(b.byCurrency||{}).filter(([code,value])=>code!=='THB'&&typeof value==='number'&&Number.isFinite(value)&&value>=0).map(([code,value])=>esc(code)+' '+number(value)).join(' · '):'';
       return issues.length?`<small class="ss-sales-value-warning">${issues.join(' · ')} · ไม่ตีเป็นศูนย์</small>${sourceCurrencies?`<small>ยอดต้นทางที่ยังแปลงไม่ครบ: ${sourceCurrencies}</small>`:''}`:'<small>มูลค่าตามราคาขายจริงครบกลุ่มนี้</small>';
     };
-    return `<div class="ss-sold-sales-values" aria-label="มูลค่าการขายจากราคาขายจริง"><div class="ss-sales-total-value"><span>มูลค่าการขาย</span><b>${money(summary?.sold)}</b>${coverage(summary?.sold)}</div><div class="ss-sales-pending-value"><span>มูลค่ารอโหลด · ${quantityText(breakdown.remaining)}</span><b>${money(validPending?pending:null)}</b>${validPending?coverage(pending):'<small class="ss-sales-value-warning">รอตรวจยอดขายรอโหลดให้ตรงกับยอดขายทั้งหมด − โหลดออกแล้ว</small>'}<small>ส่วนหนึ่งของยอดขายรวม · รวมมีของและต้องผลิตเพิ่ม</small></div><small class="ss-sales-value-basis">ราคาขายจริงรายออเดอร์ · ไม่ใช่มูลค่าสต๊อกหรือยอดเงินรับจริง</small></div>`;
+    const native=['THB','USD'].filter(code=>validSaleMoney(summary?.sold?.byCurrency?.[code])).map(code=>`<span>${code} ${number(summary.sold.byCurrency[code])}</span>`).join('');
+    const fx=validSaleMoney(summary?.sold?.byCurrency?.USD)&&summary.sold.byCurrency.USD>0?'<small class="ss-sales-fx-basis">ยอดรวมบาทรวม USD ที่แปลงด้วยเรทอ้างอิง · เป็นยอดเทียบ ไม่ใช่ยอดเงินบาทที่ธนาคารรับจริง</small>':'';
+    const goodsBasis=summary?.sold?.settlement?.valueBasis==='product-line-sale-value'?'<small class="ss-sales-goods-basis">ฐานมูลค่าสินค้า: ราคาขายจริง × จำนวน ก่อนค่าธรรมเนียม / ค่าใช้จ่ายที่ไม่ใช่สินค้าและใบลดหนี้ · ยอดในประเทศยังไม่ยืนยันฐาน VAT</small>':'';
+    return `<div class="ss-sold-sales-values" aria-label="มูลค่าการขายจากราคาขายจริง"><div class="ss-sales-total-value"><span>มูลค่าการขาย</span><b>${money(summary?.sold)}</b>${native?`<div class="ss-sales-native" aria-label="มูลค่าการขายแยกสกุลเงินต้นทาง">${native}</div>`:''}${coverage(summary?.sold)}${fx}</div>${soldSettlementHTML(summary?.sold)}<details class="ss-sales-pending-value" data-stock-gap-group="sold-waiting-value"><summary>มูลค่ารอโหลด · ${quantityText(breakdown.remaining)}</summary><b>${money(validPending?pending:null)}</b>${validPending?coverage(pending):'<small class="ss-sales-value-warning">รอตรวจยอดขายรอโหลดให้ตรงกับยอดขายทั้งหมด − โหลดออกแล้ว</small>'}<small>ส่วนหนึ่งของยอดขายรวม · รวมมีของและต้องผลิตเพิ่ม · ไม่ใช่ยอดเงินรอรับ</small></details>${goodsBasis}<small class="ss-sales-value-basis">ราคาขายจริงรายออเดอร์ · ไม่ใช่มูลค่าสต๊อกหรือยอดเงินรับจริง</small></div>`;
   }
   function partitionKpiHTML(summary,m){
     const p=summary.partition,verified=p?.status==='verified',firmOnly=p?.reservationPolicy==='aaf-firm-only-20261003-v1';
@@ -269,7 +328,7 @@
       const details=specs.length?`<details class="ss-production-details"><summary>ดูรายการต้องผลิต · ${specs.length} สเปก</summary><table><thead><tr><th>หนา (มม.)</th><th>เกรด</th><th>ขนาด (มม.)</th><th>จำนวน</th></tr></thead><tbody>${specs.map(r=>`<tr><td>${esc(thicknessLabel(r.t))}</td><td>${esc(r.grade)}</td><td>${number(r.w)} × ${number(r.l)}</td><td>${number(r.qty)} ${r.unit==='strip'?'ชิ้น':'แผ่น'}</td></tr>`).join('')}</tbody><tfoot><tr><th colspan="3">รวมต้องผลิต</th><td>${quantityText(b.byUnit)}</td></tr></tfoot></table></details>`:'';
       return `<div class="ss-outside-stock"><span>ต้องผลิตเพิ่ม · นอกสต๊อกจริง</span><b>${quantityText(b?.byUnit)}</b>${stockValuation?`<div>${reportMoney(b)}</div>`:''}${details}${stockValuation?priceCoverage(b,group):''}</div>`;
     };
-    const definitions=[['physical','สต๊อกจริง · Physical','ทั้งหมดในโรงงาน',summary.physical],['sold','ขายแล้วทั้งหมด','รับเงินแล้ว / โหลดแล้ว · นับครั้งเดียว',summary.sold],['reserved','ยอดจองอื่น · มีของรองรับ',firmOnly?'PI / มีเรือ · ไม่รวมขายแล้ว':'PI / มีเรือ / เจรจา / Forecast · ไม่รวมขายแล้ว',verified?p.reserved.inStock:null],['free','พร้อมขาย · Free','มีในสต๊อก · ยังไม่ถูกจัดสรร',summary.free]];
+    const definitions=[['physical','สต๊อกจริง · Physical','ทั้งหมดในโรงงาน',summary.physical],['sold','ขายแล้วทั้งหมด','ขายแล้วตามชุดใบขาย · ไม่ขึ้นกับการรับเงิน',summary.sold],['reserved','ยอดจองอื่น · มีของรองรับ',firmOnly?'PI / มีเรือ · ไม่รวมขายแล้ว':'PI / มีเรือ / เจรจา / Forecast · ไม่รวมขายแล้ว',verified?p.reserved.inStock:null],['free','พร้อมขาย · Free','มีในสต๊อก · ยังไม่ถูกจัดสรร',summary.free]];
     const cards=definitions.map(([id,label,note,b])=>{
       const units=(id==='sold'?summary.sold:b)?.byUnit;
       let detail='';
@@ -459,8 +518,19 @@
     [data-aaf-stock-summary] .ss-sold-sales-values{display:grid;gap:10px;margin-top:14px;font-size:12px;line-height:1.5}
     [data-aaf-stock-summary] .ss-sold-sales-values>div{display:grid;gap:3px;border-top:1px solid #bdd2ef;padding-top:8px}
     [data-aaf-stock-summary] .ss-sold-sales-values b{font-size:19px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+    [data-aaf-stock-summary] .ss-sales-total-value>b{font-size:23px;color:#163d73}
+    [data-aaf-stock-summary] .ss-sales-native{display:flex;flex-wrap:wrap;gap:3px 12px;font-weight:600}
+    [data-aaf-stock-summary] .ss-sold-sales-values .ss-sales-settlement{gap:8px;margin-left:7px;padding-left:10px;border-top:0;border-left:3px solid #bdd2ef}
+    [data-aaf-stock-summary] .ss-sales-settlement>div{display:grid;gap:2px}
+    [data-aaf-stock-summary] .ss-sales-settlement b{font-size:16px}
+    [data-aaf-stock-summary] .ss-sales-settlement .ss-settlement-unallocated{padding:7px;border-radius:6px;background:#fff7e6;color:#785018}
+    [data-aaf-stock-summary] .ss-settlement-details{font-size:11px;border-top:1px solid #bdd2ef;padding-top:7px}
+    [data-aaf-stock-summary] .ss-settlement-details>div{display:grid;gap:3px;margin-top:7px;padding:7px;background:#fff;border-radius:6px;overflow-wrap:anywhere}
+    [data-aaf-stock-summary] .ss-settlement-details>div>b{font-size:12px}
+    [data-aaf-stock-summary] .ss-settlement-equation{color:#176b53}
     [data-aaf-stock-summary] .ss-sold-sales-values .ss-sales-pending-value{border:1px solid #aac7e8;border-radius:8px;padding:8px;background:#fff}
-    [data-aaf-stock-summary] .ss-sold-sales-values .ss-sales-pending-value b{font-size:17px}
+    [data-aaf-stock-summary] .ss-sold-sales-values .ss-sales-pending-value b{display:block;margin-top:6px;font-size:15px}
+    [data-aaf-stock-summary] .ss-sales-pending-value small{display:block}
     [data-aaf-stock-summary] .ss-sold-sales-values .ss-sales-value-warning{color:#9e3b33}
     [data-aaf-stock-summary] .ss-sales-value-basis{display:block;line-height:1.5}
     [data-aaf-stock-summary] .ss-price-gaps{width:100%;font-size:11px;color:#9e3b33}
@@ -628,6 +698,7 @@
   // Pure read-only builders exposed for regression tests and isolated previews.
   window.AAFStockSummary.buildModel=model;window.AAFStockSummary.renderHTML=html;window.AAFStockSummary.renderKpis=kpiHTML;
   window.AAFStockSummary.soldLoadingBreakdown=soldLoadingBreakdown;
+  window.AAFStockSummary.soldSettlementState=soldSettlementState;
   window.AAFStockSummary.exchangeRateDisplay=exchangeRateDisplay;
   window.AAFStockSummary.withSavedCatalog=withSavedCatalog;
 })();
