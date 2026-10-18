@@ -1010,6 +1010,7 @@ module.exports = {
     });
     const invalidDraftValues = new Map();
     const freeDisclosures = new Map();
+    const priceEditorScopes = new Map(), allPriceSpecs = new Set();
     const on = (element, event, fn) => {element.addEventListener(event, fn); cleanups.push(() => element.removeEventListener(event, fn));};
     function syncFreeDisclosure(id) {
       const disclosure = freeDisclosures.get(id);
@@ -1095,7 +1096,7 @@ module.exports = {
     function updatePersistenceAccess() {
       const blocked = readOnly || storeLoading || storeLoadFailed;
       root.setAttribute('aria-busy',String(storeLoading));
-      root.querySelectorAll('[data-fx],[data-spec-note],[data-free-price],[data-free-currency]').forEach(node => {node.disabled = blocked;if(readOnly){node.setAttribute('aria-readonly','true');node.placeholder='';}});
+      root.querySelectorAll('[data-fx],[data-spec-note],[data-free-price],[data-free-currency],[data-price-editor-all]').forEach(node => {node.disabled = blocked;if(readOnly){node.setAttribute('aria-readonly','true');node.placeholder='';}});
       if(priceNotesOnly || automaticFx)root.querySelectorAll('[data-fx]').forEach(node=>{node.disabled=true;node.setAttribute('aria-readonly','true');node.title=automaticFx?'อัปเดตอัตโนมัติจาก ธปท.':'อัตราแลกเปลี่ยนกำหนดโดยเจ้าของ';});
     }
     function saveStatus() {
@@ -1460,10 +1461,17 @@ module.exports = {
       return '<small class="sp-historical-source">'+esc([sources.join(' / '),'ราคาอ้างอิงย้อนหลัง · เฉลี่ยถ่วงจำนวน · สกุลเงินต้นฉบับ · ไม่เติมราคาอัตโนมัติ'].filter(Boolean).join(' · '))+'</small>';
     }
     function freeMarkup(inventory, scopeId, thicknesses) {
-      const rows = inventory.rows.filter(row => row.free > 0);
-      const controls = saveToolbar()+thicknessNotesMarkup(thicknesses || inventory.rows.map(row => row.t),scopeId);
+      priceEditorScopes.set(scopeId,{inventory,thicknesses});
+      return '<div data-price-editor-scope="'+esc(scopeId)+'">'+priceEditorMarkup(inventory,scopeId,thicknesses)+'</div>';
+    }
+    function priceEditorMarkup(inventory, scopeId, thicknesses) {
+      // Editing visibility never changes the inventory model or the Free-only
+      // valuation denominator. Zero rows come from the retained catalog itself.
+      const showAll = allPriceSpecs.has(scopeId), rows = inventory.rows.filter(row => showAll || row.free > 0);
+      const switcher = readOnly ? '' : '<label class="sp-save-scope"><input type="checkbox" data-price-editor-all="'+esc(scopeId)+'"'+(showAll?' checked':'')+'> แสดงทุกสเปกเพื่อแก้ราคา</label>';
+      const controls = saveToolbar()+switcher+thicknessNotesMarkup(thicknesses || inventory.rows.map(row => row.t),scopeId);
       if (!rows.length) return controls+'<span class="sp-empty">ไม่มีสเปกที่มี Free มากกว่า 0</span>';
-      return controls+'<div class="sp-table-scroll"><table class="sp-stock-table sp-free-table"><caption>เฉพาะสเปกที่มี Free มากกว่า 0 · ราคาต่อแผ่นจริง / ชิ้นแถบ · เลือกบาทหรือ USD · เว้นว่าง = ยังไม่ทราบราคา'+historicalSourceMarkup(rows)+'</caption><thead><tr><th scope="col">หนา (มม.)</th><th scope="col">เกรด</th><th scope="col">ขนาด (มม.)</th><th scope="col">Free</th><th scope="col">ราคาต่อหน่วย</th><th scope="col">หมายเหตุ</th><th scope="col">มูลค่า Free โดยประมาณ (บาท)</th></tr></thead><tbody>'+rows.map(row => {
+      return controls+'<div class="sp-table-scroll"><table class="sp-stock-table sp-free-table"><caption>'+(showAll?'ทุกสเปกในทะเบียนของกลุ่มนี้ รวม Free / Physical เป็น 0 · แก้ราคาเท่านั้น ไม่เพิ่มยอดสต๊อก':'เฉพาะสเปกที่มี Free มากกว่า 0')+' · ราคาต่อแผ่นจริง / ชิ้นแถบ · เลือกบาทหรือ USD · เว้นว่าง = ยังไม่ทราบราคา'+historicalSourceMarkup(rows)+'</caption><thead><tr><th scope="col">หนา (มม.)</th><th scope="col">เกรด</th><th scope="col">ขนาด (มม.)</th><th scope="col">Free</th><th scope="col">ราคาต่อหน่วย</th><th scope="col">หมายเหตุ</th><th scope="col">มูลค่า Free โดยประมาณ (บาท)</th></tr></thead><tbody>'+rows.map(row => {
         const key = specKey(row), label = 'ราคาประเมิน '+thick(row.t)+' มม. '+row.grade+' '+row.w+' × '+row.l;
         const noteId = scopeId+'-note-'+encodeURIComponent(key).replaceAll('%','_');
         return '<tr><td>'+esc(thick(row.t))+'</td><td>'+esc(row.grade)+'</td><td>'+fmt(row.w)+' × '+fmt(row.l)+'</td><td>'+fmt(row.free)+' '+esc(unitName(row.unit))+'</td><td><div class="sp-price-controls"><input class="sp-number-input" type="number" min="0.0000001" step="any" inputmode="decimal" placeholder="ใส่ราคา" data-unit="'+esc(row.unit)+'" data-price-label="'+esc(label)+'" data-free-price="'+esc(key)+'"><select class="sp-currency-select cursor-interaction" aria-label="สกุลเงิน '+esc(label)+'" data-free-currency="'+esc(key)+'"><option value="THB">บาท</option><option value="USD">USD</option></select></div>'+historicalPriceMarkup(key)+'</td><td class="sp-free-note-cell"><textarea id="'+esc(noteId)+'" class="sp-thickness-note" rows="2" maxlength="4000" data-spec-note="'+esc(canonicalNoteKey(key))+'" aria-label="หมายเหตุเฉพาะสเปก '+esc(thick(row.t))+' มม. '+esc(row.grade)+' '+row.w+' × '+row.l+' '+esc(unitName(row.unit))+'" placeholder="ใส่หมายเหตุเฉพาะสเปกนี้"></textarea></td><td class="sp-free-value-cell" data-free-row-value="'+esc(key)+'"></td></tr>';
@@ -1709,7 +1717,18 @@ module.exports = {
       else pricing.prices[key] = value;
       invalidDraftValues.delete(displayKey);input.setAttribute('aria-invalid','false');syncInputs(input);updateFinancialView();markEdited();notifyPriceDraftChange('draft',displayKey);
     });
-    on(root,'change',event => {const input = event.target;if (readOnly || storeLoading || storeLoadFailed || !input.matches('[data-free-currency]')) return;setDraftCurrency(input.dataset.freeCurrency,input.value === 'USD' ? 'USD' : 'THB',input);});
+    on(root,'change',event => {
+      const input = event.target;if (readOnly || storeLoading || storeLoadFailed) return;
+      if (input.matches('[data-price-editor-all]')) {
+        const id=input.dataset.priceEditorAll,scope=priceEditorScopes.get(id),panel=input.closest('[data-price-editor-scope]');
+        if (!scope || !panel || panel.dataset.priceEditorScope!==id) return;
+        if(input.checked)allPriceSpecs.add(id);else allPriceSpecs.delete(id);
+        panel.innerHTML=priceEditorMarkup(scope.inventory,id,scope.thicknesses);
+        syncInputs();updateFinancialView();saveStatus();
+        panel.querySelector('[data-price-editor-all]')?.focus();return;
+      }
+      if(input.matches('[data-free-currency]'))setDraftCurrency(input.dataset.freeCurrency,input.value === 'USD' ? 'USD' : 'THB',input);
+    });
     on(root,'click',event => {
       const save = event.target.closest('[data-save-prices]');if (save) {savePrices();return;}
       const exporter = event.target.closest('[data-export-prices]');if (exporter) {exportSaved(exporter);return;}
