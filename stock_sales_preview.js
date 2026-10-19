@@ -1021,7 +1021,7 @@ module.exports = {
     }
     let dirty = false, saving = false, error = '', errorCode = '', writeCount = 0, queuedWrites = 0, writeFailed = false;
     const persistenceMessages = {
-      'state-too-large':'ยังไม่เซฟ · ราคาและหมายเหตุรวมเกิน 16 KB กรุณาย่อหมายเหตุ',
+      'state-too-large':'ยังไม่เซฟ · ราคาและหมายเหตุรวมเกิน 512 KB กรุณาตรวจขนาดข้อมูล',
       'auth-required':'ยังไม่เซฟ · กรุณาเข้าสู่ระบบ AAF ก่อนบันทึก · เก็บร่างในหน้านี้ไว้ก่อน',
       'auth-expired':'ยังไม่เซฟ · สิทธิ์เข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบ AAF ใหม่ · เก็บร่างในหน้านี้ไว้ก่อน',
       'permission-denied':'ยังไม่เซฟ · บัญชีนี้ไม่มีสิทธิ์บันทึกราคาและหมายเหตุ กรุณาตรวจสิทธิ์บัญชี',
@@ -1135,7 +1135,7 @@ module.exports = {
         writeCount++;
         try {
           const value = build();
-          if (new TextEncoder().encode(JSON.stringify(value)).byteLength >= 16*1024) {const cause = new Error('ข้อมูลราคาและหมายเหตุเกินขอบเขตบันทึก');cause.code = 'state-too-large';throw cause;}
+          if (new TextEncoder().encode(JSON.stringify(value)).byteLength > 512*1024) {const cause = new Error('ข้อมูลราคาและหมายเหตุเกินขอบเขตบันทึก');cause.code = 'state-too-large';throw cause;}
           const confirmed = await persistSavedState(value);
           success(priceNotesOnly && confirmed?.privateContent ? confirmed : value); writeFailed = false;
         } catch (cause) {writeFailed = true; throw cause;}
@@ -1144,7 +1144,7 @@ module.exports = {
       queue = write; return write;
     }
     function updatePersistenceAccess() {
-      const blocked = readOnly || storeLoading || storeLoadFailed;
+      const blocked = readOnly || storeLoading || storeLoadFailed || saving;
       root.setAttribute('aria-busy',String(storeLoading));
       root.querySelectorAll('[data-fx],[data-spec-note],[data-free-price],[data-free-currency],[data-price-editor-all]').forEach(node => {node.disabled = blocked;if(readOnly){node.setAttribute('aria-readonly','true');node.placeholder='';}});
       if(priceNotesOnly || automaticFx)root.querySelectorAll('[data-fx]').forEach(node=>{node.disabled=true;node.setAttribute('aria-readonly','true');node.title=automaticFx?'อัปเดตอัตโนมัติจาก ธปท.':'อัตราแลกเปลี่ยนกำหนดโดยเจ้าของ';});
@@ -1154,6 +1154,7 @@ module.exports = {
       root.querySelectorAll('[data-save-price-status]').forEach(node => {node.textContent = label; node.dataset.state = error || storeLoadFailed ? 'error' : dirty ? 'dirty' : 'saved';});
       root.querySelectorAll('[data-save-prices]').forEach(node => {node.disabled = storeLoading || storeLoadFailed || saving; node.textContent = saving ? 'กำลังเซฟ…' : 'เซฟราคาและหมายเหตุ';});
       root.querySelectorAll('[data-export-prices]').forEach(node => {node.disabled = storeLoading || storeLoadFailed || !hasSavedState;node.title = hasSavedState ? 'ส่งออกเฉพาะข้อมูลที่เซฟแล้ว ไม่รวมร่างบนจอ' : 'ยังไม่มีข้อมูลที่เซฟให้ส่งออก';});
+      root.querySelectorAll('[data-import-notes],[data-notes-file],[data-notes-column],[data-notes-mode]').forEach(node => {node.disabled=readOnly||storeLoading||storeLoadFailed||saving;});
       updatePersistenceAccess();
     }
     function knownDisplayKey(key) {return typeof key === 'string' ? knownPoolKeys.get(key) || null : null;}
@@ -1179,7 +1180,7 @@ module.exports = {
     }
     function setDraftPrice(key,value,currencyCode) {
       if (readOnly) return false;
-      if (destroyed || storeLoading || storeLoadFailed) return false;
+      if (destroyed || storeLoading || storeLoadFailed || saving) return false;
       const displayKey = knownDisplayKey(key);if (displayKey === null) return false;
       if (!['string','number'].includes(typeof value)) return rejectDraftPrice(displayKey,value);
       const blank = typeof value === 'string' && value.trim() === '';
@@ -1195,7 +1196,7 @@ module.exports = {
     }
     function setDraftCurrency(key,currencyCode,active = null) {
       if (readOnly) return false;
-      if (destroyed || storeLoading || storeLoadFailed || !['THB','USD'].includes(currencyCode)) return false;
+      if (destroyed || storeLoading || storeLoadFailed || saving || !['THB','USD'].includes(currencyCode)) return false;
       const displayKey = knownDisplayKey(key);if (displayKey === null) return false;
       pricing.currencies[priceKey(displayKey)] = currencyCode;syncInputs(active);updateFinancialView();markEdited();notifyPriceDraftChange('draft',displayKey);return true;
     }
@@ -1219,6 +1220,67 @@ module.exports = {
       if (storeLoading || storeLoadFailed) return;
       // Only the committed catalog accompanies FX autosaves. Price/note drafts are never saved implicitly.
       enqueue(() => payload(committed),value => {committedFx = positive(value.privateContent.fx);hasSavedState = true;if (error === 'บันทึกอัตราไม่สำเร็จ · กรุณาลองใหม่') {error = ''; saveStatus();}}).then(() => notifyReportSummary('saved')).catch(() => {error = 'บันทึกอัตราไม่สำเร็จ · กรุณาลองใหม่'; saveStatus();});
+    }
+    // Excel is read locally. It cannot submit prices, stock quantities or a whole
+    // catalog: only the reviewed per-spec note patch reaches the dedicated writer.
+    let notesImport={workbook:null,name:'',column:'AD',mode:'append',plan:null,issues:[],message:'',busy:false};
+    const notesImportAvailable=()=>!readOnly&&typeof externalStore?.updateNotes==='function';
+    const notesImportClean=()=>!destroyed&&!readOnly&&!storeLoading&&!storeLoadFailed&&!dirty&&!saving&&!queuedWrites&&!invalidDraftValues.size&&!['catalog-conflict','save-outcome-unknown','readback-mismatch','session-changed-after-save','session-changed','auth-expired','access-invalidated'].includes(errorCode);
+    function notesImportMarkup(){
+      if(!notesImportAvailable())return '';
+      return '<button type="button" class="cursor-interaction" data-import-notes>นำเข้าหมายเหตุจาก Excel</button><section data-notes-import-panel hidden aria-label="นำเข้าหมายเหตุสินค้า" style="flex-basis:100%;width:100%;padding:14px;border:1px solid #bacddd;border-radius:8px"><h4>นำเข้าหมายเหตุรายสินค้า</h4><p class="sp-save-scope">กรอกในคอลัมน์ AD: หมายเหตุสเปกในชุดราคา แล้วอัปโหลดกลับ · ตรวจจับคู่ขนาด / หนา / เกรด / หน่วย · ช่องว่างไม่ลบข้อความเดิม · ไม่แก้สต๊อก ยอดจอง ราคา หรือสกุลเงิน</p><label>ไฟล์ Excel <input type="file" accept=".xlsx,.xls" data-notes-file aria-label="ไฟล์ Excel หมายเหตุสินค้า"></label><div style="display:flex;gap:12px;flex-wrap:wrap;margin:12px 0"><label>คอลัมน์หมายเหตุ <select data-notes-column aria-label="คอลัมน์หมายเหตุ"><option value="AD">AD · หมายเหตุรายสินค้า</option><option value="AE">AE · หมายเหตุเดิมรายความหนา (ต้องตรวจทุกรายการ)</option></select></label><label>วิธีบันทึก <select data-notes-mode aria-label="วิธีบันทึกหมายเหตุ"><option value="append">เพิ่มต่อข้อความเดิม (แนะนำ)</option><option value="replace">แทนที่เฉพาะรายการที่มีข้อความในไฟล์</option></select></label></div><p data-notes-import-status role="status" aria-live="polite"></p><div data-notes-import-preview></div><button type="button" class="cursor-interaction" data-confirm-notes disabled>บันทึกเฉพาะหมายเหตุ</button><button type="button" class="cursor-interaction" data-cancel-notes>ปิด</button></section>';
+    }
+    function renderNotesImport(){
+      const panel=root.querySelector('[data-notes-import-panel]');if(!panel)return;
+      const status=root.querySelector('[data-notes-import-status]'),preview=root.querySelector('[data-notes-import-preview]');
+      const changes=notesImport.plan?.changes||[],issues=[...notesImport.issues,...(notesImport.plan?.issues||[])];
+      if(status)status.textContent=notesImport.message||(notesImport.busy?'กำลังอ่านไฟล์…':notesImport.workbook?notesImport.name+' · '+changes.length+' สเปกที่จะเปลี่ยน · '+issues.length+' ข้อที่ต้องตรวจ':'เลือกไฟล์เพื่อดูตัวอย่างก่อนบันทึก · ยังไม่ส่งข้อมูล');
+      root.querySelectorAll('[data-notes-file],[data-notes-column],[data-notes-mode]').forEach(node=>{node.disabled=readOnly||storeLoading||storeLoadFailed||saving||notesImport.busy;});
+      const columnInput=root.querySelector('[data-notes-column]'),modeInput=root.querySelector('[data-notes-mode]');
+      if(columnInput)columnInput.value=notesImport.column;if(modeInput)modeInput.value=notesImport.mode;
+      const countLabels={sourceRows:'แถวต้นทาง',noteRows:'แถวที่มีข้อความ',matchedRows:'แถวที่จับคู่แล้ว',uniqueSpecs:'สเปกไม่ซ้ำ',blankRows:'ช่องว่างข้าม',unchanged:'เหมือนเดิมข้าม',changes:'สเปกที่จะเปลี่ยน',duplicates:'แถวซ้ำรวม',nonBlank:'มีข้อความ',blank:'ช่องว่างข้าม',changed:'เปลี่ยนแปลง',matched:'จับคู่แล้ว'};
+      const counts=Object.entries(notesImport.plan?.counts||{}).filter(([,value])=>typeof value==='number').map(([key,value])=>esc(countLabels[key]||key)+': '+fmt(value)).join(' · ');
+      if(preview)preview.innerHTML=(notesImport.column==='AE'?'<p role="alert" style="color:#9b4500">AE เป็นหมายเหตุเดิมที่ใช้ร่วมทั้งความหนา และอาจซ้ำหลายสินค้า · การเลือกนี้จะคัดลอกลงรายสเปกเฉพาะแถวที่ตรวจพบ กรุณาตรวจข้อความก่อนบันทึก</p>':'')+(notesImport.mode==='replace'?'<p role="alert" style="color:#9b4500">โหมดแทนที่: หมายเหตุเดิมของรายการด้านล่างจะถูกแทนด้วยข้อความจากไฟล์ · แถวว่างไม่ลบ</p>':'')+(counts?'<p>'+counts+'</p>':'')+(issues.length?'<ul>'+issues.map(issue=>'<li>'+esc(issue.message||issue.code||'ข้อมูลไม่ถูกต้อง')+(issue.sourceRow?' (แถว '+esc(issue.sourceRow)+')':'')+'</li>').join('')+'</ul>':'')+(changes.length?'<div class="sp-table-scroll" style="max-height:440px;overflow:auto"><table class="sp-stock-table"><thead><tr><th>สินค้า / แถว Excel</th><th>หมายเหตุเดิม</th><th>หลังบันทึก</th></tr></thead><tbody>'+changes.map(change=>'<tr><td>'+esc(change.label||change.key)+'<br><small>แถว '+esc((change.sourceRows||[]).join(', '))+'</small></td><td style="white-space:pre-wrap;min-width:200px">'+esc(change.before||'—')+'</td><td style="white-space:pre-wrap;min-width:200px">'+esc(change.after)+'</td></tr>').join('')+'</tbody></table></div>':'');
+      const confirm=root.querySelector('[data-confirm-notes]');if(confirm)confirm.disabled=notesImport.busy||!notesImportClean()||issues.length>0||!notesImport.plan?.canApply||!changes.length;
+      const cancel=root.querySelector('[data-cancel-notes]');if(cancel)cancel.disabled=notesImport.busy||saving;
+    }
+    function prepareNotesImportWorkbook(workbook,settings={}){
+      notesImport.plan=null;notesImport.issues=[];notesImport.message='';
+      if(!notesImportAvailable()||!notesImportClean()){notesImport.message='ยังไม่นำเข้า · มีร่างที่ยังไม่เซฟ หรือยังยืนยันข้อมูลส่วนกลางไม่ได้ กรุณาเซฟ/ตรวจร่างเดิมก่อน';renderNotesImport();return null;}
+      if(!win.AAFStockNotesImport||!win.XLSX){notesImport.message='เครื่องมือนำเข้า Excel ยังโหลดไม่ครบ กรุณาโหลดหน้าใหม่';renderNotesImport();return null;}
+      notesImport={...notesImport,workbook,column:settings.column||notesImport.column,mode:settings.mode||notesImport.mode};
+      try{
+        const parsed=win.AAFStockNotesImport.parseWorkbook(workbook,win.XLSX,{column:notesImport.column});
+        notesImport.plan=win.AAFStockNotesImport.buildPlan(parsed,options.notesImportRows||model.all.stock.rows,committed.notesBySpec,{mode:notesImport.mode});
+        if(!notesImport.plan?.changes?.length&&!notesImport.issues.length&&!notesImport.plan?.issues?.length)notesImport.message='ไม่มีหมายเหตุใหม่ที่ต้องบันทึก · ช่องว่างและข้อความเดิมถูกข้าม';
+      }catch{notesImport.message='อ่านรูปแบบ Excel ไม่สำเร็จ · ใช้ไฟล์รายงานสต๊อกที่ส่งออกจากระบบและตรวจหัวคอลัมน์';notesImport.plan=null;}
+      renderNotesImport();return notesImport.plan;
+    }
+    async function readNotesFile(file){
+      if(!file||notesImport.busy||saving)return;
+      notesImport.plan=null;notesImport.issues=[];notesImport.workbook=null;notesImport.message='';
+      if(!notesImportClean()){notesImport.message='ยังไม่นำเข้า · มีร่างที่ยังไม่เซฟ กรุณาเซฟ/ตรวจร่างเดิมก่อน';renderNotesImport();return;}
+      if(!/\.(xlsx|xls)$/i.test(file.name)||file.size>10*1024*1024){notesImport.message='เลือกไฟล์ .xlsx หรือ .xls ขนาดไม่เกิน 10 MB';renderNotesImport();return;}
+      notesImport.busy=true;renderNotesImport();
+      try{
+        const bytes=await file.arrayBuffer();if(destroyed)return;
+        const workbook=win.XLSX.read(bytes,{type:'array',cellFormula:true,cellHTML:false,cellText:false});
+        notesImport.name=file.name;notesImport.busy=false;prepareNotesImportWorkbook(workbook);
+      }catch{notesImport.message='อ่านไฟล์ไม่สำเร็จ · กรุณาตรวจไฟล์ Excel';notesImport.busy=false;renderNotesImport();}
+    }
+    async function saveImportedNotes(){
+      if(!notesImportAvailable()||!notesImportClean()||notesImport.busy||notesImport.issues.length||!notesImport.plan?.canApply||!notesImport.plan.changes.length)return false;
+      const changes=notesImport.plan.changes.map(change=>({key:change.key,before:change.before,after:change.after}));
+      saving=true;notesImport.busy=true;notesImport.message='กำลังตรวจข้อมูลส่วนกลางและบันทึกเฉพาะหมายเหตุ…';saveStatus();renderNotesImport();notifyPriceDraftChange('save-start');
+      let saved=false;
+      try{
+        const confirmed=await externalStore.updateNotes(changes);if(destroyed)return false;
+        if(!readState(confirmed))throw Object.assign(new Error('Invalid saved notes'),{code:'readback-mismatch'});
+        notesImport={...notesImport,workbook:null,plan:null,issues:[],message:'บันทึกและอ่านกลับส่วนกลางแล้ว '+changes.length+' สเปก · ยอดสต๊อก ยอดจอง และราคาไม่เปลี่ยน'};
+        syncInputs();updateFinancialView();notifyReportSummary('saved');saved=true;
+      }catch(cause){setPersistenceError(cause);notesImport.message=error;}
+      finally{saving=false;notesImport.busy=false;saveStatus();renderNotesImport();notifyPriceDraftChange(saved?'saved':'save-failed');}
+      return saved;
     }
     function exportSaved(button = null) {
       if (readOnly) return null;
@@ -1480,7 +1542,7 @@ module.exports = {
       if (!rows.length) return '<span class="sp-empty">ไม่มีรายการในกลุ่มนี้</span>';
       return '<div class="sp-table-scroll"><table class="sp-table"><thead><tr><th scope="col">ลูกค้า</th><th class="sp-qty" scope="col">จำนวน</th><th class="sp-grade-cell" scope="col">เกรด</th><th class="sp-thickness" scope="col">หนา (มม.)</th><th class="sp-size" scope="col">ขนาด (มม.)</th><th class="sp-equivalent" scope="col">แผ่นเทียบ<br>4×8 @2.5</th><th class="sp-payment" scope="col">สถานะการรับเงิน</th><th class="sp-money" scope="col">มูลค่ารายการ<br>โดยประมาณ</th></tr></thead><tbody>'+rows.map(row => '<tr><td><span class="sp-customer-name"><span class="sp-term">'+esc(row.term === 'unknown' ? '—' : row.term === 'credit' ? 'เครดิต' : row.term)+'</span><span class="sp-term-divider" aria-hidden="true">—</span><span>'+esc(row.customer)+'</span></span>'+rowProvenance(row)+'</td><td class="sp-qty"><strong>'+fmt(row.qty)+'</strong><small class="sp-unit-break">'+esc(unitName(row.unit))+'</small></td><td class="sp-grade-cell">'+esc(row.grade === 'mix' ? 'AAA+B' : row.grade)+'</td><td class="sp-thickness">'+esc(thick(row.t))+'</td><td class="sp-size">'+fmt(row.w)+' × '+fmt(row.l)+'</td><td class="sp-equivalent">'+esc(rowEquivalent(row))+'</td><td class="sp-payment"><span class="sp-payment-label">'+esc(paymentText(row))+'</span></td><td class="sp-money">'+esc(rowMoneyText(row))+'</td></tr>').join('')+'</tbody></table></div>';
     }
-    function saveToolbar() {if(readOnly)return '<p class="sp-save-scope">ดูอย่างเดียว · ใช้ราคาและหมายเหตุที่เจ้าของบันทึกไว้</p>';return '<div class="sp-save-prices"><button type="button" class="cursor-interaction" data-save-prices aria-label="เซฟราคาและหมายเหตุทุกความหนา">เซฟราคาและหมายเหตุ</button><button type="button" class="cursor-interaction" data-export-prices aria-label="ส่งออก JSON ราคาและหมายเหตุที่เซฟแล้ว">Export JSON ที่เซฟแล้ว</button><span class="sp-save-status" data-save-price-status role="status" aria-live="polite"></span><span class="sp-save-scope">'+esc(options.persistenceLabel || 'เก็บราคา สกุลเงิน และหมายเหตุในพรีวิว Codex นี้ · ไม่แก้สต๊อกหรือข้อมูลส่วนกลาง')+' · Export ไม่รวมร่างที่ยังไม่เซฟ</span><div class="sp-export-panel" data-export-panel hidden style="flex-basis:100%;width:100%"><label class="sp-thickness-note-label">JSON สำหรับย้าย catalog ที่เซฟแล้ว<textarea class="sp-thickness-note" rows="8" readonly data-export-json aria-label="JSON ราคาและหมายเหตุที่เซฟแล้ว"></textarea></label><button type="button" class="cursor-interaction" data-copy-export-json>คัดลอก JSON</button><span class="sp-save-status" data-export-copy-status role="status" aria-live="polite">เลือกข้อความแล้วคัดลอกได้ทันที</span></div></div>';}
+    function saveToolbar(scopeId) {if(readOnly)return '<p class="sp-save-scope">ดูอย่างเดียว · ใช้ราคาและหมายเหตุที่เจ้าของบันทึกไว้</p>';return '<div class="sp-save-prices"><button type="button" class="cursor-interaction" data-save-prices aria-label="เซฟราคาและหมายเหตุทุกความหนา">เซฟราคาและหมายเหตุ</button>'+(scopeId==='sp-money-all-g-all'?notesImportMarkup():'')+'<button type="button" class="cursor-interaction" data-export-prices aria-label="ส่งออก JSON ราคาและหมายเหตุที่เซฟแล้ว">Export JSON ที่เซฟแล้ว</button><span class="sp-save-status" data-save-price-status role="status" aria-live="polite"></span><span class="sp-save-scope">'+esc(options.persistenceLabel || 'เก็บราคา สกุลเงิน และหมายเหตุในพรีวิว Codex นี้ · ไม่แก้สต๊อกหรือข้อมูลส่วนกลาง')+' · Export ไม่รวมร่างที่ยังไม่เซฟ</span><div class="sp-export-panel" data-export-panel hidden style="flex-basis:100%;width:100%"><label class="sp-thickness-note-label">JSON สำหรับย้าย catalog ที่เซฟแล้ว<textarea class="sp-thickness-note" rows="8" readonly data-export-json aria-label="JSON ราคาและหมายเหตุที่เซฟแล้ว"></textarea></label><button type="button" class="cursor-interaction" data-copy-export-json>คัดลอก JSON</button><span class="sp-save-status" data-export-copy-status role="status" aria-live="polite">เลือกข้อความแล้วคัดลอกได้ทันที</span></div></div>';}
     function thicknessNotesMarkup(thicknesses, scopeId) {
       const keys = [...new Set(thicknesses.map(thicknessKey).filter(key => key !== null))].sort((a,b) => Number(a)-Number(b));
       return '<details class="sp-free-notes-disclosure"><summary class="cursor-interaction">หมายเหตุเดิมรายความหนา</summary><p class="sp-save-scope">ข้อความเดิมใช้ร่วมกันทั้งความหนา · อ่านอย่างเดียว · ไม่ใช่หมายเหตุรายสเปก และไม่ได้ย้ายไปให้รายการใดอัตโนมัติ</p><div class="sp-free-notes" data-legacy-thickness-notes="'+esc(scopeId === 'sp-money-all-g-all' ? '*' : keys.join('|'))+'"></div></details>';
@@ -1519,7 +1581,7 @@ module.exports = {
       // valuation denominator. Zero rows come from the retained catalog itself.
       const showAll = allPriceSpecs.has(scopeId), rows = inventory.rows.filter(row => showAll || row.free > 0);
       const switcher = readOnly ? '' : '<label class="sp-save-scope"><input type="checkbox" data-price-editor-all="'+esc(scopeId)+'"'+(showAll?' checked':'')+'> แสดงทุกสเปกเพื่อแก้ราคา</label>';
-      const controls = saveToolbar()+switcher+thicknessNotesMarkup(thicknesses || inventory.rows.map(row => row.t),scopeId);
+      const controls = saveToolbar(scopeId)+switcher+thicknessNotesMarkup(thicknesses || inventory.rows.map(row => row.t),scopeId);
       if (!rows.length) return controls+'<span class="sp-empty">ไม่มีสเปกที่มี Free มากกว่า 0</span>';
       return controls+'<div class="sp-table-scroll"><table class="sp-stock-table sp-free-table"><caption>'+(showAll?'ทุกสเปกในทะเบียนของกลุ่มนี้ รวม Free / Physical เป็น 0 · แก้ราคาเท่านั้น ไม่เพิ่มยอดสต๊อก':'เฉพาะสเปกที่มี Free มากกว่า 0')+' · ราคาต่อแผ่นจริง / ชิ้นแถบ · เลือกบาทหรือ USD · เว้นว่าง = ยังไม่ทราบราคา'+historicalSourceMarkup(rows)+'</caption><thead><tr><th scope="col">หนา (มม.)</th><th scope="col">เกรด</th><th scope="col">ขนาด (มม.)</th><th scope="col">Free</th><th scope="col">ราคาต่อหน่วย</th><th scope="col">หมายเหตุ</th><th scope="col">มูลค่า Free โดยประมาณ (บาท)</th></tr></thead><tbody>'+rows.map(row => {
         const key = specKey(row), label = 'ราคาประเมิน '+thick(row.t)+' มม. '+row.grade+' '+row.w+' × '+row.l;
@@ -1753,7 +1815,7 @@ module.exports = {
     on(root,'input',event => {
       const input = event.target;
       if (readOnly) return;
-      if (storeLoading || storeLoadFailed) return;
+      if (storeLoading || storeLoadFailed || saving) return;
       if (input.matches('[data-fx]')) {if(priceNotesOnly || automaticFx)return;pricing.fx = positive(input.value);input.setAttribute('aria-invalid',String(pricing.fx === null));updateFinancialView();saveFx();return;}
       if (input.matches('[data-spec-note]')) {const key = canonicalNoteKey(input.dataset.specNote);if (key === null || !knownNoteKeys.has(key)) return;if (input.value === '') delete pricing.notesBySpec[key];else pricing.notesBySpec[key] = input.value;syncInputs(input);markEdited();notifyPriceDraftChange('draft');return;}
       if (!input.matches('[data-free-price]')) return;
@@ -1768,18 +1830,27 @@ module.exports = {
       invalidDraftValues.delete(displayKey);input.setAttribute('aria-invalid','false');syncInputs(input);updateFinancialView();markEdited();notifyPriceDraftChange('draft',displayKey);
     });
     on(root,'change',event => {
-      const input = event.target;if (readOnly || storeLoading || storeLoadFailed) return;
+      const input = event.target;if (readOnly || storeLoading || storeLoadFailed || saving) return;
+      if(input.matches('[data-notes-file]')){const file=input.files?.[0];input.value='';readNotesFile(file);return;}
+      if(input.matches('[data-notes-column],[data-notes-mode]')){
+        if(input.matches('[data-notes-column]'))notesImport.column=input.value==='AE'?'AE':'AD';
+        else notesImport.mode=input.value==='replace'?'replace':'append';
+        if(notesImport.workbook)prepareNotesImportWorkbook(notesImport.workbook);else renderNotesImport();return;
+      }
       if (input.matches('[data-price-editor-all]')) {
         const id=input.dataset.priceEditorAll,scope=priceEditorScopes.get(id),panel=input.closest('[data-price-editor-scope]');
         if (!scope || !panel || panel.dataset.priceEditorScope!==id) return;
         if(input.checked)allPriceSpecs.add(id);else allPriceSpecs.delete(id);
         panel.innerHTML=priceEditorMarkup(scope.inventory,id,scope.thicknesses);
-        syncInputs();updateFinancialView();saveStatus();
+        syncInputs();updateFinancialView();saveStatus();renderNotesImport();
         panel.querySelector('[data-price-editor-all]')?.focus();return;
       }
       if(input.matches('[data-free-currency]'))setDraftCurrency(input.dataset.freeCurrency,input.value === 'USD' ? 'USD' : 'THB',input);
     });
     on(root,'click',event => {
+      if(event.target.closest('[data-import-notes]')){const panel=root.querySelector('[data-notes-import-panel]');if(panel){panel.hidden=false;renderNotesImport();panel.scrollIntoView?.({block:'nearest'});if(notesImportClean())root.querySelector('[data-notes-file]')?.click();}return;}
+      if(event.target.closest('[data-confirm-notes]')){saveImportedNotes();return;}
+      if(event.target.closest('[data-cancel-notes]')){if(!saving&&!notesImport.busy){const panel=root.querySelector('[data-notes-import-panel]');if(panel)panel.hidden=true;}return;}
       const save = event.target.closest('[data-save-prices]');if (save) {savePrices();return;}
       const exporter = event.target.closest('[data-export-prices]');if (exporter) {exportSaved(exporter);return;}
       const copy = event.target.closest('[data-copy-export-json]');if (copy) {copyExport(copy);return;}
@@ -1798,7 +1869,7 @@ module.exports = {
     });
     // Mounting never writes state; changes are handled only by explicit interactions.
     function destroy() {destroyed = true;cleanups.forEach(fn => fn());}
-    return {destroy,ready,getPriceState,getDraftPrice,setDraftPrice,getReportSummary,savePrices,exportSaved,setAutomaticFx,setPersistenceError};
+    return {destroy,ready,getPriceState,getDraftPrice,setDraftPrice,getReportSummary,savePrices,prepareNotesImportWorkbook,saveImportedNotes,exportSaved,setAutomaticFx,setPersistenceError};
   }
   host.mountAllThickness = mountAllThickness;
   if (typeof module !== 'undefined' && module.exports) module.exports = mountAllThickness;

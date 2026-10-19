@@ -301,7 +301,37 @@
     const root=element('section',{id:'sales-stock-preview-16'});content.replaceChildren(root);
     let reconcileRequired=null;
     const requireReconciliation=cause=>{reconcileRequired=cause;if(current(version,currentHost,auth))reconciliationError=cause;return cause;};
-    const store={widgetState:data.widgetState,load:()=>data.widgetState,setWidgetState:async value=>{
+    const store={widgetState:data.widgetState,load:()=>store.widgetState,updateNotes:async changes=>{
+      if(reconcileRequired)throw reconcileRequired;
+      if(readOnly)throw accessError||saveError('read-only');
+      if(!token())throw saveError('auth-required');
+      if(!current(version,currentHost,auth))throw saveError('session-changed');
+      const draft=view?.getPriceState?.();
+      if(draft?.dirty||draft?.invalidKeys?.length)throw saveError('save-rejected');
+      const latest=await request(null,true);
+      if(!current(version,currentHost,auth))throw saveError('session-changed');
+      if(latest.catalogRevision!==mountedCatalogRevision||latest.revision!==data.revision)throw saveError('catalog-conflict');
+      const before=latest.widgetState?.privateContent,patch={},keys=new Set();
+      if(!before||!Array.isArray(changes)||!changes.length||changes.length>2000)throw saveError('save-rejected');
+      for(const change of changes){
+        if(typeof change?.key!=='string'||keys.has(change.key)||typeof change.after!=='string'||!change.after.trim()||change.after.length>4000||change.before!==(before.notesBySpec?.[change.key]??''))throw saveError('save-rejected');
+        keys.add(change.key);patch[change.key]=change.after;
+      }
+      let saved;
+      try{saved=await request({action:'saveSalesNotes',expectedRevision:latest.revision,expectedCatalogRevision:mountedCatalogRevision,notesBySpec:patch});}
+      catch(cause){if(uncertainCodes.has(cause?.code))requireReconciliation(cause);throw cause;}
+      if(!current(version,currentHost,auth))throw requireReconciliation(saveError('session-changed-after-save'));
+      const expected={...latest.widgetState,privateContent:{...before,notesBySpec:{...(before.notesBySpec||{}),...patch},savedAt:saved.widgetState?.privateContent?.savedAt}};
+      if(!sameSavedValue(saved.widgetState,expected)||saved.revision!==latest.revision+1||saved.catalogRevision!==mountedCatalogRevision+1)throw requireReconciliation(saveError('readback-mismatch'));
+      let verified;
+      try{verified=await request(null,true);}catch{throw requireReconciliation(saveError('save-outcome-unknown'));}
+      if(!current(version,currentHost,auth))throw requireReconciliation(saveError('session-changed-after-save'));
+      if(verified.catalogRevision!==saved.catalogRevision||verified.revision!==latest.revision+1||!sameSavedValue(verified.widgetState,expected))throw requireReconciliation(saveError('readback-mismatch'));
+      // Catalog writes also advance the server-wide CAS revision. Keep this
+      // writer's baseline current; the next stock refresh still verifies and
+      // remounts its own dated quantity snapshot through the normal access gate.
+      data.revision=verified.revision;mountedCatalogRevision=verified.catalogRevision;catalogRevision=verified.catalogRevision;store.widgetState=verified.widgetState;data.widgetState=verified.widgetState;clearSavedStockCatalog();return verified.widgetState;
+    },setWidgetState:async value=>{
       if(reconcileRequired)throw reconcileRequired;
       if(readOnly)throw accessError||saveError('read-only');
       if(!token())throw saveError('auth-required');
@@ -315,11 +345,11 @@
       if(!current(version,currentHost,auth))throw requireReconciliation(saveError('session-changed-after-save'));
       const expected=salesMode?{...value.privateContent,savedAt:saved.widgetState?.privateContent?.savedAt}:value;
       if(!sameSavedValue(salesMode?saved.widgetState?.privateContent:saved.widgetState,expected))throw requireReconciliation(saveError('readback-mismatch'));
-      mountedCatalogRevision=saved.catalogRevision;catalogRevision=saved.catalogRevision;store.widgetState=saved.widgetState;clearSavedStockCatalog();return saved.widgetState;
+      data.revision=saved.revision;mountedCatalogRevision=saved.catalogRevision;catalogRevision=saved.catalogRevision;store.widgetState=saved.widgetState;data.widgetState=saved.widgetState;clearSavedStockCatalog();return saved.widgetState;
     }};
     // Both grouping and financial arithmetic remain in the original model/view.
     const model=window.AafAllModel.buildModel(p.salesRows,p.stockRows,p.modelOptions);
-    const mountedView=window.mountAllThickness(root,model,{...p.options,financialEvidenceUnavailable:evidence?.financialEvidence==='unavailable-plan-only',automaticFx:true,fxReference:{...p.options?.fxReference,url:'https://www.bot.or.th/th/statistics/exchange-rate.html',sourceLabel:'ธปท. · อัตราซื้อเงินโอน USD รายวัน'},readOnly,priceNotesOnly:salesMode,store,persistenceLabel:salesMode?'ฝ่ายขาย · เซฟราคาและหมายเหตุร่วมกับเจ้าของ · ไม่แก้ยอดสต๊อก':'เก็บราคา สกุลเงิน และหมายเหตุในระบบ · ไม่เปลี่ยนยอดสต๊อกหรือใบขาย',onReportSummary:summary=>{if(current(version,currentHost,auth)&&view===mountedView)publishReportSummary(withEvidence(summary));},onPriceDraftChange:change=>{if(current(version,currentHost,auth)&&view===mountedView)publishPriceDraftChange(change);}});view=mountedView;viewGeneration=version;
+    const mountedView=window.mountAllThickness(root,model,{...p.options,notesImportRows:stockSnapshot?.rows||p.stockRows,financialEvidenceUnavailable:evidence?.financialEvidence==='unavailable-plan-only',automaticFx:true,fxReference:{...p.options?.fxReference,url:'https://www.bot.or.th/th/statistics/exchange-rate.html',sourceLabel:'ธปท. · อัตราซื้อเงินโอน USD รายวัน'},readOnly,priceNotesOnly:salesMode,store,persistenceLabel:salesMode?'ฝ่ายขาย · เซฟราคาและหมายเหตุร่วมกับเจ้าของ · ไม่แก้ยอดสต๊อก':'เก็บราคา สกุลเงิน และหมายเหตุในระบบ · ไม่เปลี่ยนยอดสต๊อกหรือใบขาย',onReportSummary:summary=>{if(current(version,currentHost,auth)&&view===mountedView)publishReportSummary(withEvidence(summary));},onPriceDraftChange:change=>{if(current(version,currentHost,auth)&&view===mountedView)publishPriceDraftChange(change);}});view=mountedView;viewGeneration=version;
     if(mountedView.ready&&(await mountedView.ready)===false){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}throw new Error('โหลดราคาที่เซฟไว้ไม่สำเร็จ · ยังไม่แสดงยอดสรุป');}
     if(!current(version,currentHost,auth)){mountedView.destroy();if(view===mountedView){view=null;viewGeneration=0;}return;}
     if(mountedView.getReportSummary)publishReportSummary(withEvidence(mountedView.getReportSummary()));
