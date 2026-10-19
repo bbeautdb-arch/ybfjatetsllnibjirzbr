@@ -16,6 +16,7 @@
   const blank=()=>({qty:0,baseQty:0,freeQty:0,committedQty:0,reservedInStockQty:0,reservedProductionQty:0,stripEq4x8:0,stripEq:0,eq4x8:0,eq:0,value:0,freeValue:0,freeEq4x8:0,freeEq:0,reservedEq4x8:0,reservedEq:0,reservedValue:0,reservedUnpricedQty:0,agingBaseQty:0,aging90:0,aging180:0,agingOver180:0,count:0,byUnit:{sheet:blankUnit(),strip:blankUnit()}});
   const add=(s,r)=>{for(const k of ['qty','baseQty','freeQty','committedQty','reservedInStockQty','reservedProductionQty','stripEq4x8','stripEq','eq4x8','eq','value','freeValue','freeEq4x8','freeEq','reservedEq4x8','reservedEq','reservedValue','reservedUnpricedQty','agingBaseQty','aging90','aging180','agingOver180'])s[k]+=r[k];s.count++;const unit=s.byUnit[r.unit];if(unit){for(const k of Object.keys(unit).filter(k=>k!=='count'))unit[k]+=r[k];unit.count++;}return s;};
   let latest=null,exporting=false,canvasLoader=null,headerExchangeRate=null,savedStockCatalog=null;
+  let orderHeader=null,orderHeaderError='กำลังรอชุดรายงานเดือนที่ตรวจครบ';
   const expandedCards=new Set();
 
   // Saved stock prices are independent of the sales-allocation package. Exact
@@ -90,7 +91,7 @@
     return {rate:fx.rate,status:prefix+' · '+reportDay(fx.date)+' · บาท / 1 USD · อัตรารายวัน ไม่ใช่เรทรับเงินจริง'};
   }
   function paintExchangeRate(){
-    const display=exchangeRateDisplay(latest?.salesSummary,headerExchangeRate);
+    const display=orderHeader?{rate:orderHeader.fx.rate,status:'เรทของชุดรายงานเดือนที่เลือก · '+orderHeader.fx.date+' · ไม่ใช่เรทรับเงินจริง'}:exchangeRateDisplay(latest?.salesSummary,headerExchangeRate);
     const value=root?.querySelector('.ss-exchange b');if(value)value.textContent=display.rate===null?'—':number(display.rate,4);
     const status=root?.querySelector('.ss-exchange small');if(status)status.textContent=display.status;
     const dailySource=root?.querySelector('.ss-overview-source');if(dailySource)dailySource.textContent=overviewSourceText(latest);
@@ -443,6 +444,13 @@
     return 'แสดงสต๊อกส่วนกลางตามรายงาน '+reportDay(m?.reportDate)+(m?.savedCatalog?' · ราคาประเมินจากชุดที่บันทึกตามสเปก แยกจากยอดขาย':' · กำลังตรวจชุดราคาที่บันทึก')+' · ยอดขายและมูลค่าการขายยังรอตรวจชุดข้อมูล'+(status?.message?' · '+status.message:'');
   }
   function kpiHTML(summary,m){
+    // The authenticated monthly header is authoritative for sales scope.
+    // Legacy whole-ledger callbacks remain active for catalog/export services,
+    // but must never overwrite it or leak an old month after a failed reload.
+    if(window.AAFOrderHeader){
+      if(orderHeader)return window.AAFOrderHeader.render(orderHeader,expandedCards);
+      return ['สต๊อกจริง · ทั้งคลัง','ขายแล้ว · เดือนที่เลือก','จองอื่น · เดือนที่เลือก','Free Stock · ทั้งคลัง'].map(label=>`<div class="ss-kpi"><h3>${esc(label)}</h3><p role="status">${esc(orderHeaderError)}</p><small>ยังไม่แสดงชุดเก่าหรือเดือนอื่นแทน</small></div>`).join('');
+    }
     if(!summary){const basic=basicStockKpis(m);if(basic)return basic;}
     if(summary?.version>=2)return partitionKpiHTML(summary,m);
     const cards=[
@@ -468,9 +476,18 @@
       cards.querySelectorAll('[data-stock-gap-group]').forEach(node=>{node.open=opened.has(node.dataset.stockGapGroup);});
     }
     paintExchangeRate();
-    const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=summarySourceText(summary,latest);
+    const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=orderHeader?window.AAFOrderHeader.sourceText(orderHeader):window.AAFOrderHeader?orderHeaderError:summarySourceText(summary,latest);
     const dailySource=root?.querySelector('.ss-overview-source');if(dailySource)dailySource.textContent=overviewSourceText(latest);
     syncPriceDrafts();
+  }
+  function setOrderReview(review,readModel){
+    orderHeader=null;orderHeaderError='รอโหลดรายงานเดือนที่ตรวจครบ · ยังไม่แสดงยอดขายชุดเก่าแทน';
+    if(review&&window.AAFOrderHeader){
+      try{orderHeader=window.AAFOrderHeader.build(review,readModel||{});orderHeaderError='';}
+      catch(error){orderHeaderError='ยังแสดงภาพรวมเดือนไม่ได้: '+error.message;}
+    }
+    if(latest)latest={...latest,orderHeader};
+    setSalesSummary(latest?.salesSummary||null);
   }
   function syncPriceDrafts(){
     if(!root)return;
@@ -507,6 +524,7 @@
   }
   root?.addEventListener('input',editGapPrice);root?.addEventListener('change',editGapPrice);root?.addEventListener('click',saveGapPrices);root?.addEventListener('click',overviewClick);
   function overviewSourceText(m){
+    if(window.AAFOrderHeader)return orderHeader?window.AAFOrderHeader.sourceText(orderHeader):orderHeaderError;
     const e=m?.salesSummary?.evidence,fx=exchangeRateDisplay(m?.salesSummary,m?.headerExchangeRate);
     const sales=e?.salesReportDate?'ขายอ้างอิง '+e.salesReportDate+(e.needsSalesRefresh?' · ยังไม่ได้อ่านยอดขายใหม่':' · ชุดข้อมูลที่บันทึกไว้'):'ยังไม่ยืนยันวันที่ชุดยอดขาย';
     return 'สต๊อก '+(m?.reportDate||'รอยืนยัน')+' · '+sales+(fx.rate!==null?' · USD/THB '+number(fx.rate,4)+' ('+fx.status+')':' · ยังไม่ยืนยันเรท USD')+' · ใช้ภายในบริษัท';
@@ -520,17 +538,20 @@
     return `<article class="ss-sheet">
       <header class="ss-hero"><div><div class="ss-eyebrow">AAF / STOCK & SALES FOLLOW-UP</div><h2>รายงานสต๊อกและติดตามการขาย</h2><p>อ้างอิงรายงานเมล ${esc(reportDay(m.reportDate))}</p></div><div class="ss-hero-meta"><div class="ss-stamp">ข้อมูลที่บันทึกแล้ว<br><b>ครบ ${number(m.rows.length)} สเปก</b><br>ทุกเกรด · ทุกขนาด</div><div class="ss-exchange"><span>อัตราแลกเปลี่ยน USD → บาท</span><b>${exchangeRateDisplay(m.salesSummary,m.headerExchangeRate).rate===null?'—':number(exchangeRateDisplay(m.salesSummary,m.headerExchangeRate).rate,4)}</b><small>${esc(exchangeRateDisplay(m.salesSummary,m.headerExchangeRate).status)}</small></div></div></header>
       <div class="ss-content"><div class="ss-context"><span>ข้อมูลส่วนกลางล่าสุด <b>${esc(when(m.updatedAt))}</b></span><span>เวลาไทย (UTC+7) · ภาพรวมทั้งชุด ไม่ใช้ตัวกรองในหน้าสต๊อก</span></div>
-      <p class="ss-sales-summary-source" role="status">${esc(summarySourceText(m.salesSummary,m))}</p>
+      <p class="ss-sales-summary-source" role="status">${esc(window.AAFOrderHeader?overviewSourceText(m):summarySourceText(m.salesSummary,m))}</p>
       ${dailyOverviewHTML(m)}
-      <div class="ss-section-title"><span>01</span><h3>ภาพรวมแยกเกรดและความหนา</h3></div>
-      <p class="ss-help ss-reservation-help">จองรวม = จองมีของ + จองต้องผลิตเพิ่ม · Physical − จองมีของ = Free · แยกคำนวณรายสเปกก่อนรวม ไม่เอาของคนละสเปกหักกัน${m.rows.some(r=>r.freeReconciliationException)?'<br><strong class="ss-manual">มีค่า Free ที่บันทึกไว้ต่างจากสูตรในบางสเปก · คงค่าที่บันทึกไว้ ไม่ล้างค่าปรับเอง</strong>':''}<br>เทียบ 4×8 ใช้ขนาด 1,220 × 2,440 มม. · เทียบหนา 2.5 เพิ่มสัดส่วนความหนา ÷ 2.5 · ไม้แถบเป็นยอดเทียบเพื่อแสดงผล ไม่ใช่การเพิ่มแผ่นจริง</p>
+      <div class="ss-section-title"><span>01</span><h3>ภาพรวมแยกเกรดและความหนา · ทั้งคลัง</h3></div>
+      <p class="ss-help ss-reservation-help"><strong>จำนวนจองตามแผนทั้งคลังเดิม ไม่ใช่จองเฉพาะเดือนหรือคิวใหม่หัวข้อ02</strong><br>จองรวม = จองมีของ + จองต้องผลิตเพิ่ม · Physical − จองมีของ = Free · แยกคำนวณรายสเปกก่อนรวม ไม่เอาของคนละสเปกหักกัน${m.rows.some(r=>r.freeReconciliationException)?'<br><strong class="ss-manual">มีค่า Free ที่บันทึกไว้ต่างจากสูตรในบางสเปก · คงค่าที่บันทึกไว้ ไม่ล้างค่าปรับเอง</strong>':''}<br>เทียบ 4×8 ใช้ขนาด 1,220 × 2,440 มม. · เทียบหนา 2.5 เพิ่มสัดส่วนความหนา ÷ 2.5 · ไม้แถบเป็นยอดเทียบเพื่อแสดงผล ไม่ใช่การเพิ่มแผ่นจริง</p>
       <div class="ss-groups">${groupTable('แยกตามเกรด',m.grades,'เกรด',t)}${groupTable('แยกตามความหนา',m.thickness.filter(([,totals])=>totals.qty>0||totals.committedQty>0||totals.freeQty>0).map(([thick,totals])=>[thicknessLabel(thick),totals]),'หนา (mm)',t)}</div>
       ${agingPanel(m)}
-      <section class="ss-sales-block" data-html2canvas-ignore><div class="ss-section-title"><span>02</span><h3>ยอดขายและสต๊อก</h3></div><div id="stock-sales-preview-slot"></div></section>
+      <section class="ss-sales-block" data-html2canvas-ignore><div class="ss-section-title"><span>02</span><h3>ภาพรวมรายการขาย · เดือนเดียวกับกล่องด้านบน</h3></div><p class="ss-help">กล่องด้านบนรวมทุกความหนาในเดือนที่เลือก · ตัวกรองความหนาด้านล่างใช้ตรวจรายละเอียด ไม่เปลี่ยนขอบเขตกล่องด้านบน</p><div id="stock-order-review-slot"></div></section>
+      <section class="ss-legacy-sales-services" hidden aria-hidden="true"><div id="stock-sales-preview-slot"></div></section>
+      <section class="ss-legacy-detail" hidden aria-hidden="true">
       <div class="ss-section-title"><span>03</span><h3>รายละเอียดครบทุกสเปก</h3><small>ปรับเอง ${number(overrides)} สเปก · มีติดตาม ${number(followed)} สเปก</small></div>
       <p class="ss-help">เรียงความหนา → กว้าง → ยาว → เกรด • แสดง SKU, อายุสินค้า, ข้อความติดตาม และหมายเหตุครบ ไม่ตัดข้อความ</p>
       ${m.thickness.map(([thick,totals])=>`<section class="ss-detail-group"><div class="ss-band"><h4>ความหนา ${esc(thick)} mm</h4><span>${totals.count} สเปก · Physical ${stockQuantityText(totals,'qty')} · Free ${stockQuantityText(totals,'freeQty')}</span></div><table class="ss-detail"><caption class="ss-sr">รายละเอียดความหนา ${esc(thick)} mm</caption><colgroup><col style="width:4%"><col style="width:18%"><col style="width:6%"><col style="width:11%"><col style="width:9%"><col style="width:11%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:10%"></colgroup><thead><tr><th>#</th><th>กว้าง × ยาว × หนา<br><small>หน่วย mm</small></th><th>เกรด</th><th class="ss-num">Physical</th><th class="ss-num">ยอดจอง</th><th class="ss-num">Free</th><th class="ss-num">เทียบ 2.5</th><th class="ss-num">ราคา/หน่วย</th><th class="ss-num">มูลค่า (฿)</th><th class="ss-num">Free (฿)</th></tr></thead><tbody>${m.rows.filter(r=>String(Number(r.t))===thick).map(r=>`<tr class="ss-stock-row" data-stock-row-key="${esc(r.key)}"><td>${++index}</td><th>${number(r.w,3)} × ${number(r.l,3)} × ${number(r.t,3)}</th><td><b class="ss-grade">${esc(r.grade)}</b></td>${cell(r.qty)}${cell(r.committedQty)}<td class="ss-num ss-free">${number(r.freeQty)}</td>${cell(r.eq)}${stockPriceCells(r)}</tr><tr class="ss-description"><td colspan="10"><div><b>SKU</b> ${esc(r.sku||'—')} <span>· ${esc(r.desc)} · ${esc(r.size)}</span></div><div>${provenance(r)}</div>${r.physicalAt||r.freeAt?`<div class="ss-manual">${r.physicalAt?'ปรับ Physical '+esc(when(r.physicalAt)):''}${r.physicalAt&&r.freeAt?' · ':''}${r.freeAt?'ปรับ Free '+esc(when(r.freeAt)):''}</div>`:''}<div class="ss-memos">${memo(r,'followup','การติดตามยอดขาย')}${memo(r,'note','หมายเหตุ / แนวทางจัดการสต๊อก')}</div></td></tr>`).join('')}</tbody></table></section>`).join('')}
       <div class="ss-grand"><b>รวมครบ ${number(t.count)} สเปก</b><span>Physical <strong>${stockQuantityText(t,'qty')}</strong></span><span>ยอดจอง <strong>${stockQuantityText(t,'committedQty')}</strong></span><span>Free <strong>${stockQuantityText(t,'freeQty')}</strong></span></div>
+      </section>
       <footer class="ss-footer"><div><b>จบรายงาน · แสดงครบ ${number(t.count)} / ${number(t.count)} สเปก</b><br>แหล่งข้อมูล: Stock AAF ส่วนกลาง${m.sourceRowCount?' · ต้นฉบับ '+number(m.sourceRowCount)+' แถว':''}<br>bbeautdb-arch.github.io/ybfjatetsllnibjirzbr/stock_manager.html</div><div>สร้างมุมมอง ${esc(when(m.renderedAt))}<br>ข้อมูลบันทึกล่าสุด ${esc(when(m.updatedAt))}<br>รายงานสำหรับใช้ภายในบริษัท</div></footer>
       </div></article>`;
   }
@@ -538,6 +559,7 @@
   const style=document.createElement('style');style.textContent=`
     [data-aaf-stock-summary]{font-family:'Prompt',sans-serif;color:#172b42;padding-bottom:40px;min-width:0;font-size:14px;line-height:1.55}
     [data-aaf-stock-summary] *{box-sizing:border-box}
+    [data-aaf-stock-summary] .ss-legacy-sales-services,[data-aaf-stock-summary] .ss-legacy-detail{display:none!important}
     [data-aaf-stock-summary] .ss-tools{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:0 0 16px;flex-wrap:wrap}
     [data-aaf-stock-summary] .ss-tools h2{font-size:23px;font-weight:700;margin:0}
     [data-aaf-stock-summary] .ss-tools p{margin:4px 0;color:#52657a}
@@ -777,7 +799,7 @@
     [data-aaf-stock-summary].ss-overview-export .ss-overview-actions,[data-aaf-stock-summary].ss-export .ss-card-toggle{display:none}
     @media(max-width:650px){[data-aaf-stock-summary]:not(.ss-export) .ss-daily-overview .ss-kpis{grid-template-columns:1fr}[data-aaf-stock-summary]:not(.ss-export) .ss-card-detail-content{grid-template-columns:1fr}}
   `;document.head.append(style);
-  function showError(message){if(!root)return;const n=root.querySelector('.ss-status')||root;n.textContent=message;n.classList.add('ss-error');root.querySelectorAll('.ss-download,.cash-download,.ss-overview-download').forEach(b=>b.disabled=true);latest=null;root.querySelector('.ss-sheet')?.remove();root.querySelector('.cash-sheet')?.remove();}
+  function showError(message){orderHeader=null;orderHeaderError='รอโหลดรายงานเดือนที่ตรวจครบใหม่';if(!root)return;const n=root.querySelector('.ss-status')||root;n.textContent=message;n.classList.add('ss-error');root.querySelectorAll('.ss-download,.cash-download,.ss-overview-download').forEach(b=>b.disabled=true);latest=null;root.querySelector('.ss-sheet')?.remove();root.querySelector('.cash-sheet')?.remove();}
   let jumpedToCash=false;
   function update(data,calculate){
     if(!root)return;let m=model(data,calculate);m.salesSummary=window.AAFSalesPreview?.getReportSummary?.()||null;
@@ -785,12 +807,14 @@
     m.headerExchangeRate=headerExchangeRate;m=withSavedCatalog(m,savedStockCatalog,headerExchangeRate);latest=m;root.classList.remove('ss-error');
     // Retain the same native preview node: changing stock revisions must not discard price/note drafts.
     const preview=root.querySelector('#stock-sales-preview-host');
-    const focused=preview?.shadowRoot?.activeElement;
+    const orderPreview=root.querySelector('#stock-order-review-host');
+    const focused=orderPreview?.shadowRoot?.activeElement||orderPreview?.querySelector('input:focus,textarea:focus,select:focus')||preview?.shadowRoot?.activeElement;
     const selection=focused&&typeof focused.selectionStart==='number'?{start:focused.selectionStart,end:focused.selectionEnd}:null;
-    preview?.remove();
+    preview?.remove();orderPreview?.remove();
     root.innerHTML=`<div class="ss-tools ss-report-intro"><div><h2>สรุปสต๊อกสำหรับส่งรายงาน</h2><p>รายงานยาวครบทุกแถว • ข้อมูลอ่านอย่างเดียว ไม่เปลี่ยนข้อมูลสต๊อก</p><a href="#stock-cash">ดูสต๊อกและเงิน ↓</a></div><button type="button" class="ss-download" ${exporting?'disabled':''}>ดาวน์โหลดภาพยาว PNG</button></div><p class="ss-status" role="status">ภาพรวมจากข้อมูลส่วนกลางที่โหลดล่าสุด — ใช้เฉพาะค่าที่บันทึกสำเร็จจากหน้าสต๊อก</p>${html(m)}${m.cash?`<div class="ss-tools" style="margin-top:28px"><h2>กล่องสต๊อกและเงิน</h2><button type="button" class="cash-download" ${exporting?'disabled':''}>ดาวน์โหลดกล่องสต๊อกและเงิน PNG</button></div>${window.AAFStockCash.render(m.cash)}`:m.cashError?`<p class="ss-error">ยังแสดงกล่องเงินไม่ได้: ${esc(m.cashError)}</p>`:''}`;
     root.querySelector('.ss-download').addEventListener('click',()=>download());root.querySelector('.cash-download')?.addEventListener('click',()=>download('cash'));
     window.AAFSalesPreview?.attach(root.querySelector('#stock-sales-preview-slot'));
+    window.AAFOrderReview?.attach(root.querySelector('#stock-order-review-slot'));
     syncPriceDrafts();
     if(focused?.isConnected){focused.focus({preventScroll:true});if(selection)focused.setSelectionRange(selection.start,selection.end);}
     if(!jumpedToCash&&location.hash==='#stock-cash'&&m.cash){jumpedToCash=true;root.querySelector('#stock-cash').scrollIntoView();}
@@ -816,7 +840,7 @@
       status(`${which==='overview'?'ดาวน์โหลดภาพรวม 4 กล่องแล้ว':`ดาวน์โหลดภาพครบ ${captured.rows.length} สเปกแล้ว`} · ข้อมูลบันทึก ${when(captured.updatedAt)}${latest!==captured?' · มีข้อมูลใหม่บนหน้าจอหลังเริ่มสร้างภาพ':''}`);
     }catch(e){status('ยังไม่ได้ดาวน์โหลดภาพ: '+e.message);}finally{box?.remove();exporting=false;root.querySelectorAll('.ss-download,.cash-download,.ss-overview-download').forEach(b=>b.disabled=!latest);}
   }
-  window.AAFStockSummary={update,showError,setSalesSummary,setExchangeRate,setSavedStockCatalog,syncPriceDrafts};
+  window.AAFStockSummary={update,showError,setSalesSummary,setOrderReview,setExchangeRate,setSavedStockCatalog,syncPriceDrafts};
   // Pure read-only builders exposed for regression tests and isolated previews.
   window.AAFStockSummary.buildModel=model;window.AAFStockSummary.renderHTML=html;window.AAFStockSummary.renderKpis=kpiHTML;
   window.AAFStockSummary.soldLoadingBreakdown=soldLoadingBreakdown;

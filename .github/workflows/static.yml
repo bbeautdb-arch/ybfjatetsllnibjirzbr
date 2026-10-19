@@ -49,6 +49,7 @@ jobs:
           node --test tests/stock-cash.mjs
           node --test tests/stock-reservations.mjs
           node --test tests/stock-review-notes-bridge.mjs
+          node --test tests/stock-order-controller.mjs tests/stock-order-review-ui.mjs tests/stock-order-header.mjs
       - name: Stage public files only
         run: |
           mkdir _site

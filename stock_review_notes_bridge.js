@@ -3,7 +3,12 @@
   'use strict';
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
-  else api.boot(root);
+  else {
+    // Shared, pure validators for the same-origin report. No credentials or
+    // transport are exported; the localhost channel keeps its original scope.
+    root.AAFStockNotesCore = Object.freeze({ parseSnapshot: api.parseSnapshot, validChanges: api.validChanges });
+    api.boot(root);
+  }
 })(typeof window === 'undefined' ? null : window, function () {
   'use strict';
   const PROTOCOL = 'aaf-review-notes-v1';
@@ -46,6 +51,18 @@
   const qty = v => typeof v === 'number' && Number.isFinite(v) && v >= 0;
   const integer = v => Number.isSafeInteger(v) && v >= 0;
   const keyOf = r => [Number(r.t), r.grade, Math.min(Number(r.w), Number(r.l)), Math.max(Number(r.w), Number(r.l)), r.unit].join('|');
+  const sourceRecord = r => {
+    // Keep the server's exact raw-row identity. Do not replace a reversed alias
+    // with the shared-note key or pick one alias's tracking as the winner.
+    if (typeof r.key !== 'string' || r.key !== `w${Number(r.w)}_l${Number(r.l)}_t${Number(r.t)}_g${r.grade}`) fail('invalid-snapshot');
+    const result = { rawKey: r.key };
+    for (const field of ['note', 'noteBy', 'noteAt', 'followup', 'followupBy', 'followupAt']) {
+      const value = r[field];
+      if (value !== undefined && value !== null && (typeof value !== 'string' || value.length > 4000)) fail('invalid-snapshot');
+      result[field] = value == null ? '' : value;
+    }
+    return result;
+  };
   function canonicalKey(key) {
     if (typeof key !== 'string') return false;
     const p = key.split('|');
@@ -59,9 +76,10 @@
     for (const r of stock.rows) {
       if (!object(r) || !['w', 'l', 't'].every(k => dimension(r[k])) || !GRADES.has(r.grade) || !['sheet', 'strip'].includes(r.unit) || !qty(r.qty) || !qty(r.freeQty)) fail('invalid-snapshot');
       const key = keyOf(r);
-      if (!grouped.has(key)) grouped.set(key, { key, w: Math.min(Number(r.w), Number(r.l)), l: Math.max(Number(r.w), Number(r.l)), t: Number(r.t), grade: r.grade, unit: r.unit, qty: 0, freeQty: 0, skus: new Set() });
+      if (!grouped.has(key)) grouped.set(key, { key, w: Math.min(Number(r.w), Number(r.l)), l: Math.max(Number(r.w), Number(r.l)), t: Number(r.t), grade: r.grade, unit: r.unit, qty: 0, freeQty: 0, skus: new Set(), records: [] });
       const row = grouped.get(key); row.qty += r.qty; row.freeQty += r.freeQty;
       if (!qty(row.qty) || !qty(row.freeQty)) fail('invalid-snapshot');
+      row.records.push(sourceRecord(r));
       if (typeof r.sku === 'string' && r.sku) row.skus.add(r.sku);
     }
     // Reversed axes are one notes identity. Aggregate only exact dimensions;
@@ -78,7 +96,7 @@
       if (!positive(Number(key)) || String(Number(key)) !== key || typeof value !== 'string' || value.length > 4000) fail('invalid-snapshot');
       legacyNotesByThickness[key] = value;
     }
-    return { snapshot: { rows, notesBySpec, legacyNotesByThickness, revision: stock.revision, catalogRevision: catalog.catalogRevision, reportDate: stock.report.reportDate, readAt: new Date(now).toISOString(), canSave: catalog.permissions?.pricesAndNotes === true }, catalog: clone(catalog), stock: clone(stock) };
+    return { snapshot: { rows, notesBySpec, legacyNotesByThickness, revision: stock.revision, catalogRevision: catalog.catalogRevision, reportDate: stock.report.reportDate, readAt: new Date(now).toISOString(), canSave: catalog.permissions?.pricesAndNotes === true, canEditFollowup: stock.permissions?.followup === true }, catalog: clone(catalog), stock: clone(stock) };
   }
   function validChanges(changes, snapshot) {
     if (!Array.isArray(changes) || !changes.length || changes.length > 2000 || !snapshot.canSave) fail('invalid-request');
@@ -255,15 +273,15 @@
       const doc = win.document, opener = win.opener;
       if (!opener) return;
       const panel = doc.createElement('section');
-      panel.setAttribute('aria-label', 'เชื่อมหมายเหตุกับหน้าตรวจสต๊อกส่วนตัว');
+      panel.setAttribute('aria-label', 'เชื่อมหมายเหตุและอ่านการติดตามกับหน้าตรวจสต๊อกส่วนตัว');
       panel.style.cssText = 'position:fixed;z-index:2147483000;top:12px;right:12px;width:min(620px,calc(100vw - 24px));max-height:90vh;overflow:auto;padding:18px;border:2px solid #0f766e;border-radius:12px;background:#fff;color:#102b39;box-shadow:0 6px 36px #0005;font:14px/1.6 system-ui,sans-serif';
       const make = (tag, text) => { const el = doc.createElement(tag); if (text) el.textContent = text; return el; };
-      const title = make('h2', 'เชื่อมหมายเหตุสินค้า · หน้าตรวจสต๊อกส่วนตัว');
+      const title = make('h2', 'หมายเหตุสินค้าและการติดตาม · หน้าตรวจสต๊อกส่วนตัว');
       title.style.cssText = 'font-size:18px;margin:0 0 8px';
-      const intro = make('p', 'อนุญาตให้หน้าตรวจที่ http://127.0.0.1:8766 อ่านทะเบียนสินค้าและหมายเหตุร่วมกับ Free Stock เท่านั้น ไม่ส่งรหัสเข้าสู่ระบบหรือราคาไปยังหน้านั้น การบันทึกต้องยืนยันในหน้าต่าง AAF นี้ทุกครั้ง');
+      const intro = make('p', 'อนุญาตให้หน้าตรวจที่ http://127.0.0.1:8766 อ่านทะเบียนสินค้า หมายเหตุร่วมกับ Free Stock และข้อความติดตามการขายพร้อมผู้ติดตาม/เวลาติดตาม ไม่ส่งรหัสเข้าสู่ระบบหรือราคาไปยังหน้านั้น การติดตามอ่านอย่างเดียว การบันทึกยังทำได้เฉพาะหมายเหตุสินค้าและต้องยืนยันในหน้าต่าง AAF นี้ทุกครั้ง');
       const status = make('p', 'ยังไม่เชื่อมต่อ · ยังไม่ได้อ่านหรือส่งข้อมูลส่วนกลาง'); status.setAttribute('role', 'status');
       const controls = make('div'); controls.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
-      const approve = make('button', 'อนุญาตเชื่อมหมายเหตุ'), refresh = make('button', 'โหลดหมายเหตุล่าสุด'), disconnect = make('button', 'ตัดการเชื่อมต่อ');
+      const approve = make('button', 'อนุญาตเชื่อมหมายเหตุและอ่านการติดตาม'), refresh = make('button', 'โหลดหมายเหตุและการติดตามล่าสุด'), disconnect = make('button', 'ตัดการเชื่อมต่อ');
       for (const b of [approve, refresh, disconnect]) { b.type = 'button'; b.style.cssText = 'padding:9px 12px;border:1px solid #6b8795;border-radius:6px;background:#f0f8f7;color:#102b39;cursor:pointer'; }
       const login = make('a', 'เข้าสู่ระบบ AAF ด้วยตัวเอง'); login.href = 'login.html?next=stock-sales'; login.style.cssText = 'display:block;margin:8px 0;color:#075985';
       const preview = make('div'), save = make('button', 'ยืนยันบันทึกเฉพาะหมายเหตุ'), cancel = make('button', 'ยกเลิกร่างนี้');
@@ -295,7 +313,7 @@
           if (s.stopped) { preview.replaceChildren(); status.textContent = lastError || 'ตัดการเชื่อมต่อแล้ว · กดปิดแผงนี้หรือเริ่มใหม่จากหน้าตรวจ'; disconnect.disabled = false; disconnect.textContent = 'ปิดแผงนี้'; }
           else if (s.busy) status.textContent = 'กำลังตรวจข้อมูลส่วนกลาง…';
           else if (lastError) status.textContent = lastError;
-          else if (s.snapshot && !s.stage && !s.retryBlocked) status.textContent = 'อ่านหมายเหตุส่วนกลางล่าสุดแล้ว · ' + s.snapshot.rows.length + ' สเปก · รุ่น ' + s.snapshot.revision + ' · ' + new Date(s.snapshot.readAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+          else if (s.snapshot && !s.stage && !s.retryBlocked) status.textContent = 'อ่านหมายเหตุและการติดตามส่วนกลางล่าสุดแล้ว · ' + s.snapshot.rows.length + ' สเปก · การติดตามอ่านอย่างเดียว · รุ่น ' + s.snapshot.revision + ' · ' + new Date(s.snapshot.readAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
         }
       });
       approve.onclick = () => { lastError = ''; return controller.approve(); }; refresh.onclick = () => { lastError = ''; return controller.refresh(); }; save.onclick = () => { lastError = ''; return controller.confirm(); }; cancel.onclick = () => { lastError = ''; return controller.cancel(); };

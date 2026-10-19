@@ -10,7 +10,8 @@ const row={key:'1220|2440|2.5|AAA',sku:'AAA12202440025',desc:'Test <img src=x on
 const data={report:{reportDate:'2026-09-08',sourceRowCount:2},rows:[row,{...row,key:'915|1830|1.60|B',sku:'B09151830016',w:'0915',l:'1830',t:'1.60',grade:'B',qty:0,baseQty:0,freeQty:0,committedQty:0,d90:0,d180:0,priceObj:{price:55,currency:'THB'}}],exchangeRate:34,revision:123,updatedAt:'2026-09-08T08:00:00Z',actor:{token:'not-for-report'},permissions:{adjust:true}};
 const before=JSON.stringify(data),m=buildModel(data,calculate),html=renderHTML(m);
 assert.equal(JSON.stringify(data),before,'no source mutations');
-assert(html.includes('<span>02</span><h3>ยอดขายและสต๊อก</h3>')&&html.includes('<span>03</span><h3>รายละเอียดครบทุกสเปก</h3>'),'section02 hosts the original preview and full details move to03');
+assert(html.includes('<span>02</span><h3>ภาพรวมรายการขาย · เดือนเดียวกับกล่องด้านบน</h3>')&&html.includes('id="stock-order-review-slot"'),'section02 hosts the selected-month review');
+assert(html.includes('class="ss-legacy-sales-services" hidden')&&html.includes('class="ss-legacy-detail" hidden')&&html.includes('<span>03</span><h3>รายละเอียดครบทุกสเปก</h3>'),'legacy services and full source detail remain mounted but hidden, not deleted');
 assert(html.indexOf('stock-sales-preview-slot')<html.indexOf('<span>03</span>'),'sales preview is above full spec details');
 assert.equal(m.rows[0].t,'1.60','numeric thickness sorting');
 assert.equal(m.total.qty,80);assert.equal(m.total.freeQty,75,'manual Free must not be recalculated as 60');

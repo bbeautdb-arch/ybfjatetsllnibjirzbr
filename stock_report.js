@@ -18,6 +18,7 @@
   function fail(message,login=false){
     revision=null;authRequired=login;signin.hidden=!login;tell(message,true);
     window.AAFSalesPreview?.invalidate?.(login?'กรุณาเข้าสู่ระบบอีกครั้ง':message);
+    window.AAFOrderReview?.invalidate?.(login?'กรุณาเข้าสู่ระบบอีกครั้ง':message);
     window.AAFStockSummary?.showError(login?'กรุณาเข้าสู่ระบบด้วยบัญชีที่มีสิทธิ์ดูสต๊อก แล้วกลับมาเปิดหน้ารายงานนี้':message);
     document.title='รายงานสต๊อก AAF';
   }
@@ -37,6 +38,7 @@
       // The API remains the authorization authority; the client role is never a grant.
       if(force||revision===null||String(data.revision)!==revision){
         window.AAFSalesPreview?.setAccess?.({refreshReport:force,salesMode:data.actor?.owner!==true,revision:data.revision,reportDate:data.report?.reportDate,rows:data.rows});
+        window.AAFOrderReview?.setAccess?.({refreshReport:force,notesReadOnly:true,revision:data.revision,reportDate:data.report?.reportDate});
         window.AAFStockSummary.update(data,r=>values(r,data));revision=String(data.revision);
       }
       signin.hidden=true;authRequired=false;

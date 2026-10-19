@@ -106,7 +106,7 @@ assert.equal(model.all.stock.byKey['2.5|B|1220|2440|sheet'].reserved,15,'mix B a
 assert.equal(model.all.stock.unitTotals.sheet.free,180);
 
 const visibleKey='2.5|AAA|1220|2440|sheet';
-const saved={modelContent:{scope:'AAF preview price catalog',fxThbPerUsd:33.3901,freePriceUnit:'THB or USD per actual sheet or strip piece',freeValueCurrency:'THB'},privateContent:{version:3,context:'aaf-sales-stock-preview|free-price-catalog',fx:33.3901,prices:{[visibleKey]:1.95},currencies:{[visibleKey]:'USD'},notesByThickness:{'2.5':'saved note'},savedAt:'2026-10-01T14:44:41.000Z'}};
+const saved={modelContent:{scope:'AAF preview price catalog',fxThbPerUsd:33.3901,freePriceUnit:'THB or USD per actual sheet or strip piece',freeValueCurrency:'THB'},privateContent:{version:3,context:'aaf-sales-stock-preview|free-price-catalog',fx:33.3901,prices:{[visibleKey]:1.95},currencies:{[visibleKey]:'USD'},notesByThickness:{'2.5':'saved note'},notesBySpec:{[visibleKey]:'saved spec note'},savedAt:'2026-10-01T14:44:41.000Z'}};
 for(let index=0;index<95;index++){const key=`${10+index}|F|1220|2440|sheet`;saved.privateContent.prices[key]=index+0.125;saved.privateContent.currencies[key]=index%2?'USD':'THB';}
 assert.equal(Object.keys(saved.privateContent.prices).length,96);
 
@@ -126,19 +126,24 @@ assert.equal(Object.keys(saved.privateContent.prices).length,96);
   assert.equal(Object.keys(initial.privateContent.prices).length,96);
   assert.equal(initial.privateContent.prices[visibleKey],1.95);
   const price=h.find('[data-free-price]',node=>node.dataset.freePrice===visibleKey);
-  const note=h.find('[data-thickness-note]',node=>node.dataset.thicknessNote==='2.5');
+  const note=h.find('[data-spec-note]',node=>node.dataset.specNote===visibleKey);
   assert(price&&note,'synthetic Free inputs are mounted');
+  assert.equal(note.value,'saved spec note','editor reads the exact spec note, not the legacy thickness text');
+  assert.equal(h.root.querySelectorAll('[data-thickness-note]').length,0,'legacy thickness notes have no editable control');
+  assert(h.root.querySelectorAll('[data-legacy-thickness-notes]').some(node=>node.innerHTML.includes('saved note')),'legacy note remains visible for read-only reference');
   const committedSummary=clone(app.getReportSummary());
   price.value='2.5';h.listeners.input({target:price});note.value='draft note';h.listeners.input({target:note});
   assert.deepEqual(app.getReportSummary(),committedSummary,'report summary never reads unsaved price/note drafts');assert.equal(reports.length,1,'draft edits emit no report update');
   const draftExport=app.exportSaved();
   assert.equal(draftExport.privateContent.prices[visibleKey],1.95,'export excludes an unsaved price draft');
-  assert.equal(draftExport.privateContent.notesByThickness['2.5'],'saved note','export excludes an unsaved note draft');
+  assert.equal(draftExport.privateContent.notesByThickness['2.5'],'saved note','legacy thickness text is preserved');
+  assert.equal(draftExport.privateContent.notesBySpec[visibleKey],'saved spec note','export excludes an unsaved per-spec note draft');
   await app.savePrices();
   assert.equal(writes.length,1);assert.equal(Object.keys(writes[0].privateContent.prices).length,96,'save preserves absent catalog specs');
   assert.equal(reports.length,2);assert.equal(reports[1].meta.reason,'saved','acknowledged save emits the new committed summary');
   assert.equal(reports[1].summary.physical.knownValueTHB,200*2.5*33.3901,'saved summary uses the committed price, not the prior or draft catalog');
-  assert.equal(writes[0].privateContent.prices[visibleKey],2.5);assert.equal(writes[0].privateContent.notesByThickness['2.5'],'draft note');
+  assert.equal(writes[0].privateContent.prices[visibleKey],2.5);assert.equal(writes[0].privateContent.notesBySpec[visibleKey],'draft note');
+  assert.equal(writes[0].privateContent.notesByThickness['2.5'],'saved note','saving a spec note never overwrites legacy thickness text');
   assert(!JSON.stringify(writes[0]).includes('PRIVATE-CANARY'),'persistence payload never contains model/customer rows');
   const committed=app.exportSaved();
   assert.equal(committed.privateContent.version,3);assert.equal(committed.privateContent.context,'aaf-sales-stock-preview|free-price-catalog');
@@ -385,7 +390,7 @@ assert.equal(Object.keys(saved.privateContent.prices).length,96);
   const readerView=api.mount(readonly.root,model,{readOnly:true,fxReference:{rate:33.3901}},store);
   await ownerView.ready;await readerView.ready;
   assert.deepEqual(readerView.getReportSummary(),ownerView.getReportSummary());
-  assert(readonly.root.querySelectorAll('[data-fx],[data-free-price],[data-free-currency],[data-thickness-note]').every(node=>node.disabled));
+  assert(readonly.root.querySelectorAll('[data-fx],[data-free-price],[data-free-currency],[data-spec-note]').every(node=>node.disabled));
   assert.equal(readonly.root.querySelectorAll('[data-save-prices],[data-export-prices]').length,0);
   assert.equal(readerView.setDraftPrice(visibleKey,999,'THB'),false);
   assert.equal(await readerView.savePrices(),false);assert.equal(readerView.exportSaved(),null);
@@ -397,11 +402,12 @@ assert.equal(Object.keys(saved.privateContent.prices).length,96);
   const h=harness(),writes=[];
   const app=api.mount(h.root,model,{priceNotesOnly:true,fxReference:{rate:33.3901}},{load:()=>clone(saved),setWidgetState:async value=>writes.push(value)});
   await app.ready;assert(h.root.querySelectorAll('[data-fx]').every(node=>node.disabled));
-  assert(h.root.querySelectorAll('[data-free-price],[data-thickness-note]').every(node=>!node.disabled));
+  assert(h.root.querySelectorAll('[data-free-price],[data-spec-note]').every(node=>!node.disabled));
   const fx=h.find('[data-fx]');fx.value='99';h.listeners.input({target:fx});assert.equal(app.getPriceState().fx,saved.privateContent.fx);
-  assert(app.setDraftPrice(visibleKey,2.75,'USD'));const note=h.find('[data-thickness-note]');note.value='sales note';h.listeners.input({target:note});
+  assert(app.setDraftPrice(visibleKey,2.75,'USD'));const note=h.find('[data-spec-note]',node=>node.dataset.specNote===visibleKey);note.value='sales note';h.listeners.input({target:note});
   assert.equal(await app.savePrices(),true);assert.equal(writes.length,1);assert.equal(writes[0].privateContent.fx,saved.privateContent.fx);
-  assert.equal(writes[0].privateContent.notesByThickness[note.dataset.thicknessNote],'sales note');app.destroy();
+  assert.equal(writes[0].privateContent.notesBySpec[note.dataset.specNote],'sales note');
+  assert.equal(writes[0].privateContent.notesByThickness['2.5'],'saved note','sales edits preserve read-only legacy thickness notes');app.destroy();
 }
 console.log('Stock sales preview role permissions, parity, catalog preservation and fail-closed persistence tests passed.');
 

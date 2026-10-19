@@ -24,7 +24,7 @@
   const can=k=>!salesLink&&!!shared?.permissions?.[k]&&!accessDenied;
   const isOwner=()=>can('adjust');
   const banner=(message,error=false)=>{for(const id of ['shared-message','stock-owner-message','stock-sales-message']){const n=$(id);if(n){n.textContent=message;n.style.color=error?'#be123c':'#047857';}}const access=$('stock-report-access');if(access){access.hidden=!error;$('stock-report-access-message').textContent=error?message:'';}};
-  const previewPending=()=>!!(window.AAFSalesPreview?.isDirty?.()||window.AAFSalesPreview?.isSaving?.());
+  const previewPending=()=>!!(window.AAFSalesPreview?.isDirty?.()||window.AAFSalesPreview?.isSaving?.()||window.AAFOrderReview?.isDirty?.()||window.AAFOrderReview?.isSaving?.());
   const css=document.createElement('style');css.textContent=`
     [hidden]{display:none!important}
     #shared-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
@@ -51,6 +51,7 @@
     if($('download-stock-report'))$('download-stock-report').disabled=true;
     if($('stock-sales-state'))$('stock-sales-state').textContent='ยังยืนยันสิทธิ์อ่านข้อมูลส่วนกลางไม่ได้';
     window.AAFSalesPreview?.invalidate?.(message);
+    window.AAFOrderReview?.invalidate?.(message);
   }
   function observeRequestAccess(){
     const auth=token();
@@ -112,6 +113,7 @@
   function accept(data,refreshReport=false){assertCurrentResponse(data);if(shared&&data.revision!==shared.revision){reportData=null;reportDataDay=null;$('download-stock-report').disabled=true;}accessDenied=false;lastReportRetryAt=Date.now();shared=data;user=data.actor;currentStockData=data.rows;globalExchangeRate=data.exchangeRate;priceDB=Object.fromEntries(data.rows.map(r=>[r.key,r.priceObj]));
     $('stock-summary').hidden=false;window.AAFStockLinks?.update(data);
     window.AAFSalesPreview?.setAccess?.({...controllerEvidence(data),refreshReport});
+    window.AAFOrderReview?.setAccess?.({...controllerEvidence(data),refreshReport});
     if($('stock-sales-tools'))$('stock-sales-tools').hidden=!salesLink;
     if($('stock-sales-state'))$('stock-sales-state').textContent='โหลดจากส่วนกลางล่าสุด '+dateText(new Date().toISOString())+' · รายงาน '+(data.report?.reportDate||'—')+' · รุ่นข้อมูล '+data.revision+' · '+data.rows.length+' สเปก';
     $('global-exchange-rate').value=data.exchangeRate;$('global-exchange-rate').disabled=!isOwner();
