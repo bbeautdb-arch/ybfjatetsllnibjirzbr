@@ -11,7 +11,7 @@ const key = '2|A|100|200|sheet';
 const zeroKey = '2|B|100|200|sheet';
 const copy = value => JSON.parse(JSON.stringify(value));
 function fixture() {
-  const rows = [{ w: 100, l: 200, t: 2, grade: 'A', unit: 'sheet', sku: 'SYNTH-A', qty: 10, freeQty: 0, committedQty: 10, priceObj: { price: 2, currency: 'THB' } }, { w: 100, l: 200, t: 2, grade: 'B', unit: 'sheet', sku: 'SYNTH-B', qty: 0, freeQty: 0, committedQty: 0 }];
+  const rows = [{ key: 'w100_l200_t2_gA', w: 100, l: 200, t: 2, grade: 'A', unit: 'sheet', sku: 'SYNTH-A', qty: 10, freeQty: 0, committedQty: 10, priceObj: { price: 2, currency: 'THB' } }, { key: 'w100_l200_t2_gB', w: 100, l: 200, t: 2, grade: 'B', unit: 'sheet', sku: 'SYNTH-B', qty: 0, freeQty: 0, committedQty: 0 }];
   return { stock: { ok: true, revision: 5, report: { reportDate: '2026-01-01' }, rows, actor: { username: 'synthetic-only' } }, catalog: { ok: true, revision: 5, catalogRevision: 3, stockReportDate: '2026-01-01', permissions: { pricesAndNotes: true }, widgetState: { privateContent: { version: 3, context: 'aaf-sales-stock-preview|free-price-catalog', fx: 3, prices: { [key]: 2 }, currencies: { [key]: 'THB' }, notesByThickness: { '2': 'legacy synthetic' }, notesBySpec: { [key]: 'before synthetic' }, savedAt: '2026-01-01T00:00:00.000Z' } } } };
 }
 function harness() {
@@ -76,9 +76,9 @@ test('snapshot includes all grades and zero-stock rows; drops auth prices and fi
 });
 test('reversed-axis catalog aliases share one note row while quantities sum exactly', async () => {
   const h = harness();
-  h.records.stock.rows.push({ w: 200, l: 100, t: 2, grade: 'A', unit: 'sheet', sku: 'SYNTH-REVERSE', qty: 3, freeQty: 2 });
-  h.records.stock.rows.push({ w: 1200, l: 2400, t: 2, grade: 'A', unit: 'sheet', qty: 0, freeQty: 0 });
-  h.records.stock.rows.push({ w: 1220, l: 2440, t: 2, grade: 'A', unit: 'sheet', qty: 0, freeQty: 0 });
+  h.records.stock.rows.push({ key: 'w200_l100_t2_gA', w: 200, l: 100, t: 2, grade: 'A', unit: 'sheet', sku: 'SYNTH-REVERSE', qty: 3, freeQty: 2 });
+  h.records.stock.rows.push({ key: 'w1200_l2400_t2_gA', w: 1200, l: 2400, t: 2, grade: 'A', unit: 'sheet', qty: 0, freeQty: 0 });
+  h.records.stock.rows.push({ key: 'w1220_l2440_t2_gA', w: 1220, l: 2440, t: 2, grade: 'A', unit: 'sheet', qty: 0, freeQty: 0 });
   await h.controller.approve();
   const snapshot = last(h).snapshot;
   assert.equal(snapshot.rows.length, 4); assert.equal(snapshot.rows[0].qty, 13); assert.equal(snapshot.rows[0].freeQty, 2);
@@ -97,6 +97,50 @@ test('numeric-string dimensions from central catalog normalize without changing 
     const { stock, catalog } = fixture(); stock.rows[0].t = invalid;
     assert.throws(() => bridge.parseSnapshot(stock, catalog, 1000), /ตรวจสอบไม่ครบ/);
   }
+});
+test('tracking and stock-note records retain every reversed alias without choosing or combining values', async () => {
+  const h = harness();
+  Object.assign(h.records.stock.rows[0], { note: 'synthetic stock note', noteBy: 'synthetic-note-author', noteAt: '2026-01-01T00:01:00Z', followup: 'synthetic followup A', followupBy: 'synthetic-sales-A', followupAt: '2026-01-01T00:02:00Z', internalSecret: 'must-not-forward' });
+  h.records.stock.rows.push({ key: 'w200_l100_t2_gA', w: 200, l: 100, t: 2, grade: 'A', unit: 'sheet', qty: 3, freeQty: 2, note: 'synthetic reverse note', noteBy: null, followup: 'synthetic followup B', followupBy: 'synthetic-sales-B', followupAt: '2026-01-01T00:03:00Z' });
+  const before = copy(h.records.stock.rows);
+  await h.controller.approve();
+  const row = last(h).snapshot.rows[0];
+  assert.deepEqual(row.records, [
+    { rawKey: 'w100_l200_t2_gA', note: 'synthetic stock note', noteBy: 'synthetic-note-author', noteAt: '2026-01-01T00:01:00Z', followup: 'synthetic followup A', followupBy: 'synthetic-sales-A', followupAt: '2026-01-01T00:02:00Z' },
+    { rawKey: 'w200_l100_t2_gA', note: 'synthetic reverse note', noteBy: '', noteAt: '', followup: 'synthetic followup B', followupBy: 'synthetic-sales-B', followupAt: '2026-01-01T00:03:00Z' }
+  ]);
+  assert.equal(last(h).snapshot.notesBySpec[key], 'before synthetic');
+  assert.doesNotMatch(JSON.stringify(last(h)), /internalSecret|must-not-forward/);
+  assert.deepEqual(h.records.stock.rows, before); assert.equal(posts(h).length, 0);
+  row.records[0].followup = 'local-only mutation'; assert.deepEqual(h.records.stock.rows, before);
+});
+test('tracking fields require bounded strings and an exact original raw-row identity', () => {
+  for (const field of ['note', 'noteBy', 'noteAt', 'followup', 'followupBy', 'followupAt']) {
+    for (const bad of [false, 123, [], {}, 'x'.repeat(4001)]) {
+      const { stock, catalog } = fixture(); stock.rows[0][field] = bad;
+      assert.throws(() => bridge.parseSnapshot(stock, catalog, 1000), /ตรวจสอบไม่ครบ/, field);
+    }
+    const { stock, catalog } = fixture(); stock.rows[0][field] = 'x'.repeat(4000);
+    assert.equal(bridge.parseSnapshot(stock, catalog, 1000).snapshot.rows[0].records[0][field].length, 4000);
+  }
+  for (const bad of [undefined, null, '', key, 'w200_l100_t2_gA', 'w100_l200_t2_gB', 'w100_l200_t3_gA']) {
+    const { stock, catalog } = fixture(); stock.rows[0].key = bad;
+    assert.throws(() => bridge.parseSnapshot(stock, catalog, 1000), /ตรวจสอบไม่ครบ/);
+  }
+});
+test('fresh tracking permission is independent of notes permission and grants no tracking write protocol', async () => {
+  const h = harness(); await h.controller.approve();
+  assert.equal(last(h).snapshot.canSave, true); assert.equal(last(h).snapshot.canEditFollowup, false);
+  h.records.stock.permissions = { followup: true }; await h.controller.refresh();
+  assert.equal(last(h).snapshot.canEditFollowup, true);
+  for (const value of [false, 'true', 1, null]) {
+    h.records.stock.permissions.followup = value; await h.controller.refresh();
+    assert.equal(last(h).snapshot.canEditFollowup, false);
+  }
+  h.records.stock.permissions.followup = true;
+  assert.equal(await h.controller.receive(h.event('EDIT_FOLLOWUP', { requestId, rawKey: 'w100_l200_t2_gA', value: 'not allowed' })), false);
+  await h.controller.receive(h.event('STAGE', { requestId, changes: [{ ...changes[0], followup: 'not allowed' }] }));
+  assert.equal(last(h).code, 'invalid-request'); assert.equal(posts(h).length, 0);
 });
 test('STAGE previews only; explicit popup confirmation writes one notes-only patch then reads back', async () => {
   const h = harness(), beforeRows = copy(h.records.stock.rows), beforePrices = copy(h.records.catalog.widgetState.privateContent.prices);
@@ -174,6 +218,14 @@ test('readback detects quantity mutation independent of note correctness', async
   h.setHook(async (url, opts) => { if (opts.method === 'POST') h.records.stock.rows[0].qty = 11; return null; });
   assert.equal(await h.controller.confirm(), false); assert.equal(last(h).code, 'save-uncertain');
 });
+test('notes-only readback still rejects changes to any raw tracking or stock-note field', async () => {
+  for (const field of ['note', 'noteBy', 'noteAt', 'followup', 'followupBy', 'followupAt']) {
+    const h = harness(); await h.controller.approve(); await h.controller.receive(h.event('STAGE', { requestId, changes }));
+    h.setHook(async (url, opts) => { if (opts.method === 'POST') h.records.stock.rows[0][field] = 'unexpected synthetic change'; return null; });
+    assert.equal(await h.controller.confirm(), false, field); assert.equal(last(h).code, 'save-uncertain', field);
+    await h.controller.refresh(); assert.equal(last(h).code, 'readback-conflict', field); assert.equal(last(h).retryBlocked, true);
+  }
+});
 test('token changed, logged out or expired cancels connection without leaking snapshot', async () => {
   for (const next of ['', 'different-synthetic-token']) {
     const h = harness(); await h.controller.approve(); h.messages.length = 0; h.setToken(next); h.controller.checkSession();
@@ -203,4 +255,6 @@ test('source has no credential migration, wildcard postMessage or arbitrary API 
   const source = fs.readFileSync(new URL('../stock_review_notes_bridge.js', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /localStorage|sessionStorage\.(?:getItem|setItem)\(['"]aaf_user|postMessage\([^\n]*['"]\*['"]|action:\s*['"](?:edit|commercial|saveSalesReport|saveSalesPreview)['"]/);
   assert.match(source, /AAFStockAccess\?\.token/); assert.match(source, /action: 'saveSalesNotes'/);
+  assert.match(source, /การติดตามอ่านอย่างเดียว/);
+  assert.match(source, /การบันทึกยังทำได้เฉพาะหมายเหตุสินค้า/);
 });
