@@ -35,6 +35,15 @@ test('actual prices and order-level receipt partition remain independent of stoc
   r.reconciliation.headerStockValuations.physical.equivalentTHB=999;
   assert.deepEqual(api.build(r).sold.money,m.sold.money);
 });
+test('other reservation native currency breakdown is explicitly actual sale, not the stock estimate above it',()=>{
+  const model=api.build(fixture()),before=JSON.stringify(model),html=api.render(model);
+  const reserved=html.slice(html.indexOf('class="ss-kpi ss-kpi-reserved"'),html.indexOf('class="ss-kpi ss-kpi-free"'));
+  assert.match(reserved,/มูลค่าความต้องการ · ราคาประเมินสต๊อก/);
+  assert.match(reserved,/<small>ราคาขายจริงตามใบขาย \(ไม่ใช่ราคาประเมินสต๊อก\): THB 0 · USD 36<\/small>/);
+  assert.doesNotMatch(reserved,/<small>THB 0 · USD 36<\/small>/);
+  assert.match(reserved,/มูลค่าขายตามใบในกลุ่มนี้/);
+  assert.equal(JSON.stringify(model),before,'label-only correction must not alter any value or classification');
+});
 test('LC without ETD is not promoted from group3 to sold',()=>{
   const r=fixture();r.queueReview.rows[2].commercial.etdValid=false;const m=api.build(r);assert.equal(m.sold.quantity.sheet,30);assert.equal(m.reserved.quantity.sheet,16);
 });
