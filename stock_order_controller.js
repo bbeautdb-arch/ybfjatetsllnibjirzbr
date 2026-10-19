@@ -1,20 +1,16 @@
 /* Authenticated monthly read model. Never writes allocations, stock or prices. */
 (function(root,factory){
   'use strict';
-  const api=factory();
+  const api=factory(typeof module==='object'&&module.exports?require('./stock_review_notes_bridge.js'):root.AAFStockNotesCore);
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.AAFOrderReview=api.boot(root);
-})(typeof window==='undefined'?null:window,function(){
+})(typeof window==='undefined'?null:window,function(core){
   'use strict';
   const API='https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/stock';
   const clone=v=>JSON.parse(JSON.stringify(v));
   const equal=(a,b)=>a===b||!!a&&!!b&&typeof a==='object'&&typeof b==='object'&&Array.isArray(a)===Array.isArray(b)&&Object.keys(a).length===Object.keys(b).length&&Object.keys(a).every(k=>Object.hasOwn(b,k)&&equal(a[k],b[k]));
   const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
-  function verifiedWrite(before,after,changes){
-    const p=after.catalog.widgetState.privateContent;
-    const expected={...clone(before.catalog.widgetState.privateContent),notesBySpec:{...(before.catalog.widgetState.privateContent.notesBySpec||{}),...Object.fromEntries(changes.map(c=>[c.key,c.after]))},savedAt:p.savedAt};
-    return after.snapshot.revision===before.snapshot.revision+1&&after.snapshot.catalogRevision===before.snapshot.catalogRevision+1&&typeof p.savedAt==='string'&&Number.isFinite(Date.parse(p.savedAt))&&equal(p,expected)&&equal(before.stock.rows,after.stock.rows)&&before.stock.exchangeRate===after.stock.exchangeRate&&equal(before.stock.report,after.stock.report)&&equal(before.stock.sellablePlan,after.stock.sellablePlan);
-  }
+  const verifiedWrite=(before,after,changes)=>core.verifiedAnnotationWrite(before,after,changes);
   function createNotesService(env){
     let busy=false,uncertain=null;
     const guard=scope=>{if(scope!==env.scope())fail('session-changed','เซสชันหรือข้อมูลเปลี่ยน กรุณาโหลดส่วนกลางใหม่');};
@@ -27,27 +23,29 @@
       fail('read-failed','ยังอ่านหมายเหตุส่วนกลางไม่ครบ');
     }
     async function readNotes(){
+      if(busy)fail('save-blocked','กำลังบันทึก กรุณารอผลก่อนโหลดหมายเหตุตรวจซ้ำ');
       const scope=env.scope(),fresh=await readCurrent(scope);
       if(uncertain){
         if(verifiedWrite(uncertain.before,fresh,uncertain.changes))uncertain=null;
         else if(equal(uncertain.before.stock,fresh.stock)&&equal(uncertain.before.catalog,fresh.catalog))uncertain=null;
-        else fresh.snapshot.canSave=false;
+        else {fresh.snapshot.canSave=false;fresh.snapshot.canEditFollowup=false;fresh.snapshot.saveUnresolved=true;}
       }
       return fresh.snapshot;
     }
-    async function saveNotes(changes){
+    async function save(changes,combined=false){
       if(busy||uncertain)fail('save-blocked','กำลังบันทึกหรือยังยืนยันผลครั้งก่อนไม่ได้ กรุณาโหลดหมายเหตุเพื่อตรวจผลก่อน');
       busy=true;const scope=env.scope();
       try{
-        const before=await readCurrent(scope),valid=env.core.validChanges(changes,before.snapshot);
+        const before=await readCurrent(scope),valid=combined?env.core.validAnnotationChanges(changes,before.snapshot):env.core.validChanges(changes,before.snapshot);
         guard(scope);uncertain={before,changes:valid};
+        const notesChanges=combined?valid.notesChanges:valid,followupChanges=combined?valid.followupChanges:[];
         let result;
-        try{result=await env.request('',{action:'saveSalesNotes',expectedRevision:before.snapshot.revision,expectedCatalogRevision:before.snapshot.catalogRevision,notesBySpec:Object.fromEntries(valid.map(c=>[c.key,c.after]))});}
-        catch(e){if(['conflict','save-rejected'].includes(e.code))uncertain=null;throw e;}
+        try{result=await env.request('',combined?{action:'saveSalesAnnotations',expectedRevision:before.snapshot.revision,expectedCatalogRevision:before.snapshot.catalogRevision,reportDate:before.snapshot.reportDate,...valid}:{action:'saveSalesNotes',expectedRevision:before.snapshot.revision,expectedCatalogRevision:before.snapshot.catalogRevision,notesBySpec:Object.fromEntries(valid.map(c=>[c.key,c.after]))});}
+        catch(e){if(['conflict','save-rejected','permission-denied','read-only'].includes(e.code))uncertain=null;throw e;}
         guard(scope);
-        if(result.revision!==before.snapshot.revision+1||result.catalogRevision!==before.snapshot.catalogRevision+1)fail('save-uncertain','ยังยืนยันผลบันทึกไม่ได้ ห้ามส่งซ้ำ ให้โหลดหมายเหตุตรวจผลก่อน');
+        if(result.revision!==before.snapshot.revision+1||result.catalogRevision!==before.snapshot.catalogRevision+(notesChanges.length?1:0)||combined&&(result.savedNoteCount!==notesChanges.length||result.savedFollowupCount!==followupChanges.length||typeof result.updatedAt!=='string'||!Number.isFinite(Date.parse(result.updatedAt))))fail('save-uncertain','ยังยืนยันผลบันทึกไม่ได้ ห้ามส่งซ้ำ ให้โหลดหมายเหตุตรวจผลก่อน');
         const after=await readCurrent(scope);
-        if(!verifiedWrite(before,after,valid))fail('save-uncertain','อ่านกลับไม่ตรงกับที่คาด ห้ามบันทึกซ้ำจนกว่าจะตรวจผล');
+        if(!verifiedWrite(before,after,valid)||combined&&after.stock.updatedAt!==result.updatedAt)fail('save-uncertain','อ่านกลับไม่ตรงกับที่คาด ห้ามบันทึกซ้ำจนกว่าจะตรวจผล');
         uncertain=null;return after.snapshot;
       }finally{busy=false;}
     }
@@ -58,7 +56,7 @@
       const plan=await env.parseFile(file,settings,fresh.stock.rows,fresh.snapshot.notesBySpec);guard(scope);
       return {...plan,snapshot:fresh.snapshot};
     }
-    return {readNotes,saveNotes,prepareNotesFile,isBusy:()=>busy,isUncertain:()=>!!uncertain};
+    return {readNotes,saveNotes:changes=>save(changes),saveChanges:changes=>save(changes,true),prepareNotesFile,isBusy:()=>busy,isUncertain:()=>!!uncertain};
   }
   function boot(win){
     let host=null,body=null,status=null,select=null,view=null,loading=null,auth='',epoch=0,access=null,response=null,selectedMonth='',months=[],failed=false;
@@ -66,8 +64,18 @@
     const scope=()=>epoch+'|'+token();
     const tell=text=>{if(status)status.textContent=text;};
     const invalidate=(message='กรุณาโหลดข้อมูลส่วนกลางใหม่')=>{
+      const keepDraft=!!auth&&token()===auth&&view?.hasDirty?.();
       epoch++;access=null;response=null;auth='';loading=null;failed=true;
-      view?.destroy?.();view=null;body?.replaceChildren();
+      if(keepDraft){
+        // Same credential expired/was denied: retain the user's draft in this
+        // mounted view, but no editing/write can resume without fresh access.
+        // A different token or logout always follows the destructive branch.
+        auth=token();
+        const retained=message+' · ร่างยังอยู่ในหน้านี้ กรุณาคัดลอกก่อนเข้าสู่ระบบใหม่; เปลี่ยนบัญชีหรือรีโหลดอาจทำให้ร่างหาย · ยังไม่ส่งซ้ำ';
+        if(view.suspendEditing)view.suspendEditing(retained);else if(body){body.hidden=true;body.inert=true;}
+        win.AAFStockSummary?.setOrderReview?.(null,null);tell(retained);return;
+      }
+      view?.destroy?.();view=null;body?.replaceChildren();if(body){body.hidden=false;body.inert=false;}
       win.AAFStockSummary?.setOrderReview?.(null,null);tell(message);
     };
     async function request(suffix='',payload=null){
@@ -78,6 +86,7 @@
       try{res=await win.fetch(API+suffix,{method:payload?'POST':'GET',cache:'no-store',headers:{Authorization:'Bearer '+credential,...(payload?{'Content-Type':'text/plain;charset=UTF-8'}:{})},...(payload?{body:JSON.stringify(payload)}:{})});}
       catch{fail(payload?'save-uncertain':'read-failed',payload?'ยังยืนยันผลบันทึกไม่ได้ ห้ามส่งซ้ำ ให้โหลดหมายเหตุตรวจผลก่อน':'อ่านส่วนกลางไม่สำเร็จ กรุณาตรวจการเชื่อมต่อ');}
       if(current!==scope())fail('session-changed','เซสชันเปลี่ยนระหว่างอ่าน ไม่ใช้ผลเก่า');
+      if(res.status===403&&payload)fail('permission-denied','ยังไม่บันทึก · บัญชีนี้ไม่มีสิทธิ์แก้หมายเหตุหรือการติดตามที่เลือก ร่างยังอยู่ กรุณาตรวจสิทธิ์');
       if([401,403].includes(res.status)){invalidate(res.status===401?'กรุณาเข้าสู่ระบบ AAF ใหม่':'บัญชีหรือลิงก์นี้ไม่มีสิทธิ์อ่านรายงาน');fail('auth-expired','สิทธิ์อ่านข้อมูลหมดอายุหรือไม่เพียงพอ');}
       if([409,412].includes(res.status))fail('conflict','ข้อมูลส่วนกลางเปลี่ยนแล้ว กรุณาโหลดล่าสุดและตรวจร่างก่อนบันทึก');
       if(res.status===422&&!payload)fail('month-unavailable','เดือนนี้ยังไม่มีชุดข้อมูลที่ตรวจครบ ไม่ใช้เดือนอื่นแทน');
@@ -122,7 +131,7 @@
           response=data;selectedMonth=month;months=available;failed=false;
           select.replaceChildren(...months.map(m=>{const option=win.document.createElement('option');option.value=m;option.textContent=m;option.selected=m===month;return option;}));
           const review={...data.review,readModel:data.readModel};
-          if(view)view.update(review);else view=win.AAFOrderReviewUI.mount(body,review,{readNotes:async()=>{const snapshot=await notes.readNotes();return access?.notesReadOnly?{...snapshot,canSave:false}:snapshot;},saveNotes:notes.saveNotes,prepareNotesFile:async(file,settings)=>{if(access?.notesReadOnly)fail('read-only','รายงานหน้านี้อ่านอย่างเดียว');return notes.prepareNotesFile(file,settings);}});
+          if(view)view.update(review);else view=win.AAFOrderReviewUI.mount(body,review,{readNotes:async()=>{const snapshot=await notes.readNotes();if(snapshot.saveUnresolved)fail('save-uncertain','ข้อมูลหลังบันทึกยังไม่ตรงครบทุกช่องที่ต้องคงเดิม · เก็บร่างและสถานะรอตรวจไว้ ห้ามส่งซ้ำ ยังไม่ถือว่าเซฟสำเร็จ');return access?.notesReadOnly?{...snapshot,canSave:false,canEditFollowup:false}:snapshot;},saveNotes:notes.saveNotes,saveChanges:notes.saveChanges,prepareNotesFile:async(file,settings)=>{if(access?.notesReadOnly)fail('read-only','รายงานหน้านี้อ่านอย่างเดียว');return notes.prepareNotesFile(file,settings);}});
           publish();tell((data.readModel.warning||'ชุดยอดขายที่ตรวจไว้ ไม่ใช่การอ่านหน้า 09 สด')+' · เดือน '+month+' · อ่านส่วนกลาง '+new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})+' · ไม่เปลี่ยนยอดสต๊อก/จอง/ราคา');
         }catch(e){
           if(stamp!==scope())return;
@@ -141,6 +150,7 @@
       if(auth&&credential!==auth)invalidate('เซสชันเปลี่ยน กรุณาโหลดข้อมูลส่วนกลางใหม่');
       const changed=!access||access.revision!==next.revision||access.reportDate!==next.reportDate;
       auth=credential;access={revision:next.revision,reportDate:next.reportDate,notesReadOnly:next.notesReadOnly===true};
+      if(body){body.hidden=false;body.inert=false;}
       if(changed||next.refreshReport){epoch++;loading=null;failed=true;response=null;win.AAFStockSummary?.setOrderReview?.(null,null);}
     }
     function attach(slot){

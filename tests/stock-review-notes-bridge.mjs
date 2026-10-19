@@ -26,7 +26,16 @@ function harness() {
       if (opts.method === 'POST') {
         const body = JSON.parse(opts.body);
         if (body.expectedRevision !== records.stock.revision || body.expectedCatalogRevision !== records.catalog.catalogRevision) return response({ ok: false }, 409);
-        records.stock.revision++; records.catalog.revision++; records.catalog.catalogRevision++;
+        records.stock.revision++; records.catalog.revision++;
+        if(body.action==='saveSalesAnnotations'){
+          assert.deepEqual(Object.keys(body).sort(),['action','expectedRevision','expectedCatalogRevision','reportDate','notesChanges','followupChanges'].sort());
+          assert.equal(body.reportDate,records.stock.report.reportDate);
+          records.stock.updatedAt='2026-01-01T01:00:00.000Z';
+          if(body.notesChanges.length){records.catalog.catalogRevision++;for(const c of body.notesChanges)records.catalog.widgetState.privateContent.notesBySpec[c.key]=c.after;records.catalog.widgetState.privateContent.savedAt=records.stock.updatedAt;}
+          for(const c of body.followupChanges)Object.assign(records.stock.rows.find(r=>r.key===c.rawKey),{followup:c.after,followupBy:records.stock.actor.username,followupAt:records.stock.updatedAt});
+          return response({ok:true,revision:records.stock.revision,catalogRevision:records.catalog.catalogRevision,updatedAt:records.stock.updatedAt,savedNoteCount:body.notesChanges.length,savedFollowupCount:body.followupChanges.length});
+        }
+        records.catalog.catalogRevision++;
         records.catalog.widgetState.privateContent.notesBySpec = { ...records.catalog.widgetState.privateContent.notesBySpec, ...body.notesBySpec };
         records.catalog.widgetState.privateContent.savedAt = '2026-01-01T01:00:00.000Z';
         return response(records.catalog);
@@ -128,7 +137,7 @@ test('tracking fields require bounded strings and an exact original raw-row iden
     assert.throws(() => bridge.parseSnapshot(stock, catalog, 1000), /ตรวจสอบไม่ครบ/);
   }
 });
-test('fresh tracking permission is independent of notes permission and grants no tracking write protocol', async () => {
+test('fresh tracking permission is independent of notes permission; generic unscoped tracking messages remain forbidden', async () => {
   const h = harness(); await h.controller.approve();
   assert.equal(last(h).snapshot.canSave, true); assert.equal(last(h).snapshot.canEditFollowup, false);
   h.records.stock.permissions = { followup: true }; await h.controller.refresh();
@@ -211,7 +220,7 @@ test('readback detects price mutation even when desired notes match; remains blo
   const h = harness(); await h.controller.approve(); await h.controller.receive(h.event('STAGE', { requestId, changes }));
   h.setHook(async (url, opts) => { if (opts.method === 'POST') h.records.catalog.widgetState.privateContent.prices[key] = 99; return null; });
   assert.equal(await h.controller.confirm(), false); assert.equal(last(h).code, 'save-uncertain');
-  await h.controller.refresh(); assert.equal(last(h).code, 'readback-conflict'); assert.equal(last(h).retryBlocked, true);
+  const sentBefore=h.messages.length;await h.controller.refresh(); assert.equal(last(h).code, 'readback-conflict'); assert.equal(last(h).retryBlocked, true);assert(!h.messages.slice(sentBefore).some(m=>['SNAPSHOT','SAVED'].includes(m.message.type)),'unresolved protected-field mismatch must not erase matching local drafts');
 });
 test('readback detects quantity mutation independent of note correctness', async () => {
   const h = harness(); await h.controller.approve(); await h.controller.receive(h.event('STAGE', { requestId, changes }));
@@ -256,5 +265,46 @@ test('source has no credential migration, wildcard postMessage or arbitrary API 
   assert.doesNotMatch(source, /localStorage|sessionStorage\.(?:getItem|setItem)\(['"]aaf_user|postMessage\([^\n]*['"]\*['"]|action:\s*['"](?:edit|commercial|saveSalesReport|saveSalesPreview)['"]/);
   assert.match(source, /AAFStockAccess\?\.token/); assert.match(source, /action: 'saveSalesNotes'/);
   assert.match(source, /การติดตามอ่านอย่างเดียว/);
-  assert.match(source, /การบันทึกยังทำได้เฉพาะหมายเหตุสินค้า/);
+  assert.match(source, /บันทึกได้เฉพาะหมายเหตุและการติดตามตามสิทธิ์บัญชีเดิม/);
+  assert.match(source, /saveSalesAnnotations/);
+});
+
+const rawKey='w100_l200_t2_gA';
+const tracking=[{rawKey,before:'',after:'synthetic followup'}];
+test('combined annotations stage has no write until popup confirmation, commits one revision, and exposes no credentials',async()=>{
+  const h=harness();h.records.stock.permissions={followup:true};const before=copy(h.records);await h.controller.approve();
+  await h.controller.receive(h.event('STAGE_CHANGES',{requestId,notesChanges:changes,followupChanges:tracking}));
+  assert.equal(last(h).type,'STAGED');assert.equal(last(h).noteCount,1);assert.equal(last(h).followupCount,1);assert.equal(posts(h).length,0);
+  assert.equal(await h.controller.confirm(),true);assert.equal(posts(h).length,1);assert.equal(h.records.stock.revision,before.stock.revision+1);assert.equal(h.records.catalog.catalogRevision,before.catalog.catalogRevision+1);
+  const payload=JSON.parse(posts(h)[0].opts.body);assert.equal(payload.action,'saveSalesAnnotations');assert.deepEqual(payload.notesChanges,changes);assert.deepEqual(payload.followupChanges,tracking);
+  assert.equal(last(h).type,'SAVED');assert.equal(last(h).snapshot.rows[0].records[0].followup,tracking[0].after);
+  assert.deepEqual(h.records.catalog.widgetState.privateContent.prices,before.catalog.widgetState.privateContent.prices);assert.equal(h.records.stock.rows[0].qty,10);assert.equal(h.records.stock.rows[0].committedQty,10);
+  assert.doesNotMatch(JSON.stringify(h.messages),/synthetic-token|Authorization|Bearer|priceObj/);
+});
+test('followup-only clear changes exact raw row, does not advance catalog, and does not require notes permission',async()=>{
+  const h=harness();h.records.stock.permissions={followup:true};h.records.catalog.permissions.pricesAndNotes=false;h.records.stock.rows[0].followup='clear this';
+  h.records.stock.rows.push({key:'w200_l100_t2_gA',w:200,l:100,t:2,grade:'A',unit:'sheet',qty:1,freeQty:0,followup:'keep reverse'});
+  const before=copy(h.records.catalog.widgetState),rev=h.records.catalog.catalogRevision;await h.controller.approve();
+  await h.controller.receive(h.event('STAGE_CHANGES',{requestId,notesChanges:[],followupChanges:[{rawKey,before:'clear this',after:''}]}));assert.equal(await h.controller.confirm(),true);
+  assert.equal(h.records.stock.rows[0].followup,'');assert.equal(h.records.stock.rows[2].followup,'keep reverse');assert.equal(h.records.catalog.catalogRevision,rev);assert.deepEqual(h.records.catalog.widgetState,before);
+});
+test('followup permission missing or revoked and illegal raw patches never write',async()=>{
+  for(const input of [tracking,[{...tracking[0],rawKey:key}],[{...tracking[0],rawKey:'w200_l100_t2_gA'}],[{...tracking[0],after:'x'.repeat(4001)}],[{...tracking[0],qty:1}],[tracking[0],tracking[0]],[{...tracking[0],before:'stale'}]]){
+    const h=harness();if(input!==tracking)h.records.stock.permissions={followup:true};await h.controller.approve();await h.controller.receive(h.event('STAGE_CHANGES',{requestId,notesChanges:[],followupChanges:input}));assert.equal(last(h).type,'ERROR');await h.controller.confirm();assert.equal(posts(h).length,0);
+  }
+  const h=harness();h.records.stock.permissions={followup:true};await h.controller.approve();await h.controller.receive(h.event('STAGE_CHANGES',{requestId,notesChanges:changes,followupChanges:tracking}));h.records.stock.permissions.followup=false;
+  assert.equal(await h.controller.confirm(),false);assert.equal(posts(h).length,0);assert.equal(last(h).code,'permission-denied');
+});
+test('403 from combined POST preserves approved connection and sends draft-safe error without automatic retry',async()=>{
+  const h=harness();h.records.stock.permissions={followup:true};await h.controller.approve();await h.controller.receive(h.event('STAGE_CHANGES',{requestId,notesChanges:[],followupChanges:tracking}));
+  h.setHook(async(url,opts)=>opts.method==='POST'?response({ok:false},403):null);
+  assert.equal(await h.controller.confirm(),false);assert.equal(last(h).type,'ERROR');assert.equal(last(h).code,'permission-denied');assert.equal(h.controller.state().approved,true);assert.equal(h.controller.state().stopped,false);assert.equal(h.controller.state().retryBlocked,false);assert.equal(posts(h).length,1);
+});
+test('combined lost response is reconciled once; complete protected-data mutation is never treated as saved',async()=>{
+  const h=harness();h.records.stock.permissions={followup:true};await h.controller.approve();await h.controller.receive(h.event('STAGE_CHANGES',{requestId,notesChanges:changes,followupChanges:tracking}));
+  h.setHook(async(url,opts)=>{if(opts.method!=='POST')return null;h.records.stock.revision++;h.records.catalog.revision++;h.records.catalog.catalogRevision++;h.records.stock.updatedAt='2026-01-01T01:00:00.000Z';h.records.catalog.widgetState.privateContent.savedAt=h.records.stock.updatedAt;h.records.catalog.widgetState.privateContent.notesBySpec[key]=changes[0].after;Object.assign(h.records.stock.rows[0],{followup:tracking[0].after,followupBy:'synthetic-only',followupAt:h.records.stock.updatedAt});throw Error('lost response');});
+  assert.equal(await h.controller.confirm(),false);assert(h.controller.state().retryBlocked);await h.controller.confirm();assert.equal(posts(h).length,1);await h.controller.refresh();assert.equal(last(h).type,'SAVED');assert.equal(posts(h).length,1);assert(!h.controller.state().retryBlocked);
+  for(const mutate of [r=>r.stock.exchangeRate=999,r=>r.stock.rows[0].note='protected mutation',r=>r.stock.rows[1].followup='untargeted',r=>r.stock.report.reportDate='2026-01-02',r=>r.catalog.widgetState.privateContent.currencies[key]='USD']){
+    const bad=harness();bad.records.stock.permissions={followup:true};await bad.controller.approve();await bad.controller.receive(bad.event('STAGE_CHANGES',{requestId,notesChanges:changes,followupChanges:tracking}));bad.setHook(async(url,opts)=>{if(opts.method==='POST')mutate(bad.records);return null;});assert.equal(await bad.controller.confirm(),false);assert(bad.controller.state().retryBlocked);
+  }
 });

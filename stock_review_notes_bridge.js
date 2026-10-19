@@ -1,4 +1,4 @@
-/* Notes-only review connection. Authentication stays on this AAF origin. */
+/* Notes/tracking review connection. Authentication stays on this AAF origin. */
 (function (root, factory) {
   'use strict';
   const api = factory();
@@ -6,7 +6,7 @@
   else {
     // Shared, pure validators for the same-origin report. No credentials or
     // transport are exported; the localhost channel keeps its original scope.
-    root.AAFStockNotesCore = Object.freeze({ parseSnapshot: api.parseSnapshot, validChanges: api.validChanges });
+    root.AAFStockNotesCore = Object.freeze({ parseSnapshot: api.parseSnapshot, validChanges: api.validChanges, validAnnotationChanges: api.validAnnotationChanges, verifiedAnnotationWrite: api.verifiedAnnotationWrite });
     api.boot(root);
   }
 })(typeof window === 'undefined' ? null : window, function () {
@@ -22,7 +22,7 @@
     'approval-required': 'กรุณาอนุญาตเชื่อมหมายเหตุในหน้าต่าง AAF นี้ก่อน',
     'auth-required': 'กรุณาเข้าสู่ระบบ AAF ด้วยตัวเอง แล้วกลับมาอนุญาตเชื่อมหมายเหตุ',
     'auth-expired': 'สิทธิ์ AAF หมดอายุ กรุณาเข้าสู่ระบบใหม่ด้วยตัวเอง',
-    'permission-denied': 'บัญชีนี้ยังไม่มีสิทธิ์อ่านหรือบันทึกหมายเหตุฝ่ายขาย',
+    'permission-denied': 'บัญชีนี้ไม่มีสิทธิ์บันทึกหมายเหตุหรือการติดตามที่เลือก · เก็บร่างไว้ กรุณาตรวจสิทธิ์',
     'session-changed': 'บัญชีหรือเซสชันเปลี่ยนแล้ว ยกเลิกการเชื่อมต่อเพื่อป้องกันข้อมูลข้ามบัญชี',
     'disconnected': 'ยกเลิกการเชื่อมหมายเหตุแล้ว',
     'expired': 'การเชื่อมต่อครบ 30 นาทีแล้ว กรุณาเปิดการเชื่อมใหม่',
@@ -72,14 +72,14 @@
     if (!stock?.ok || !catalog?.ok || !integer(stock.revision) || stock.revision !== catalog.revision || !integer(catalog.catalogRevision) || !/^\d{4}-\d{2}-\d{2}$/.test(stock.report?.reportDate || '') || stock.report.reportDate !== catalog.stockReportDate || !Array.isArray(stock.rows) || !stock.rows.length || stock.rows.length > 2000) fail('invalid-snapshot');
     const p = catalog.widgetState?.privateContent;
     if (!object(p) || !object(p.prices) || !object(p.currencies) || !object(p.notesByThickness) || (p.notesBySpec !== undefined && !object(p.notesBySpec))) fail('invalid-snapshot');
-    const grouped = new Map();
+    const grouped = new Map(), rawKeys = new Set();
     for (const r of stock.rows) {
       if (!object(r) || !['w', 'l', 't'].every(k => dimension(r[k])) || !GRADES.has(r.grade) || !['sheet', 'strip'].includes(r.unit) || !qty(r.qty) || !qty(r.freeQty)) fail('invalid-snapshot');
       const key = keyOf(r);
       if (!grouped.has(key)) grouped.set(key, { key, w: Math.min(Number(r.w), Number(r.l)), l: Math.max(Number(r.w), Number(r.l)), t: Number(r.t), grade: r.grade, unit: r.unit, qty: 0, freeQty: 0, skus: new Set(), records: [] });
       const row = grouped.get(key); row.qty += r.qty; row.freeQty += r.freeQty;
       if (!qty(row.qty) || !qty(row.freeQty)) fail('invalid-snapshot');
-      row.records.push(sourceRecord(r));
+      const record=sourceRecord(r);if(rawKeys.has(record.rawKey))fail('invalid-snapshot');rawKeys.add(record.rawKey);row.records.push(record);
       if (typeof r.sku === 'string' && r.sku) row.skus.add(r.sku);
     }
     // Reversed axes are one notes identity. Aggregate only exact dimensions;
@@ -108,6 +108,45 @@
       return clone(c);
     });
   }
+  function validAnnotationChanges(input, snapshot) {
+    if(!exactKeys(input,['notesChanges','followupChanges'])||!Array.isArray(input.notesChanges)||!Array.isArray(input.followupChanges)||input.notesChanges.length>2000||input.followupChanges.length>2000||!input.notesChanges.length&&!input.followupChanges.length)fail('invalid-request');
+    if(input.notesChanges.length&&!snapshot.canSave||input.followupChanges.length&&!snapshot.canEditFollowup)fail('permission-denied');
+    const notesChanges=input.notesChanges.length?validChanges(input.notesChanges,snapshot):[];
+    const known=new Map(),seen=new Set();
+    for(const row of snapshot.rows)for(const record of row.records||[]){if(known.has(record.rawKey))fail('invalid-snapshot');known.set(record.rawKey,record);}
+    const followupChanges=input.followupChanges.map(c=>{
+      if(!exactKeys(c,['rawKey','before','after'])||typeof c.rawKey!=='string'||!known.has(c.rawKey)||seen.has(c.rawKey)||typeof c.before!=='string'||c.before.length>4000||typeof c.after!=='string'||c.after.length>4000||c.before===c.after)fail('invalid-request');
+      seen.add(c.rawKey);if(c.before!==known.get(c.rawKey).followup)fail('conflict');return clone(c);
+    });
+    return {notesChanges,followupChanges};
+  }
+  const annotationChanges=pending=>Array.isArray(pending)?{notesChanges:pending,followupChanges:[]}:pending.changes?{notesChanges:pending.changes,followupChanges:[]}:{notesChanges:pending.notesChanges,followupChanges:pending.followupChanges};
+  const dateString=value=>typeof value==='string'&&Number.isFinite(Date.parse(value));
+  function verifiedAnnotationWrite(before, after, input) {
+    const {notesChanges,followupChanges}=annotationChanges(input);
+    if(!Array.isArray(notesChanges)||!Array.isArray(followupChanges)||after.snapshot.revision!==before.snapshot.revision+1||after.snapshot.catalogRevision!==before.snapshot.catalogRevision+(notesChanges.length?1:0)||after.snapshot.reportDate!==before.snapshot.reportDate)return false;
+    const expectedStock=clone(before.stock),expectedCatalog=clone(before.catalog),p=after.catalog.widgetState?.privateContent;
+    expectedStock.revision=after.snapshot.revision;expectedCatalog.revision=after.snapshot.revision;expectedCatalog.catalogRevision=after.snapshot.catalogRevision;
+    if(Object.hasOwn(before.stock,'updatedAt')||Object.hasOwn(after.stock,'updatedAt')||followupChanges.length){if(!dateString(after.stock.updatedAt))return false;expectedStock.updatedAt=after.stock.updatedAt;}
+    const targeted=new Map(followupChanges.map(change=>[change.rawKey,change]));
+    if(targeted.size!==followupChanges.length)return false;
+    for(const row of expectedStock.rows){
+      const change=targeted.get(row.key);if(!change)continue;
+      const matches=after.stock.rows.filter(candidate=>candidate.key===row.key);if(matches.length!==1)return false;
+      const actual=matches[0];
+      if(actual.followup!==change.after||typeof actual.followupBy!=='string'||!actual.followupBy||actual.followupBy.length>4000||!dateString(actual.followupAt)||actual.followupAt!==after.stock.updatedAt||typeof before.stock.actor?.username==='string'&&actual.followupBy!==before.stock.actor.username)return false;
+      row.followup=change.after;row.followupBy=actual.followupBy;row.followupAt=actual.followupAt;targeted.delete(row.key);
+    }
+    if(targeted.size)return false;
+    if(notesChanges.length){
+      if(!p||!dateString(p.savedAt))return false;
+      expectedCatalog.widgetState.privateContent={...expectedCatalog.widgetState.privateContent,notesBySpec:{...(expectedCatalog.widgetState.privateContent.notesBySpec||{}),...Object.fromEntries(notesChanges.map(c=>[c.key,c.after]))},savedAt:p.savedAt};
+      if(followupChanges.length&&p.savedAt!==after.stock.updatedAt)return false;
+    }
+    // Compare the complete authorized GET surfaces. Only explicit annotations,
+    // their server-generated author/time and CAS timestamps may differ.
+    return equal(after.stock,expectedStock)&&equal(after.catalog,expectedCatalog);
+  }
   function createController(env) {
     if (!UUID.test(env.nonce || '') || !env.opener) throw Error('Invalid review channel');
     let approved = false, stopped = false, busy = false, auth = '', latest = null, stage = null, uncertain = null;
@@ -135,6 +174,7 @@
       try { response = await env.fetch(API + suffix, { method: body ? 'POST' : 'GET', cache: 'no-store', headers: { Authorization: 'Bearer ' + auth, ...(body ? { 'Content-Type': 'text/plain;charset=UTF-8' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }); }
       catch { fail(body ? 'save-uncertain' : 'read-failed'); }
       guard();
+      if (response.status === 403 && body) fail('permission-denied');
       if (response.status === 401 || response.status === 403) { const code = response.status === 401 ? 'auth-expired' : 'permission-denied'; disconnect(code); fail(code); }
       if (response.status === 409 || response.status === 412) fail('conflict');
       if (body && [400, 422].includes(response.status)) fail('save-rejected');
@@ -152,14 +192,6 @@
       }
       fail('read-failed');
     }
-    function expectedCatalog(before, changes, savedAt) {
-      const p = before.catalog.widgetState.privateContent;
-      return { ...clone(p), notesBySpec: { ...(p.notesBySpec || {}), ...Object.fromEntries(changes.map(c => [c.key, c.after])) }, savedAt };
-    }
-    function verifiedWrite(before, after, changes) {
-      const p = after.catalog.widgetState.privateContent;
-      return after.snapshot.revision === before.snapshot.revision + 1 && after.snapshot.catalogRevision === before.snapshot.catalogRevision + 1 && typeof p.savedAt === 'string' && Number.isFinite(Date.parse(p.savedAt)) && equal(p, expectedCatalog(before, changes, p.savedAt)) && equal(after.stock.rows, before.stock.rows) && after.snapshot.reportDate === before.snapshot.reportDate;
-    }
     async function refresh() {
       if (busy) return false;
       busy = true; update();
@@ -169,13 +201,15 @@
         latest = fresh;
         if (uncertain) {
           const pending = uncertain;
-          if (verifiedWrite(pending.before, fresh, pending.changes)) {
+          if (verifiedAnnotationWrite(pending.before, fresh, pending)) {
             uncertain = null; stage = null;
             send('SAVED', { requestId: pending.requestId, snapshot: fresh.snapshot });
-          } else if (pending.changes.every(c => (fresh.snapshot.notesBySpec[c.key] || '') === c.before) && fresh.snapshot.revision === pending.before.snapshot.revision && fresh.snapshot.catalogRevision === pending.before.snapshot.catalogRevision) {
+          } else if (equal(pending.before.stock,fresh.stock)&&equal(pending.before.catalog,fresh.catalog)) {
             uncertain = null; stage = null; report('retry-cleared', pending.requestId);
           } else {
-            send('SNAPSHOT', { snapshot: fresh.snapshot }); report('readback-conflict', pending.requestId);
+            // Do not forward a successful-looking snapshot: a renderer could
+            // otherwise clear matching note drafts while protected data differs.
+            report('readback-conflict', pending.requestId);
           }
         } else send('SNAPSHOT', { snapshot: fresh.snapshot });
         return true;
@@ -193,21 +227,28 @@
     async function receive(event) {
       if (stopped || event.origin !== LOCAL_ORIGIN || event.source !== env.opener) return false;
       const data = event.data;
-      if (!object(data) || data.protocol !== PROTOCOL || data.nonce !== env.nonce || !['HELLO', 'REFRESH', 'STAGE'].includes(data.type)) return false;
-      const allowed = data.type === 'STAGE' ? ['protocol', 'nonce', 'type', 'requestId', 'changes'] : ['protocol', 'nonce', 'type'];
+      if (!object(data) || data.protocol !== PROTOCOL || data.nonce !== env.nonce || !['HELLO', 'REFRESH', 'STAGE', 'STAGE_CHANGES'].includes(data.type)) return false;
+      const allowed = data.type === 'STAGE_CHANGES' ? ['protocol','nonce','type','requestId','notesChanges','followupChanges'] : data.type === 'STAGE' ? ['protocol', 'nonce', 'type', 'requestId', 'changes'] : ['protocol', 'nonce', 'type'];
       if (!exactKeys(data, allowed)) { report('invalid-request'); return false; }
       if (env.now() >= env.expiresAt) { disconnect('expired'); return false; }
       if (data.type === 'HELLO') { send('READY', { approved }); if (approved && !busy && !stage && !uncertain) await refresh(); return true; }
-      if (!approved) { report('approval-required', data.type === 'STAGE' && UUID.test(data.requestId || '') ? data.requestId : undefined); return false; }
+      if (!approved) { report('approval-required', ['STAGE','STAGE_CHANGES'].includes(data.type) && UUID.test(data.requestId || '') ? data.requestId : undefined); return false; }
       try { guard(); } catch (e) { if (!stopped) report(e.code); return false; }
       if (data.type === 'REFRESH') return refresh();
       if (!UUID.test(data.requestId || '')) { report('invalid-request'); return false; }
       if (busy || stage || uncertain || sentRequests.has(data.requestId)) { report('busy', data.requestId); return false; }
       try {
         if (!latest) fail('read-failed');
-        const changes = validChanges(data.changes, latest.snapshot);
-        stage = { requestId: data.requestId, changes };
-        send('STAGED', { requestId: data.requestId, count: changes.length }); update(); return true;
+        if(data.type==='STAGE_CHANGES'){
+          const changes=validAnnotationChanges({notesChanges:data.notesChanges,followupChanges:data.followupChanges},latest.snapshot);
+          stage={requestId:data.requestId,...changes};
+          send('STAGED',{requestId:data.requestId,count:changes.notesChanges.length+changes.followupChanges.length,noteCount:changes.notesChanges.length,followupCount:changes.followupChanges.length});
+        }else{
+          const changes = validChanges(data.changes, latest.snapshot);
+          stage = { requestId: data.requestId, changes };
+          send('STAGED', { requestId: data.requestId, count: changes.length });
+        }
+        update(); return true;
       } catch (e) { report(e.code || 'invalid-request', data.requestId); return false; }
     }
     async function confirm() {
@@ -217,20 +258,21 @@
       try {
         guard();
         const fresh = await readCurrent();
-        validChanges(pending.changes, fresh.snapshot);
+        const combined=!pending.changes,changes=annotationChanges(pending);
+        if(combined)validAnnotationChanges(changes,fresh.snapshot);else validChanges(pending.changes, fresh.snapshot);
         latest = fresh;
-        const body = { action: 'saveSalesNotes', expectedRevision: fresh.snapshot.revision, expectedCatalogRevision: fresh.snapshot.catalogRevision, notesBySpec: Object.fromEntries(pending.changes.map(c => [c.key, c.after])) };
+        const body = combined?{action:'saveSalesAnnotations',expectedRevision:fresh.snapshot.revision,expectedCatalogRevision:fresh.snapshot.catalogRevision,reportDate:fresh.snapshot.reportDate,...changes}:{ action: 'saveSalesNotes', expectedRevision: fresh.snapshot.revision, expectedCatalogRevision: fresh.snapshot.catalogRevision, notesBySpec: Object.fromEntries(pending.changes.map(c => [c.key, c.after])) };
         sentRequests.add(pending.requestId);
         uncertain = { ...pending, before: fresh };
         let saved;
         try { saved = await request('', body); }
         catch (e) {
-          if (['conflict', 'save-rejected'].includes(e.code)) uncertain = null;
+          if (['conflict', 'save-rejected','permission-denied'].includes(e.code)) uncertain = null;
           throw e;
         }
-        if (saved.revision !== fresh.snapshot.revision + 1 || saved.catalogRevision !== fresh.snapshot.catalogRevision + 1) fail('save-uncertain');
+        if (saved.revision !== fresh.snapshot.revision + 1 || saved.catalogRevision !== fresh.snapshot.catalogRevision+(changes.notesChanges.length?1:0)||combined&&(saved.savedNoteCount!==changes.notesChanges.length||saved.savedFollowupCount!==changes.followupChanges.length||!dateString(saved.updatedAt))) fail('save-uncertain');
         const verified = await readCurrent();
-        if (!verifiedWrite(fresh, verified, pending.changes)) fail('save-uncertain');
+        if (!verifiedAnnotationWrite(fresh, verified, pending)||combined&&verified.stock.updatedAt!==saved.updatedAt) fail('save-uncertain');
         latest = verified; stage = null; uncertain = null;
         send('SAVED', { requestId: pending.requestId, snapshot: verified.snapshot }); return true;
       } catch (e) {
@@ -273,18 +315,18 @@
       const doc = win.document, opener = win.opener;
       if (!opener) return;
       const panel = doc.createElement('section');
-      panel.setAttribute('aria-label', 'เชื่อมหมายเหตุและอ่านการติดตามกับหน้าตรวจสต๊อกส่วนตัว');
+      panel.setAttribute('aria-label', 'เชื่อมหมายเหตุและการติดตามกับหน้าตรวจสต๊อกส่วนตัว');
       panel.style.cssText = 'position:fixed;z-index:2147483000;top:12px;right:12px;width:min(620px,calc(100vw - 24px));max-height:90vh;overflow:auto;padding:18px;border:2px solid #0f766e;border-radius:12px;background:#fff;color:#102b39;box-shadow:0 6px 36px #0005;font:14px/1.6 system-ui,sans-serif';
       const make = (tag, text) => { const el = doc.createElement(tag); if (text) el.textContent = text; return el; };
       const title = make('h2', 'หมายเหตุสินค้าและการติดตาม · หน้าตรวจสต๊อกส่วนตัว');
       title.style.cssText = 'font-size:18px;margin:0 0 8px';
-      const intro = make('p', 'อนุญาตให้หน้าตรวจที่ http://127.0.0.1:8766 อ่านทะเบียนสินค้า หมายเหตุร่วมกับ Free Stock และข้อความติดตามการขายพร้อมผู้ติดตาม/เวลาติดตาม ไม่ส่งรหัสเข้าสู่ระบบหรือราคาไปยังหน้านั้น การติดตามอ่านอย่างเดียว การบันทึกยังทำได้เฉพาะหมายเหตุสินค้าและต้องยืนยันในหน้าต่าง AAF นี้ทุกครั้ง');
+      const intro = make('p', 'อนุญาตให้หน้าตรวจที่ http://127.0.0.1:8766 อ่านทะเบียนสินค้า หมายเหตุร่วมกับ Free Stock และข้อความติดตามพร้อมผู้ติดตาม/เวลา ไม่ส่งรหัสเข้าสู่ระบบหรือราคาไปยังหน้านั้น บันทึกได้เฉพาะหมายเหตุและการติดตามตามสิทธิ์บัญชีเดิม ลิงก์ฝ่ายขายไม่ได้รับสิทธิ์ติดตามเพิ่ม ต้องยืนยันในหน้าต่าง AAF นี้ทุกครั้ง');
       const status = make('p', 'ยังไม่เชื่อมต่อ · ยังไม่ได้อ่านหรือส่งข้อมูลส่วนกลาง'); status.setAttribute('role', 'status');
       const controls = make('div'); controls.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
-      const approve = make('button', 'อนุญาตเชื่อมหมายเหตุและอ่านการติดตาม'), refresh = make('button', 'โหลดหมายเหตุและการติดตามล่าสุด'), disconnect = make('button', 'ตัดการเชื่อมต่อ');
+      const approve = make('button', 'อนุญาตเชื่อมหมายเหตุและการติดตาม'), refresh = make('button', 'โหลดหมายเหตุและการติดตามล่าสุด'), disconnect = make('button', 'ตัดการเชื่อมต่อ');
       for (const b of [approve, refresh, disconnect]) { b.type = 'button'; b.style.cssText = 'padding:9px 12px;border:1px solid #6b8795;border-radius:6px;background:#f0f8f7;color:#102b39;cursor:pointer'; }
       const login = make('a', 'เข้าสู่ระบบ AAF ด้วยตัวเอง'); login.href = 'login.html?next=stock-sales'; login.style.cssText = 'display:block;margin:8px 0;color:#075985';
-      const preview = make('div'), save = make('button', 'ยืนยันบันทึกเฉพาะหมายเหตุ'), cancel = make('button', 'ยกเลิกร่างนี้');
+      const preview = make('div'), save = make('button', 'ยืนยันบันทึกหมายเหตุและการติดตาม'), cancel = make('button', 'ยกเลิกร่างนี้');
       save.type = cancel.type = 'button'; save.style.cssText = 'padding:10px;margin-right:8px;background:#0f766e;color:white;border:0;border-radius:6px'; cancel.style.cssText = 'padding:10px;border:1px solid #aaa;border-radius:6px';
       const actions = make('div'); actions.append(save, cancel); controls.append(approve, refresh, disconnect);
       panel.append(title, intro, controls, login, status, preview, actions); doc.body.append(panel);
@@ -302,18 +344,20 @@
           if (s.stage?.requestId !== lastStage) {
             preview.replaceChildren(); lastStage = s.stage?.requestId || null;
             if (s.stage) {
-              preview.append(make('h3', 'ตรวจหมายเหตุก่อนบันทึก · ' + s.stage.changes.length + ' สินค้า'));
-              for (const c of s.stage.changes) {
+              const changes=annotationChanges(s.stage);
+              preview.append(make('h3', 'ตรวจการแก้ไขก่อนบันทึก · หมายเหตุ '+changes.notesChanges.length+' · ติดตาม '+changes.followupChanges.length));
+              for (const c of [...changes.notesChanges.map(c=>({...c,label:'หมายเหตุสินค้า · '+c.key})),...changes.followupChanges.map(c=>({...c,label:'การติดตาม · '+c.rawKey}))]) {
                 const box = make('div'); box.style.cssText = 'border:1px solid #d2e2e5;border-radius:6px;padding:10px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere';
-                box.append(make('strong', c.key), make('p', 'เดิม: ' + (c.before || '(ว่าง)')), make('p', 'ใหม่: ' + c.after)); preview.append(box);
+                box.append(make('strong', c.label), make('p', 'เดิม: ' + (c.before || '(ว่าง)')), make('p', 'ใหม่: ' + (c.after||'(ล้างข้อความติดตาม)'))); preview.append(box);
               }
-              status.textContent = 'รอยืนยันใน AAF · จะเขียนเฉพาะหมายเหตุ ไม่แก้ยอดสต๊อก ยอดจอง หรือราคา';
+              save.textContent=changes.followupChanges.length?'ยืนยันบันทึกหมายเหตุและการติดตาม':'ยืนยันบันทึกเฉพาะหมายเหตุ';
+              status.textContent = 'รอยืนยันใน AAF · บันทึกครั้งเดียวทั้งชุดเฉพาะข้อความที่แสดง ไม่แก้ยอดสต๊อก ยอดจอง หรือราคา';
             }
           }
           if (s.stopped) { preview.replaceChildren(); status.textContent = lastError || 'ตัดการเชื่อมต่อแล้ว · กดปิดแผงนี้หรือเริ่มใหม่จากหน้าตรวจ'; disconnect.disabled = false; disconnect.textContent = 'ปิดแผงนี้'; }
           else if (s.busy) status.textContent = 'กำลังตรวจข้อมูลส่วนกลาง…';
           else if (lastError) status.textContent = lastError;
-          else if (s.snapshot && !s.stage && !s.retryBlocked) status.textContent = 'อ่านหมายเหตุและการติดตามส่วนกลางล่าสุดแล้ว · ' + s.snapshot.rows.length + ' สเปก · การติดตามอ่านอย่างเดียว · รุ่น ' + s.snapshot.revision + ' · ' + new Date(s.snapshot.readAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+          else if (s.snapshot && !s.stage && !s.retryBlocked) status.textContent = 'อ่านหมายเหตุและการติดตามส่วนกลางล่าสุดแล้ว · ' + s.snapshot.rows.length + ' สเปก · '+(s.snapshot.canEditFollowup?'แก้การติดตามได้ตามสิทธิ์เดิม':'การติดตามอ่านอย่างเดียว')+' · รุ่น ' + s.snapshot.revision + ' · ' + new Date(s.snapshot.readAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
         }
       });
       approve.onclick = () => { lastError = ''; return controller.approve(); }; refresh.onclick = () => { lastError = ''; return controller.refresh(); }; save.onclick = () => { lastError = ''; return controller.confirm(); }; cancel.onclick = () => { lastError = ''; return controller.cancel(); };
@@ -326,5 +370,5 @@
     };
     if (win.document.readyState === 'loading') win.document.addEventListener('DOMContentLoaded', start, { once: true }); else start();
   }
-  return { PROTOCOL, LOCAL_ORIGIN, STOCK_ORIGIN, API, INTENT_KEY, canonicalKey, parseSnapshot, validChanges, createController, captureIntent, boot };
+  return { PROTOCOL, LOCAL_ORIGIN, STOCK_ORIGIN, API, INTENT_KEY, canonicalKey, parseSnapshot, validChanges, validAnnotationChanges, verifiedAnnotationWrite, createController, captureIntent, boot };
 });

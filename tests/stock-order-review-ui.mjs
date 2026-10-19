@@ -19,10 +19,16 @@ function fixture() {
 function snapshot(note = 'before synthetic', canSave = true) {
   return { rows: [{ key, w: 100, l: 200, t: 2, grade: 'A', unit: 'sheet', records: [] }], notesBySpec: { [key]: note }, legacyNotesByThickness: {}, revision: 1, catalogRevision: 1, reportDate: '2000-01-01', readAt: '2000-01-01T00:00:00Z', canSave };
 }
+const rawKey='SYNTH-RAW-1';
+function trackingSnapshot(value='before followup',canEditFollowup=true,aliases=false){
+  const out=snapshot();out.canEditFollowup=canEditFollowup;
+  const record=(key,text)=>({rawKey:key,note:'',noteBy:'',noteAt:'',followup:text,followupBy:'server synthetic author',followupAt:'2000-01-01T00:00:00Z'});
+  out.rows[0].records=[record(rawKey,value),...(aliases?[record('SYNTH-RAW-REVERSED','second followup')]:[])];return out;
+}
 const decode = value => value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 // A deliberately small DOM double exercises mount/event/state logic without an external browser.
 function harness(services = {}) {
-  const nodes = new Map();
+  const nodes = new Map(),globalEvents=new Map();
   class Element {
     constructor(tag = 'div') { this.tagName = tag; this.children = []; this.listeners = {}; this.dataset = {}; this.value = ''; this.hidden = false; this.disabled = false; this.classList = { toggle() {} }; this._html = ''; }
     addEventListener(type, callback) { (this.listeners[type] ||= []).push(callback); }
@@ -38,9 +44,15 @@ function harness(services = {}) {
     get innerHTML() { return this._html; }
     querySelector(selector) { if (selector.startsWith('#')) return nodes.get(selector.slice(1)); if (selector === 'table' || selector === 'tfoot' || selector === 'button') return this._generic ||= new Element(selector); return this.querySelectorAll(selector)[0] || null; }
     querySelectorAll(selector) {
-      if (selector === '[data-stock-note]') {
-        if (this._inputsFor !== this._html) { this._inputsFor = this._html; this._inputs = [...this._html.matchAll(/<textarea[^>]*data-stock-note="([^"]+)"[^>]*>([\s\S]*?)<\/textarea>/g)].map(match => { const input = new Element('textarea'); input.dataset.stockNote = decode(match[1]); input.value = decode(match[2]); return input; }); }
-        return this._inputs || [];
+      const attr=selector.match(/^\[(data-(?:stock-note|followup-[\w-]+))\]$/)?.[1];
+      if(attr){
+        if(this._inputsFor!==this._html){this._inputsFor=this._html;this._inputs={};}
+        if(!this._inputs[selector])this._inputs[selector]=[...this._html.matchAll(/<(textarea|button)\b([^>]*)>([\s\S]*?)<\/(?:textarea|button)>/g)].filter(match=>new RegExp('\\b'+attr+'="').test(match[2])).map(match=>{
+          const input=new Element(match[1]);input.disabled=/\bdisabled\b/.test(match[2]);
+          for(const item of match[2].matchAll(/data-([\w-]+)="([^"]*)"/g))input.dataset[item[1].replace(/-([a-z])/g,(_,c)=>c.toUpperCase())]=decode(item[2]);
+          input.value=decode(match[3]);return input;
+        });
+        return this._inputs[selector];
       }
       return [];
     }
@@ -51,11 +63,11 @@ function harness(services = {}) {
   shadow.replaceChildren = (...items) => { shadow.children = [...items]; nodes.clear(); };
   const document = { currentScript: { src: 'https://example.test/stock_order_review.js' }, createElement: tag => new Element(tag) };
   const host = { ownerDocument: document, shadowRoot: null, attachShadow() { this.shadowRoot = shadow; return shadow; } };
-  const context = { window: { document }, URL, Intl, Map, Set, console };
+  const context = { window: { document,addEventListener:(type,fn)=>globalEvents.set(type,fn),removeEventListener:type=>globalEvents.delete(type) }, URL, Intl, Map, Set, console };
   vm.runInNewContext(source, context, { filename: 'stock_order_review.js' });
   const data = fixture(), before = JSON.stringify(data);
   const api = context.window.AAFOrderReviewUI.mount(host, data, services);
-  return { api, data, before, nodes, shadow, input: () => nodes.get('stock-table').querySelectorAll('[data-stock-note]')[0] };
+  return { api, data, before, nodes, shadow,globalEvents,input: () => nodes.get('stock-table').querySelectorAll('[data-stock-note]')[0],followups:()=>nodes.get('stock-table').querySelectorAll('[data-followup-edit]'),stockButtons:attribute=>nodes.get('stock-table').querySelectorAll('['+attribute+']') };
 }
 
 test('public renderer is runtime-only and isolated; no data acquisition or auth/persistence', () => {
@@ -149,4 +161,44 @@ test('unit prices preserve precision, unconfirmed money is not fake unpaid zero,
   assert.equal((ui.receiptEventMarkup([event, event]).match(/<li>/g) || []).length, 1);
   for (const row of data.rows) assert.match(ui.orderMoneyMarkup(row), /US\$ 0.106/);
   assert.match(ui.freeNoteMarkup(data.freeStock.rows[0]), /&lt;note&gt;/);
+});
+test('tracking-only top save sends raw-key-only change, verifies metadata, and does not touch other fields',async()=>{
+  let remote=trackingSnapshot(),writes=[];remote.canSave=false;
+  const h=harness({readNotes:async()=>copy(remote),saveChanges:async payload=>{writes.push(copy(payload));remote.rows[0].records[0].followup=payload.followupChanges[0].after;remote.rows[0].records[0].followupBy='verified server author';remote.rows[0].records[0].followupAt='2000-01-02T01:02:03Z';return copy(remote);}});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(h.followups()[0].value,'before followup');assert.equal(h.followups()[0].disabled,false);
+  h.followups()[0].value='new followup';await h.followups()[0].dispatch('input');assert.equal(h.api.hasDirty(),true);assert.equal(h.nodes.get('changes-stage').disabled,false);assert.match(h.nodes.get('changes-count').textContent,/ติดตาม 1 แถว/);
+  await h.nodes.get('changes-stage').click();assert.equal(writes.length,0);assert.match(h.nodes.get('notes-confirmation').innerHTML,/before followup/);
+  await h.nodes.get('notes-confirm').click();assert.deepEqual(writes,[{notesChanges:[],followupChanges:[{rawKey,before:'before followup',after:'new followup'}]}]);assert.equal(h.api.hasDirty(),false);assert.match(h.nodes.get('stock-table').innerHTML,/verified server author/);assert.equal(JSON.stringify(h.data),h.before);h.api.destroy();
+});
+test('mixed notes plus explicit tracking clear is one confirmed atomic payload; reversed aliases remain separate',async()=>{
+  let remote=trackingSnapshot('first',true,true);const writes=[];
+  const h=harness({readNotes:async()=>copy(remote),saveChanges:async payload=>{writes.push(copy(payload));for(const change of payload.notesChanges)remote.notesBySpec[change.key]=change.after;for(const change of payload.followupChanges)remote.rows[0].records.find(row=>row.rawKey===change.rawKey).followup=change.after;return copy(remote);}});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(h.followups().length,2);assert.equal(h.stockButtons('data-followup-suggest').length,0,'ambiguous aliases never get a chosen workbook suggestion');
+  h.input().value='mixed note';await h.input().dispatch('input');h.followups()[0].value='';await h.followups()[0].dispatch('input');h.followups()[1].value='second changed';await h.followups()[1].dispatch('input');
+  await h.nodes.get('changes-stage').click();assert.match(h.nodes.get('notes-confirmation').innerHTML,/ล้างข้อความเดิม/);assert.equal(writes.length,0);await h.nodes.get('notes-confirm').click();
+  assert.deepEqual(writes,[{notesChanges:[{key,before:'before synthetic',after:'mixed note'}],followupChanges:[{rawKey,before:'first',after:''},{rawKey:'SYNTH-RAW-REVERSED',before:'second followup',after:'second changed'}]}]);assert.equal(h.api.hasDirty(),false);h.api.destroy();
+});
+test('workbook tracking is not dirty or copied until explicit single-record suggestion',async()=>{
+  const h=harness({readNotes:async()=>trackingSnapshot(''),saveChanges:async()=>trackingSnapshot()});await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(h.followups()[0].value,'');assert.equal(h.api.hasDirty(),false);assert.match(h.nodes.get('stock-table').innerHTML,/ข้อมูลจาก Excel เดิม/);
+  const button=h.stockButtons('data-followup-suggest')[0];assert(button);await button.click();assert.equal(h.followups()[0].value,'synthetic followup');assert.equal(h.api.hasDirty(),true);await h.nodes.get('changes-stage').click();assert.match(h.nodes.get('notes-confirmation').innerHTML,/\(ว่าง\)/);h.api.destroy();
+});
+test('missing tracking capability stays disabled, conflicts preserve drafts, and unload guard cleans up',async()=>{
+  const denied=harness({readNotes:async()=>trackingSnapshot('protected',false),saveChanges:async()=>{throw Error('must not save');}});await new Promise(resolve=>setImmediate(resolve));assert.equal(denied.followups()[0].disabled,true);denied.followups()[0].value='injected';await denied.followups()[0].dispatch('input');assert.equal(denied.api.hasDirty(),false);assert.match(denied.nodes.get('changes-permission').textContent,/เข้าสู่ระบบบัญชีที่มีสิทธิ์/);denied.api.destroy();
+  let remote=trackingSnapshot();const h=harness({readNotes:async()=>copy(remote),saveChanges:async()=>{throw Error('must not save conflict');}});await new Promise(resolve=>setImmediate(resolve));h.followups()[0].value='draft tracking';await h.followups()[0].dispatch('input');h.api.update(copy(h.data));assert.equal(h.followups()[0].value,'draft tracking');
+  let prevented=false;const event={preventDefault(){prevented=true;}};h.globalEvents.get('beforeunload')(event);assert.equal(prevented,true);assert.equal(event.returnValue,'');
+  remote=trackingSnapshot('remote changed');await h.api.refreshNotes();assert.equal(h.followups()[0].value,'draft tracking');assert.equal(h.nodes.get('changes-stage').disabled,true);assert.match(h.nodes.get('stock-table').innerHTML,/remote changed/);h.api.destroy();assert.equal(h.globalEvents.has('beforeunload'),false);
+});
+test('failed mixed save retains both drafts and forbids automatic retry',async()=>{
+  let calls=0;const h=harness({readNotes:async()=>trackingSnapshot(),saveChanges:async()=>{calls++;throw Error('synthetic denied or uncertain');}});await new Promise(resolve=>setImmediate(resolve));h.input().value='keep note';await h.input().dispatch('input');h.followups()[0].value='keep followup';await h.followups()[0].dispatch('input');await h.nodes.get('changes-stage').click();await h.nodes.get('notes-confirm').click();assert.equal(calls,1);assert.equal(h.api.hasDirty(),true);assert.equal(h.input().value,'keep note');assert.equal(h.followups()[0].value,'keep followup');assert.equal(h.nodes.get('changes-stage').disabled,true);await h.api.refreshNotes();assert.equal(calls,1);h.api.destroy();
+});
+test('unresolved snapshot preserves matching drafts and retry block until fully verified',async()=>{
+  let remote=trackingSnapshot();const h=harness({readNotes:async()=>copy(remote),saveChanges:async()=>{remote=trackingSnapshot('draft followup');remote.notesBySpec[key]='draft note';remote.saveUnresolved=true;return copy(remote);}});
+  await new Promise(resolve=>setImmediate(resolve));h.input().value='draft note';await h.input().dispatch('input');h.followups()[0].value='draft followup';await h.followups()[0].dispatch('input');await h.nodes.get('changes-stage').click();await h.nodes.get('notes-confirm').click();
+  assert.equal(h.api.hasDirty(),true);assert.equal(h.nodes.get('changes-stage').disabled,true);await h.api.refreshNotes();assert.equal(h.api.hasDirty(),true);assert.match(h.nodes.get('notes-status').textContent,/ยังตรวจไม่ครบ/);
+  remote.saveUnresolved=false;await h.api.refreshNotes();assert.equal(h.api.hasDirty(),false);h.api.destroy();
+});
+test('same-session editing suspension locks controls without losing drafts',async()=>{
+  const h=harness({readNotes:async()=>trackingSnapshot(),saveChanges:async()=>trackingSnapshot()});await new Promise(resolve=>setImmediate(resolve));h.followups()[0].value='keep through expiry';await h.followups()[0].dispatch('input');h.api.suspendEditing('synthetic expired session');
+  assert.equal(h.api.hasDirty(),true);assert.equal(h.followups()[0].value,'keep through expiry');assert.equal(h.followups()[0].disabled,true);assert.equal(h.nodes.get('changes-stage').disabled,true);await h.api.refreshNotes();assert.equal(h.followups()[0].value,'keep through expiry');assert.equal(h.followups()[0].disabled,false);h.api.destroy();
 });

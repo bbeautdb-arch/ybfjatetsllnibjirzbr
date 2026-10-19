@@ -2,8 +2,8 @@
 (function (global) {
 'use strict';
 const assetBase = global.document.currentScript && global.document.currentScript.src;
-const stylesheetURL = assetBase ? new URL('stock_order_review.css', assetBase).href : 'stock_order_review.css';
-const STATIC_HTML = "<main>\n<header class=\"top\"><div><h1 id=\"review-title\">ภาพรวมรายการขาย</h1><p class=\"muted\">เรียงกลุ่มและวัน ETD · รายการต้นทางครบ · ตรวจคิวก่อนยืนยันของที่ขาด</p><p class=\"small muted\" id=\"visible-source-date\"></p><span class=\"queue-method-label\" id=\"queue-method\" hidden>คิวตามกติกาในชุดข้อมูล</span></div><span class=\"readonly\">ยอดอ่านอย่างเดียว · แก้ได้เฉพาะหมายเหตุที่มีสิทธิ์</span></header>\n<section class=\"controls\" aria-label=\"เลือกความหนา\"><label for=\"thickness\">ความหนา</label><select id=\"thickness\"></select><button type=\"button\" class=\"plainbutton\" id=\"back\" hidden>← ภาพรวมทุกความหนา</button><div class=\"facts small muted\" id=\"scope-label\"></div></section>\n<p class=\"callout\" id=\"source-warning\" role=\"note\" hidden></p><section class=\"overview\" id=\"metrics\" aria-label=\"ภาพรวมสินค้าและมูลค่า\"></section>\n<p class=\"money-source-note\" id=\"money-source-note\" hidden></p><section class=\"free-detail-panel\" id=\"free-detail-panel\" aria-label=\"รายละเอียด Free Stock\" hidden></section>\n<details class=\"basis reconciliation\"><summary>ตรวจเทียบกับภาพรวมสต๊อก</summary><div id=\"reconciliation\"></div></details>\n<div class=\"sectionbar\"><h2 id=\"table-title\"></h2><button type=\"button\" id=\"collapse\" class=\"plainbutton\" hidden>ย่อรายละเอียดทั้งหมด</button><span class=\"small muted\" id=\"table-help\"></span></div><div id=\"table-area\"></div>\n<div class=\"help-row\" id=\"allocation-legend\"></div><p class=\"callout\" id=\"unreserved-note\" hidden></p><p class=\"callout\" id=\"pending-note\" hidden></p>\n<details class=\"basis\" id=\"stock-basis\"><summary id=\"stock-title\">ทะเบียนสต๊อกทุกเกรดและขนาด · ติดตามและหมายเหตุ</summary><div class=\"basis-content\">\n<section class=\"stock-notes-tools\" aria-label=\"หมายเหตุร่วมกับ Free Stock\"><strong>หมายเหตุรายสินค้า · ใช้รายการเดียวกับ Free Stock</strong><p class=\"small muted\">จับคู่ความหนา เกรด ขนาดจริง และหน่วย · กรอกได้แม้ Free เป็น 0 · ไม่เปลี่ยนยอดหรือราคา</p>\n<div class=\"stock-notes-actions\"><button type=\"button\" id=\"notes-connect\" hidden></button><button type=\"button\" class=\"plainbutton\" id=\"notes-refresh\">โหลดหมายเหตุล่าสุด</button><button type=\"button\" class=\"plainbutton\" id=\"notes-stage\" disabled>ตรวจและบันทึกหมายเหตุ</button></div><details class=\"notes-import\" id=\"notes-import\"><summary>นำเข้าหมายเหตุจาก Excel</summary><p class=\"small muted\">อ่านเฉพาะหมายเหตุ จับคู่สินค้า ไม่เปลี่ยนยอดหรือราคา · ต้องตรวจรายการก่อนบันทึก</p><div class=\"stock-notes-actions\"><label>คอลัมน์ <select id=\"notes-file-column\"><option value=\"AD\">AD · หมายเหตุ</option><option value=\"AE\">AE · เลือกเองหลังตรวจหัวตาราง</option></select></label><label>วิธีเติม <select id=\"notes-file-mode\"><option value=\"append\">ต่อท้ายของเดิม</option><option value=\"replace\">แทนข้อความเดิม · ต้องตรวจทุกแถว</option></select></label><label class=\"plainbutton\">เลือก Excel <input id=\"notes-file\" type=\"file\" accept=\".xlsx,.xls\" aria-label=\"เลือกไฟล์ Excel หมายเหตุ\"></label></div><p class=\"small muted\">AE อาจเป็นคอลัมน์ผู้บันทึกหรือข้อมูลอื่น ต้องตรวจชื่อหัวคอลัมน์ก่อนใช้ · ช่องว่างข้าม ไม่ลบหมายเหตุเดิม</p><div id=\"notes-import-preview\" role=\"status\" aria-live=\"polite\"></div></details><p id=\"notes-status\" class=\"notes-status\" role=\"status\" aria-live=\"polite\"></p><p class=\"notes-draft-warning\">ร่างอยู่ในแท็บนี้จนกว่าจะบันทึกและอ่านกลับ · ช่องว่างไม่ลบหมายเหตุเดิม · การรีโหลดหน้าจะทำให้ร่างที่ยังไม่เซฟหาย</p><section id=\"notes-confirmation\" class=\"notes-confirmation\" hidden></section></section>\n<div id=\"stock-table\"></div><div id=\"stock-legacy\"></div><p class=\"small muted\">ฐานเดิมแยกจากคิวใหม่และยอดส่วนกลางล่าสุด · หมายเหตุใช้ขนาดจริง กลับด้านได้ แต่ไม่รวมขนาดใกล้เคียงหรือต่างเกรด/หน่วย</p></div></details>\n<details class=\"basis\"><summary>วันที่ข้อมูล ขอบเขต และวิธีอ่าน</summary><div class=\"basis-content small\"><p id=\"source-sales\"></p><p id=\"source-stock\"></p><p id=\"source-allocation\"></p><p id=\"queue-order-description\"></p><p>โหลดแล้วไม่หักสต๊อกซ้ำ · รายการยังไม่ยืนยันจำนวนไม่ใช่ศูนย์ · คงต้นทางที่ยกเลิกหรือรอเงื่อนไขไว้ตรวจสอบ</p><p>ยอดเงินสินค้าใช้ราคาขายจริงในใบขาย ส่วน Free ใช้ราคาประเมินสต๊อก ไม่สลับกัน · วันที่ ETD ไม่ใช่วันรับเงิน</p><p>หน่วยแผ่นและชิ้นแยกกัน เทียบ 4×8 หนา 2.5 มม. ใช้ปริมาตรตามขนาดจริง ไม่เปลี่ยนจำนวนสต๊อก</p></div></details><footer>ข้อมูลบริษัทจากชุดที่บัญชีนี้มีสิทธิ์อ่าน · หน้านี้ไม่เปลี่ยนยอดสต๊อก ยอดจอง ราคา หรือสถานะต้นทาง</footer><div id=\"announcement\" role=\"status\" aria-live=\"polite\" class=\"small muted\"></div></main>";
+const stylesheetURL = assetBase ? new URL('stock_order_review.css?v=20261020-annotation-save', assetBase).href : 'stock_order_review.css?v=20261020-annotation-save';
+const STATIC_HTML = "<main>\n<header class=\"top\"><div><h1 id=\"review-title\">ภาพรวมรายการขาย</h1><p class=\"muted\">เรียงกลุ่มและวัน ETD · รายการต้นทางครบ · ตรวจคิวก่อนยืนยันของที่ขาด</p><p class=\"small muted\" id=\"visible-source-date\"></p><span class=\"queue-method-label\" id=\"queue-method\" hidden>คิวตามกติกาในชุดข้อมูล</span></div><span class=\"readonly\">ยอดอ่านอย่างเดียว · หมายเหตุ / ติดตามตามสิทธิ์</span></header>\n<section class=\"changes-toolbar\" aria-label=\"บันทึกการเปลี่ยนแปลง\"><button type=\"button\" class=\"plainbutton changes-save\" id=\"changes-stage\" disabled>บันทึกการเปลี่ยนแปลง</button><span id=\"changes-count\" class=\"small\" role=\"status\" aria-live=\"polite\">ไม่มีการเปลี่ยนแปลง</span><span id=\"changes-permission\" class=\"small muted\"></span></section><section id=\"notes-confirmation\" class=\"notes-confirmation\" hidden></section><section class=\"controls\" aria-label=\"เลือกความหนา\"><label for=\"thickness\">ความหนา</label><select id=\"thickness\"></select><button type=\"button\" class=\"plainbutton\" id=\"back\" hidden>← ภาพรวมทุกความหนา</button><div class=\"facts small muted\" id=\"scope-label\"></div></section>\n<p class=\"callout\" id=\"source-warning\" role=\"note\" hidden></p><section class=\"overview\" id=\"metrics\" aria-label=\"ภาพรวมสินค้าและมูลค่า\"></section>\n<p class=\"money-source-note\" id=\"money-source-note\" hidden></p><section class=\"free-detail-panel\" id=\"free-detail-panel\" aria-label=\"รายละเอียด Free Stock\" hidden></section>\n<details class=\"basis reconciliation\"><summary>ตรวจเทียบกับภาพรวมสต๊อก</summary><div id=\"reconciliation\"></div></details>\n<div class=\"sectionbar\"><h2 id=\"table-title\"></h2><button type=\"button\" id=\"collapse\" class=\"plainbutton\" hidden>ย่อรายละเอียดทั้งหมด</button><span class=\"small muted\" id=\"table-help\"></span></div><div id=\"table-area\"></div>\n<div class=\"help-row\" id=\"allocation-legend\"></div><p class=\"callout\" id=\"unreserved-note\" hidden></p><p class=\"callout\" id=\"pending-note\" hidden></p>\n<details class=\"basis\" id=\"stock-basis\"><summary id=\"stock-title\">ทะเบียนสต๊อกทุกเกรดและขนาด · ติดตามและหมายเหตุ</summary><div class=\"basis-content\">\n<section class=\"stock-notes-tools\" aria-label=\"หมายเหตุร่วมกับ Free Stock\"><strong>หมายเหตุรายสินค้า · ใช้รายการเดียวกับ Free Stock</strong><p class=\"small muted\">จับคู่ความหนา เกรด ขนาดจริง และหน่วย · กรอกได้แม้ Free เป็น 0 · ไม่เปลี่ยนยอดหรือราคา</p>\n<div class=\"stock-notes-actions\"><button type=\"button\" id=\"notes-connect\" hidden></button><button type=\"button\" class=\"plainbutton\" id=\"notes-refresh\">โหลดหมายเหตุล่าสุด</button><button type=\"button\" class=\"plainbutton\" id=\"notes-stage\" disabled>ตรวจและบันทึกการเปลี่ยนแปลง</button></div><details class=\"notes-import\" id=\"notes-import\"><summary>นำเข้าหมายเหตุจาก Excel</summary><p class=\"small muted\">อ่านเฉพาะหมายเหตุ จับคู่สินค้า ไม่เปลี่ยนยอดหรือราคา · ต้องตรวจรายการก่อนบันทึก</p><div class=\"stock-notes-actions\"><label>คอลัมน์ <select id=\"notes-file-column\"><option value=\"AD\">AD · หมายเหตุ</option><option value=\"AE\">AE · เลือกเองหลังตรวจหัวตาราง</option></select></label><label>วิธีเติม <select id=\"notes-file-mode\"><option value=\"append\">ต่อท้ายของเดิม</option><option value=\"replace\">แทนข้อความเดิม · ต้องตรวจทุกแถว</option></select></label><label class=\"plainbutton\">เลือก Excel <input id=\"notes-file\" type=\"file\" accept=\".xlsx,.xls\" aria-label=\"เลือกไฟล์ Excel หมายเหตุ\"></label></div><p class=\"small muted\">AE อาจเป็นคอลัมน์ผู้บันทึกหรือข้อมูลอื่น ต้องตรวจชื่อหัวคอลัมน์ก่อนใช้ · ช่องว่างข้าม ไม่ลบหมายเหตุเดิม</p><div id=\"notes-import-preview\" role=\"status\" aria-live=\"polite\"></div></details><p id=\"notes-status\" class=\"notes-status\" role=\"status\" aria-live=\"polite\"></p><p class=\"notes-draft-warning\">ร่างอยู่ในแท็บนี้จนกว่าจะบันทึกและอ่านกลับ · ช่องว่างไม่ลบหมายเหตุเดิม · การรีโหลดหน้าจะทำให้ร่างที่ยังไม่เซฟหาย</p></section>\n<div id=\"stock-table\"></div><div id=\"stock-legacy\"></div><p class=\"small muted\">ฐานเดิมแยกจากคิวใหม่และยอดส่วนกลางล่าสุด · หมายเหตุใช้ขนาดจริง กลับด้านได้ แต่ไม่รวมขนาดใกล้เคียงหรือต่างเกรด/หน่วย</p></div></details>\n<details class=\"basis\"><summary>วันที่ข้อมูล ขอบเขต และวิธีอ่าน</summary><div class=\"basis-content small\"><p id=\"source-sales\"></p><p id=\"source-stock\"></p><p id=\"source-allocation\"></p><p id=\"queue-order-description\"></p><p>โหลดแล้วไม่หักสต๊อกซ้ำ · รายการยังไม่ยืนยันจำนวนไม่ใช่ศูนย์ · คงต้นทางที่ยกเลิกหรือรอเงื่อนไขไว้ตรวจสอบ</p><p>ยอดเงินสินค้าใช้ราคาขายจริงในใบขาย ส่วน Free ใช้ราคาประเมินสต๊อก ไม่สลับกัน · วันที่ ETD ไม่ใช่วันรับเงิน</p><p>หน่วยแผ่นและชิ้นแยกกัน เทียบ 4×8 หนา 2.5 มม. ใช้ปริมาตรตามขนาดจริง ไม่เปลี่ยนจำนวนสต๊อก</p></div></details><footer>ข้อมูลบริษัทจากชุดที่บัญชีนี้มีสิทธิ์อ่าน · หน้านี้ไม่เปลี่ยนยอดสต๊อก ยอดจอง ราคา หรือสถานะต้นทาง</footer><div id=\"announcement\" role=\"status\" aria-live=\"polite\" class=\"small muted\"></div></main>";
 function mount(host, review, services = {}) {
   if (!host || typeof host.attachShadow !== 'function') throw new TypeError('A host element is required');
   const shadow = host.shadowRoot || host.attachShadow({mode:'open'});
@@ -17,8 +17,11 @@ function mount(host, review, services = {}) {
   };
   const CSS = global.CSS || {escape:value=>String(value).replace(/[^a-zA-Z0-9_-]/g, character=>'\\'+character)};
   const uiState = {thickness:'all',month:null,freePanelOpen:false};
-  const notesState = {connected:false,canSave:false,loaded:false,liveRows:new Map(),notes:new Map(),legacy:new Map(),drafts:new Map(),conflicts:new Map(),pending:null,retryBlocked:false,revision:null,catalogRevision:null,readAt:'',reportDate:'',status:'ยังไม่โหลดหมายเหตุส่วนกลาง · ช่องว่างไม่ใช่หลักฐานว่าไม่มีหมายเหตุ',tone:''};
+  const notesState = {connected:false,canSave:false,canEditFollowup:false,loaded:false,liveRows:new Map(),rawRecords:new Map(),notes:new Map(),legacy:new Map(),drafts:new Map(),followupDrafts:new Map(),conflicts:new Map(),followupConflicts:new Map(),pending:null,retryBlocked:false,revision:null,catalogRevision:null,readAt:'',reportDate:'',status:'ยังไม่โหลดหมายเหตุส่วนกลาง · ช่องว่างไม่ใช่หลักฐานว่าไม่มีหมายเหตุ',tone:''};
   let destroyed=false, notesBusy=false, generation=0, queuedReview=null, currentReview=review, instance;
+  const hasDirty=()=>!destroyed&&(notesState.drafts.size>0||notesState.followupDrafts.size>0||!!notesState.pending);
+  const unloadGuard=event=>{if(hasDirty()){event.preventDefault();event.returnValue='';}};
+  if(typeof global.addEventListener==='function')global.addEventListener('beforeunload',unloadGuard);
   function rebuild(data) {
     if (destroyed) return;
     const version=++generation;
@@ -282,41 +285,51 @@ function mount(host, review, services = {}) {
     return [...groups.values()];
   };
   const trackingFields = p => {
-    const key=noteKey(p),item=workbookBySpec.get(key),records=workbookTrackingRecords(p);
-    const live=notesState.liveRows.get(key)?.records||[];
-    const values=records.length?records:live;
-    const source=records.length?(workbookTracking.sourceLabel||'Excel ที่แนบในชุดข้อมูล'):'ส่วนกลาง';
-    const recordHtml=field=>values.length?values.map(r=>`<div class="tracking-record">${esc(field==='followupAt'?trackingDate(r[field]):r[field]||'—')}${r.sourceRows&&values.length>1?`<small class="tracking-source">แถว ${esc(r.sourceRows.join(', '))}</small>`:''}</div>`).join(''):'<span class="muted">—</span>';
-    const differs=records.length&&live.some(r=>(r.followup||r.followupBy||r.followupAt)&&!records.some(x=>x.followup===r.followup&&x.followupBy===r.followupBy&&x.followupAt===r.followupAt));
-    const liveDetail=differs?`<details class="tracking-live"><summary>ดูข้อมูลติดตามส่วนกลางที่ต่างจากไฟล์</summary>${live.filter(r=>r.followup||r.followupBy||r.followupAt).map(r=>`<p>${esc(r.followup||'ไม่มีข้อความ')}<br>${esc(r.followupBy||'ไม่ระบุผู้ติดตาม')} · ${esc(trackingDate(r.followupAt))}</p>`).join('')}<p>เก็บข้อมูลทั้งสองแหล่ง ไม่เขียนทับกัน</p></details>`:'';
-    return `<td class="tracking-cell" data-followup-key="${esc(key)}">${item?.followupConflict?'<div class="tracking-conflict">ข้อความต่างกัน 2 แถว · เก็บไว้ทั้งคู่</div>':''}${recordHtml('followup')}${liveDetail}<small class="tracking-source">${esc(source)} · ไม่ใช่สถานะจอง</small></td><td class="tracking-meta" data-followup-by-key="${esc(key)}">${recordHtml('followupBy')}</td><td class="tracking-meta" data-followup-at-key="${esc(key)}">${recordHtml('followupAt')}</td>`;
+    const key=noteKey(p),records=workbookTrackingRecords(p),live=notesState.liveRows.get(key)?.records||[];
+    const editable=notesState.loaded&&notesState.canEditFollowup&&!notesBusy&&!notesState.pending;
+    const suggestion=live.length===1&&records.length===1?String(records[0].followup||''):'';
+    const history=records.length?'<details class="tracking-history"><summary>ข้อมูลจาก Excel เดิม · ไม่ใช่ข้อมูลส่วนกลางล่าสุด</summary>'+records.map(record=>'<p>'+esc(record.followup||'(ไม่มีข้อความ)')+'<small class="tracking-source">'+esc(record.followupBy||'ไม่ระบุผู้ติดตาม')+' · '+esc(trackingDate(record.followupAt))+'</small></p>').join('')+'</details>':'';
+    const fields=live.map(record=>{
+      const draft=notesState.followupDrafts.get(record.rawKey),conflict=notesState.followupConflicts.get(record.rawKey),value=draft?draft.after:record.followup;
+      const status=conflict?'ส่วนกลางเปลี่ยน ต้องทวนก่อนบันทึก':draft?draft.after===''?'ร่างล้างข้อความ · ต้องยืนยัน':'ร่างยังไม่เซฟ':notesState.canEditFollowup?'อ่านจากส่วนกลาง · บันทึกเมื่อกดปุ่มด้านบน':'ดูอย่างเดียว · ต้องเข้าสู่ระบบบัญชีที่มีสิทธิ์ติดตาม';
+      return '<div class="tracking-record"><small class="tracking-source">ส่วนกลาง'+(live.length>1?' · รหัส '+esc(record.rawKey):'')+'</small><textarea data-followup-edit="'+esc(record.rawKey)+'" maxlength="4000" rows="3" aria-label="ติดตามการขาย '+esc(key)+' '+esc(record.rawKey)+'" '+(editable?'':'disabled')+'>'+esc(value)+'</textarea><div class="note-row-status '+(conflict?'conflict':'')+'" data-followup-status="'+esc(record.rawKey)+'">'+esc(status)+'</div>'+(suggestion&&suggestion!==value&&editable?'<button type="button" class="plainbutton" data-followup-suggest="'+esc(record.rawKey)+'" data-followup-spec="'+esc(key)+'">ใช้ข้อความจากไฟล์เป็นร่าง</button>':'')+(conflict?'<div class="note-conflict"><strong>ส่วนกลางล่าสุด</strong><pre>'+esc(conflict.remote||'(ว่าง)')+'</pre><button type="button" class="plainbutton" data-followup-use-remote="'+esc(record.rawKey)+'">ใช้ส่วนกลาง</button>'+(notesState.rawRecords.has(record.rawKey)&&notesState.canEditFollowup?'<button type="button" class="plainbutton" data-followup-keep-draft="'+esc(record.rawKey)+'">ใช้ร่างนี้ · รอยืนยัน</button>':'')+'</div>':'')+'</div>';
+    }).join('');
+    const noLive=!notesState.loaded?'ยังไม่โหลดข้อมูลส่วนกลาง · ข้อความจากไฟล์เป็นหลักฐานเดิมเท่านั้น':'ไม่พบแถวส่วนกลางที่แก้ไขได้ · ไม่เลือกหรือสร้างรหัสแทน';
+    const meta=field=>live.length?live.map(record=>'<div class="tracking-record">'+esc(field==='followupAt'?trackingDate(record[field]):record[field]||'—')+(live.length>1?'<small class="tracking-source">'+esc(record.rawKey)+'</small>':'')+'</div>').join(''):'<span class="muted">—</span>';
+    return '<td class="tracking-cell" data-followup-key="'+esc(key)+'">'+(live.length>1?'<p class="tracking-conflict">มีหลายแถวจริง · แก้แยกตามรหัส ไม่รวมข้อความ</p>':'')+(fields||'<p class="small muted">'+esc(noLive)+'</p>')+history+'</td><td class="tracking-meta" data-followup-by-key="'+esc(key)+'">'+meta('followupBy')+'<small class="tracking-source">ระบบบันทึกผู้แก้ ไม่ให้กรอกแทน</small></td><td class="tracking-meta" data-followup-at-key="'+esc(key)+'">'+meta('followupAt')+'<small class="tracking-source">เวลาส่วนกลาง · ไม่ใช้เวลาจากไฟล์แทน</small></td>';
   };
   const setNotesStatus = (text,tone='') => {notesState.status=text;notesState.tone=tone;updateNotesControls();};
   const updateNotesControls = () => {
-    const eligible=eligibleChanges();
+    const payload=currentChanges(),total=payload.notesChanges.length+payload.followupChanges.length;
+    const transport=typeof services.saveChanges==='function'||(!payload.followupChanges.length&&typeof services.saveNotes==='function');
+    const denied=payload.notesChanges.length&&!notesState.canSave||payload.followupChanges.length&&!notesState.canEditFollowup;
+    const blocked=notesBusy||!notesState.loaded||notesState.retryBlocked||notesState.conflicts.size>0||notesState.followupConflicts.size>0||!total||!transport||!!denied;
     document.getElementById('notes-connect').hidden=true;
     document.getElementById('notes-refresh').disabled=notesBusy||typeof services.readNotes!=='function';
-    document.getElementById('notes-stage').disabled=notesBusy||!notesState.canSave||!notesState.loaded||notesState.retryBlocked||!!notesState.conflicts.size||!eligible.length||typeof services.saveNotes!=='function';
-    for(const id of ['notes-file','notes-file-column','notes-file-mode'])document.getElementById(id).disabled=notesBusy||!notesState.canSave||notesState.retryBlocked||!!notesState.drafts.size||typeof services.prepareNotesFile!=='function';
+    document.getElementById('notes-stage').disabled=blocked;
+    document.getElementById('changes-stage').disabled=blocked;
+    document.getElementById('changes-count').textContent='ยังไม่บันทึก: หมายเหตุ '+notesState.drafts.size+' สเปก · ติดตาม '+notesState.followupDrafts.size+' แถว'+(notesBusy?' · กำลังทำรายการ':'');
+    document.getElementById('changes-permission').textContent=notesState.loaded&&!notesState.canEditFollowup?'การติดตามดูอย่างเดียว · เข้าสู่ระบบบัญชีที่มีสิทธิ์เพื่อแก้ไข':'ผู้ติดตามและเวลาให้ระบบบันทึกหลังเซฟ';
+    for(const id of ['notes-file','notes-file-column','notes-file-mode'])document.getElementById(id).disabled=notesBusy||!notesState.canSave||notesState.retryBlocked||!!notesState.drafts.size||!!notesState.followupDrafts.size||typeof services.prepareNotesFile!=='function';
     const status=document.getElementById('notes-status');status.className='notes-status '+notesState.tone;
-    status.textContent=notesState.status+(notesState.drafts.size?' · ร่าง '+notesState.drafts.size+' สเปก ยังไม่เซฟ':'')+(notesState.conflicts.size?' · ต้องทวน '+notesState.conflicts.size+' สเปก':'');
+    status.textContent=notesState.status+(notesState.drafts.size||notesState.followupDrafts.size?' · ยังมีร่างที่ไม่เซฟ':'')+(notesState.conflicts.size+notesState.followupConflicts.size?' · ต้องทวนข้อความ '+(notesState.conflicts.size+notesState.followupConflicts.size)+' รายการ':'');
   };
   const notesField = p => {
     const key=noteKey(p);const draft=notesState.drafts.get(key);const file=workbookBySpec.get(key);const fileNote=(file?.legacyNotes||[]).join('\n');const value=draft?draft.after:notesState.loaded?(notesState.notes.get(key)||''):fileNote;
     const conflict=notesState.conflicts.get(key);const connected=notesState.loaded&&notesState.liveRows.has(key);
     const label=`หมายเหตุ ${thick(p.t)} มม. ${p.grade} ${dimensions(p)} ${unitLabel(p.unit)}`;
     const status=conflict?'ข้อความส่วนกลางเปลี่ยน / ต้องตรวจสเปกก่อนส่ง':draft?'ร่างในแท็บนี้ · ยังไม่เซฟ':!notesState.loaded?fileNote?'สำเนาหมายเหตุเดิมจาก Excel · เชื่อมเพื่ออ่านส่วนกลางล่าสุด':'ยังไม่โหลดหมายเหตุส่วนกลาง':!connected?'ไม่พบสเปกนี้ในทะเบียนส่วนกลางที่เพิ่งอ่าน':value?'หมายเหตุร่วมกับ Free Stock · อ่านจากส่วนกลาง':'อ่านแล้ว · ยังไม่มีหมายเหตุเฉพาะสเปก';
-    return `<td class="stock-note-cell"><textarea data-stock-note="${esc(key)}" maxlength="4000" rows="3" aria-label="${esc(label)}" placeholder="${notesState.loaded?'พิมพ์หมายเหตุจัดการสินค้านี้':'กรอกร่างได้ · เชื่อม Free Stock ก่อนตรวจและเซฟ'}" ${notesState.pending?'disabled':''}>${esc(value)}</textarea><div class="note-row-status ${conflict?'conflict':''}" data-note-status="${esc(key)}">${esc(status)}</div>${conflict?`<div class="note-conflict"><strong>ข้อความส่วนกลางล่าสุด</strong><pre>${esc(conflict.remote||'(ไม่มีข้อความเฉพาะสเปก)')}</pre><button type="button" class="plainbutton" data-note-use-remote="${esc(key)}">ใช้ข้อความส่วนกลาง</button>${notesState.liveRows.has(key)?`<button type="button" class="plainbutton" data-note-keep-draft="${esc(key)}">ใช้ร่างนี้แทน · รอยืนยันอีกครั้ง</button>`:'<p>สเปกไม่อยู่ในทะเบียนล่าสุด ยังส่งบันทึกไม่ได้</p>'}</div>`:''}${file?.stockNotes?.length?`<div class="file-stock-note"><strong>หมายเหตุสต๊อกในไฟล์</strong><br>${file.stockNotes.map(esc).join('<br>')}</div>`:''}</td>`;
+    return `<td class="stock-note-cell"><textarea data-stock-note="${esc(key)}" maxlength="4000" rows="3" aria-label="${esc(label)}" placeholder="${notesState.loaded?'พิมพ์หมายเหตุจัดการสินค้านี้':'กรอกร่างได้ · เชื่อม Free Stock ก่อนตรวจและเซฟ'}" ${notesState.pending||notesState.loaded&&!notesState.canSave?'disabled':''}>${esc(value)}</textarea><div class="note-row-status ${conflict?'conflict':''}" data-note-status="${esc(key)}">${esc(status)}</div>${conflict?`<div class="note-conflict"><strong>ข้อความส่วนกลางล่าสุด</strong><pre>${esc(conflict.remote||'(ไม่มีข้อความเฉพาะสเปก)')}</pre><button type="button" class="plainbutton" data-note-use-remote="${esc(key)}">ใช้ข้อความส่วนกลาง</button>${notesState.liveRows.has(key)?`<button type="button" class="plainbutton" data-note-keep-draft="${esc(key)}">ใช้ร่างนี้แทน · รอยืนยันอีกครั้ง</button>`:'<p>สเปกไม่อยู่ในทะเบียนล่าสุด ยังส่งบันทึกไม่ได้</p>'}</div>`:''}${file?.stockNotes?.length?`<div class="file-stock-note"><strong>หมายเหตุสต๊อกในไฟล์</strong><br>${file.stockNotes.map(esc).join('<br>')}</div>`:''}</td>`;
   };
   const renderStock = value => {
-    const active=document.activeElement;const caret=active&&active.dataset&&active.dataset.stockNote?{key:active.dataset.stockNote,start:active.selectionStart,end:active.selectionEnd,direction:active.selectionDirection}:null;
+    const active=document.activeElement;const caret=active&&active.dataset&&(active.dataset.stockNote||active.dataset.followupEdit)?{key:active.dataset.stockNote||active.dataset.followupEdit,kind:active.dataset.stockNote?'stockNote':'followupEdit',start:active.selectionStart,end:active.selectionEnd,direction:active.selectionDirection}:null;
     const allStock=stockRowsForNotes();const selected=value==='all'?allStock:allStock.filter(p=>num(p.t)===num(value));
     const totals={};selected.filter(p=>!p.historicalMissing).forEach(p=>{const u=unitKey(p.unit);const t=totals[u]||(totals[u]={physical:0,allocatedOctober:0,allocatedOther:0,free:0});Object.keys(t).forEach(k=>t[k]+=num(p[k]));});
     document.getElementById('stock-title').textContent=`ทะเบียนทุกเกรด / ทุกขนาด · ${value==='all'?'ทุกความหนา':thick(value)+' มม.'} · ${selected.length} สเปก · ติดตามการขายและหมายเหตุ`;
     const stock=document.getElementById('stock-table');
     const quantity=(p,key,kind='')=>p.historicalMissing?'<td class="number small muted">ไม่มีฐานเดิม</td>':typeof p[key]!=='number'||!Number.isFinite(p[key])?'<td class="number small muted">ยังไม่ยืนยัน</td>':`<td class="number ${kind}">${fmt(p[key])}</td>`;
     if(!selected.length){stock.innerHTML='<p class="no-data">ไม่มีทะเบียนสต๊อกสำหรับความหนานี้ในข้อมูลที่ตรวจแล้ว</p>';return;}
-    stock.innerHTML=`<p class="stock-basis-warning">${esc(metadata.stockPoolWarning || 'ตัวเลขจัดสรร / Free เป็นฐานเดิม ไม่ใช่ยอดว่างล่าสุด และไม่ได้คืนจองหรือจัดสรรใหม่')}</p><p class="stock-catalog-count">แสดงครบ ${selected.length} สเปก รวม Physical = 0 และ Free = 0 · กลับด้านกว้าง×ยาวใช้หมายเหตุเดียวกัน · ไม่เพิ่มรายการขาย</p><p class="tracking-import-note">${esc(workbookTracking.description||'ข้อมูลติดตามตามสเปกที่ตรงกัน · ไม่ใช้ยอดหรือราคาในไฟล์ · ไม่เติมชื่อหรือเวลาแทนช่องว่าง')}</p><div class="table-scroll" role="region" aria-label="ทะเบียนสต๊อกครบทุกเกรดขนาดและหมายเหตุ"><table class="basis-table with-notes with-tracking"><thead><tr><th>หนา / ขนาด / เกรด</th><th class="number">Physical<br>ฐานเดิม</th><th class="number">จัดให้เดือนที่เลือกเดิม</th><th class="number">จัดให้เดือนอื่นเดิม</th><th class="number">Free แผน ฐานเดิม</th><th>ติดตามการขาย<small class="tracking-source">จากไฟล์ที่แนบ</small></th><th>ผู้ติดตาม<small class="tracking-source">ตามไฟล์</small></th><th>เวลาติดตาม<small class="tracking-source">เวลาไทย · ตามไฟล์</small></th><th>หมายเหตุเดิม · ร่วมกับ Free Stock</th></tr></thead><tbody>${selected.map(p=>`<tr data-stock-key="${esc(noteKey(p))}"><td>${esc(thick(p.t))} มม. · ${esc(dimensions(p))} · ${esc(p.grade)}<span class="subqty">${esc(unitLabel(p.unit))}</span>${p.pending?'<span class="pool-pending">คิวเดิมเปลี่ยนแล้ว · รอทวน</span>':''}${p.historicalMissing?'<span class="stock-external-label">ทะเบียนส่วนกลางที่เพิ่มภายหลัง · ไม่เติม 0 ลงฐานเก่า</span>':''}</td>${quantity(p,'physical')}${quantity(p,'allocatedOctober','ready-val')}${quantity(p,'allocatedOther')}${quantity(p,'free')}${trackingFields(p)}${notesField(p)}</tr>`).join('')}</tbody><tfoot>${Object.entries(totals).map(([u,t])=>`<tr><th>รวมฐานเดิม · ${esc(unitLabel(u))}</th>${['physical','allocatedOctober','allocatedOther','free'].map(k=>`<td class="number">${fmt(t[k])}</td>`).join('')}<td colspan="4">ข้อมูลติดตามและหมายเหตุไม่เปลี่ยนยอด</td></tr>`).join('')}</tfoot></table></div>`;
+    stock.innerHTML=`<p class="stock-basis-warning">${esc(metadata.stockPoolWarning || 'ตัวเลขจัดสรร / Free เป็นฐานเดิม ไม่ใช่ยอดว่างล่าสุด และไม่ได้คืนจองหรือจัดสรรใหม่')}</p><p class="stock-catalog-count">แสดงครบ ${selected.length} สเปก รวม Physical = 0 และ Free = 0 · กลับด้านกว้าง×ยาวใช้หมายเหตุเดียวกัน · ไม่เพิ่มรายการขาย</p><p class="tracking-import-note">${esc(workbookTracking.description||'ข้อมูลติดตามตามสเปกที่ตรงกัน · ไม่ใช้ยอดหรือราคาในไฟล์ · ไม่เติมชื่อหรือเวลาแทนช่องว่าง')}</p><div class="table-scroll" role="region" aria-label="ทะเบียนสต๊อกครบทุกเกรดขนาดและหมายเหตุ"><table class="basis-table with-notes with-tracking"><thead><tr><th>หนา / ขนาด / เกรด</th><th class="number">Physical<br>ฐานเดิม</th><th class="number">จัดให้เดือนที่เลือกเดิม</th><th class="number">จัดให้เดือนอื่นเดิม</th><th class="number">Free แผน ฐานเดิม</th><th>ติดตามการขาย<small class="tracking-source">ส่วนกลาง · แก้ไขตามสิทธิ์</small></th><th>ผู้ติดตาม<small class="tracking-source">ระบบบันทึก</small></th><th>เวลาติดตาม<small class="tracking-source">เวลาไทย · ระบบบันทึก</small></th><th>หมายเหตุเดิม · ร่วมกับ Free Stock</th></tr></thead><tbody>${selected.map(p=>`<tr data-stock-key="${esc(noteKey(p))}"><td>${esc(thick(p.t))} มม. · ${esc(dimensions(p))} · ${esc(p.grade)}<span class="subqty">${esc(unitLabel(p.unit))}</span>${p.pending?'<span class="pool-pending">คิวเดิมเปลี่ยนแล้ว · รอทวน</span>':''}${p.historicalMissing?'<span class="stock-external-label">ทะเบียนส่วนกลางที่เพิ่มภายหลัง · ไม่เติม 0 ลงฐานเก่า</span>':''}</td>${quantity(p,'physical')}${quantity(p,'allocatedOctober','ready-val')}${quantity(p,'allocatedOther')}${quantity(p,'free')}${trackingFields(p)}${notesField(p)}</tr>`).join('')}</tbody><tfoot>${Object.entries(totals).map(([u,t])=>`<tr><th>รวมฐานเดิม · ${esc(unitLabel(u))}</th>${['physical','allocatedOctober','allocatedOther','free'].map(k=>`<td class="number">${fmt(t[k])}</td>`).join('')}<td colspan="4">ข้อมูลติดตามและหมายเหตุไม่เปลี่ยนยอด</td></tr>`).join('')}</tfoot></table></div>`;
     stock.querySelectorAll('[data-stock-note]').forEach(input=>input.addEventListener('input',()=>{
       const key=input.dataset.stockNote;const existing=notesState.drafts.get(key);const before=existing?existing.before:notesState.loaded?(notesState.notes.get(key)||''):null;
       if(notesState.loaded&&input.value===(notesState.notes.get(key)||'')){notesState.drafts.delete(key);notesState.conflicts.delete(key);}else notesState.drafts.set(key,{before,after:input.value});
@@ -325,29 +338,62 @@ function mount(host, review, services = {}) {
     }));
     stock.querySelectorAll('[data-note-use-remote]').forEach(button=>button.addEventListener('click',()=>{notesState.drafts.delete(button.dataset.noteUseRemote);notesState.conflicts.delete(button.dataset.noteUseRemote);renderStock(select.value);}));
     stock.querySelectorAll('[data-note-keep-draft]').forEach(button=>button.addEventListener('click',()=>{const key=button.dataset.noteKeepDraft;const draft=notesState.drafts.get(key);if(draft)draft.before=notesState.notes.get(key)||'';notesState.conflicts.delete(key);renderStock(select.value);}));
+    stock.querySelectorAll('[data-followup-edit]').forEach(input=>input.addEventListener('input',()=>{
+      editFollowup(input.dataset.followupEdit,input.value);
+      const status=stock.querySelector('[data-followup-status="'+CSS.escape(input.dataset.followupEdit)+'"]');
+      if(status)status.textContent=notesState.followupConflicts.has(input.dataset.followupEdit)?'ส่วนกลางเปลี่ยน · ต้องเลือกวิธีจัดการ':input.value===''?'ร่างล้างข้อความ · ต้องยืนยันก่อนเซฟ':'ร่างยังไม่เซฟ';
+    }));
+    stock.querySelectorAll('[data-followup-suggest]').forEach(button=>button.addEventListener('click',()=>{
+      const row=stockRowsForNotes().find(row=>noteKey(row)===button.dataset.followupSpec),live=notesState.liveRows.get(button.dataset.followupSpec)?.records||[],records=row?workbookTrackingRecords(row):[];
+      if(live.length!==1||records.length!==1||live[0].rawKey!==button.dataset.followupSuggest)return;
+      editFollowup(button.dataset.followupSuggest,String(records[0].followup||''));renderStock(select.value);
+    }));
+    stock.querySelectorAll('[data-followup-use-remote]').forEach(button=>button.addEventListener('click',()=>{notesState.followupDrafts.delete(button.dataset.followupUseRemote);notesState.followupConflicts.delete(button.dataset.followupUseRemote);renderStock(select.value);}));
+    stock.querySelectorAll('[data-followup-keep-draft]').forEach(button=>button.addEventListener('click',()=>{const rawKey=button.dataset.followupKeepDraft,draft=notesState.followupDrafts.get(rawKey),record=notesState.rawRecords.get(rawKey);if(draft&&record&&notesState.canEditFollowup){draft.before=record.followup;notesState.followupConflicts.delete(rawKey);renderStock(select.value);}}));
     const legacy=[...notesState.legacy].filter(([t,note])=>(value==='all'||Number(t)===Number(value))&&note);
     document.getElementById('stock-legacy').innerHTML=legacy.length?`<details class="stock-legacy"><summary>หมายเหตุความหนาเดิม · อ่านอย่างเดียว ไม่กระจายใส่สินค้า (${legacy.length})</summary>${legacy.map(([t,note])=>`<p class="small"><strong>${esc(thick(t))} มม.</strong></p><p class="legacy-note small">${esc(note)}</p>`).join('')}</details>`:'';
     updateNotesControls();
-    if(caret){const restored=[...stock.querySelectorAll('[data-stock-note]')].find(input=>input.dataset.stockNote===caret.key);if(restored&&!restored.disabled){restored.focus({preventScroll:true});restored.setSelectionRange(caret.start,caret.end,caret.direction);}}
+    if(caret){const restored=[...stock.querySelectorAll(caret.kind==='stockNote'?'[data-stock-note]':'[data-followup-edit]')].find(input=>input.dataset[caret.kind]===caret.key);if(restored&&!restored.disabled){restored.focus({preventScroll:true});restored.setSelectionRange(caret.start,caret.end,caret.direction);}}
   };
+  function editFollowup(rawKey,after){
+    const record=notesState.rawRecords.get(rawKey);if(!record||!notesState.canEditFollowup||notesBusy||notesState.pending)return;
+    if(after===record.followup){notesState.followupDrafts.delete(rawKey);notesState.followupConflicts.delete(rawKey);}
+    else notesState.followupDrafts.set(rawKey,{before:notesState.followupDrafts.get(rawKey)?.before??record.followup,after});
+    updateNotesControls();
+  }
   const parseNotesSnapshot = snapshot => {
-    if(!snapshot||!Array.isArray(snapshot.rows)||snapshot.rows.length>2000||!snapshot.notesBySpec||typeof snapshot.notesBySpec!=='object'||Array.isArray(snapshot.notesBySpec)||!Number.isSafeInteger(snapshot.revision)||!Number.isSafeInteger(snapshot.catalogRevision)||typeof snapshot.canSave!=='boolean'||typeof snapshot.readAt!=='string'||typeof snapshot.reportDate!=='string')throw Error('รูปแบบข้อมูลหมายเหตุไม่ครบ จึงยังไม่ใช้ข้อมูลชุดนี้');
-    const liveRows=new Map();for(const row of snapshot.rows){const key=noteKey(row);if(!key||row.key!==key)throw Error('สเปกหมายเหตุไม่ตรงขนาด เกรด หรือหน่วย');if(!liveRows.has(key))liveRows.set(key,{key,w:Number(row.w),l:Number(row.l),t:Number(row.t),grade:row.grade,unit:row.unit,records:Array.isArray(row.records)?row.records.map(record=>{const clean={};for(const field of ['rawKey','note','noteBy','noteAt','followup','followupBy','followupAt']){if(typeof record[field]!=='string'||record[field].length>4000)throw Error('ข้อมูลติดตามไม่ผ่านการตรวจรูปแบบ');clean[field]=record[field];}return clean;}):[]});}
+    if(!snapshot||!Array.isArray(snapshot.rows)||snapshot.rows.length>2000||!snapshot.notesBySpec||typeof snapshot.notesBySpec!=='object'||Array.isArray(snapshot.notesBySpec)||!Number.isSafeInteger(snapshot.revision)||!Number.isSafeInteger(snapshot.catalogRevision)||typeof snapshot.canSave!=='boolean'||typeof snapshot.readAt!=='string'||typeof snapshot.reportDate!=='string'||snapshot.canEditFollowup!==undefined&&typeof snapshot.canEditFollowup!=='boolean')throw Error('รูปแบบข้อมูลหมายเหตุ/ติดตามไม่ครบ จึงยังไม่ใช้ข้อมูลชุดนี้');
+    const liveRows=new Map(),rawRecords=new Map();
+    for(const row of snapshot.rows){
+      const key=noteKey(row);if(!key||row.key!==key||liveRows.has(key))throw Error('สเปกหมายเหตุซ้ำหรือไม่ตรงขนาด เกรด หรือหน่วย');
+      const records=Array.isArray(row.records)?row.records.map(record=>{
+        const clean={};for(const field of ['rawKey','note','noteBy','noteAt','followup','followupBy','followupAt']){if(typeof record[field]!=='string'||record[field].length>4000)throw Error('ข้อมูลติดตามไม่ผ่านการตรวจรูปแบบ');clean[field]=record[field];}
+        if(!clean.rawKey||rawRecords.has(clean.rawKey))throw Error('รหัสแถวติดตามซ้ำหรือไม่ครบ · ไม่รวม/เลือกแถวแทน');
+        rawRecords.set(clean.rawKey,{...clean,specKey:key});return clean;
+      }):[];
+      liveRows.set(key,{key,w:Number(row.w),l:Number(row.l),t:Number(row.t),grade:row.grade,unit:row.unit,records});
+    }
     const notes=new Map();for(const [key,note] of Object.entries(snapshot.notesBySpec)){if(typeof note!=='string'||note.length>4000)throw Error('หมายเหตุไม่ผ่านการตรวจรูปแบบ');notes.set(key,note);}
     const legacy=new Map();for(const [t,note] of Object.entries(snapshot.legacyNotesByThickness||{})){if(Number(t)>0&&typeof note==='string'&&note.length<=4000)legacy.set(String(Number(t)),note);}
-    return {snapshot,liveRows,notes,legacy};
+    return {snapshot,liveRows,rawRecords,notes,legacy};
   };
   const applyNotesSnapshot = snapshot => {
-    const parsed=parseNotesSnapshot(snapshot);const conflicts=new Map();
-    const signature=JSON.stringify({rows:[...parsed.liveRows].sort(),notes:[...parsed.notes].sort(),legacy:[...parsed.legacy].sort(),canSave:snapshot.canSave});
+    const parsed=parseNotesSnapshot(snapshot),conflicts=new Map(),followupConflicts=new Map();
+    const signature=JSON.stringify({rows:[...parsed.liveRows].sort(),notes:[...parsed.notes].sort(),legacy:[...parsed.legacy].sort(),canSave:snapshot.canSave,canEditFollowup:snapshot.canEditFollowup===true});
     const unchanged=notesState.loaded&&notesState.snapshotSignature===signature;
     for(const [key,draft] of notesState.drafts){const remote=parsed.notes.get(key)||'';
       if(!parsed.liveRows.has(key)){conflicts.set(key,{remote});continue;}
-      if(draft.after===remote){notesState.drafts.delete(key);continue;}
+      if(draft.after===remote){if(!snapshot.saveUnresolved)notesState.drafts.delete(key);continue;}
       if((draft.before===null&&remote!=='')||(draft.before!==null&&draft.before!==remote))conflicts.set(key,{remote});
       else if(draft.before===null)draft.before=remote;
     }
-    Object.assign(notesState,{connected:true,loaded:true,canSave:snapshot.canSave,liveRows:parsed.liveRows,notes:parsed.notes,legacy:parsed.legacy,conflicts,revision:snapshot.revision,catalogRevision:snapshot.catalogRevision,readAt:snapshot.readAt,reportDate:snapshot.reportDate,retryBlocked:false,snapshotSignature:signature});
+    for(const [rawKey,draft] of notesState.followupDrafts){const record=parsed.rawRecords.get(rawKey),remote=record?.followup||'';
+      if(!record){followupConflicts.set(rawKey,{remote});continue;}
+      if(draft.after===remote){if(!snapshot.saveUnresolved)notesState.followupDrafts.delete(rawKey);continue;}
+      if(draft.before!==remote)followupConflicts.set(rawKey,{remote});
+    }
+    Object.assign(notesState,{connected:true,loaded:true,canSave:snapshot.canSave,canEditFollowup:snapshot.canEditFollowup===true,liveRows:parsed.liveRows,rawRecords:parsed.rawRecords,notes:parsed.notes,legacy:parsed.legacy,conflicts,followupConflicts,revision:snapshot.revision,catalogRevision:snapshot.catalogRevision,readAt:snapshot.readAt,reportDate:snapshot.reportDate,retryBlocked:snapshot.saveUnresolved===true,snapshotSignature:signature});
+    if(snapshot.saveUnresolved)setNotesStatus('ผลบันทึกก่อนหน้ายังตรวจไม่ครบ แม้ข้อความตรงแล้ว · เก็บร่างและระงับส่งซ้ำ รอตรวจยอด/ราคาที่ต้องคงเดิม','error');
     if(!unchanged){syncThicknessOptions();renderStock(select.value);if(typeof refreshFreeStockPanel==='function')refreshFreeStockPanel();}else updateNotesControls();
   };
   const queueReview = data.queueReview || {};
@@ -496,6 +542,10 @@ function mount(host, review, services = {}) {
   function eligibleChanges() {
     return [...notesState.drafts].filter(([key,draft])=>notesState.liveRows.has(key)&&typeof draft.before==='string'&&draft.after.trim()&&draft.after.length<=4000&&draft.after!==draft.before).map(([key,draft])=>({key,before:draft.before,after:draft.after}));
   }
+  function eligibleFollowupChanges() {
+    return [...notesState.followupDrafts].filter(([rawKey,draft])=>notesState.rawRecords.has(rawKey)&&typeof draft.before==='string'&&typeof draft.after==='string'&&draft.after.length<=4000&&draft.after!==draft.before).map(([rawKey,draft])=>({rawKey,before:draft.before,after:draft.after}));
+  }
+  function currentChanges(){return {notesChanges:eligibleChanges(),followupChanges:eligibleFollowupChanges()};}
   function renderReconciliation() {
     const root=document.getElementById('reconciliation'), comparison=data.reconciliation;
     const values=Array.isArray(comparison?.rows)?comparison.rows:[];
@@ -518,24 +568,26 @@ function mount(host, review, services = {}) {
     notesBusy=true;updateNotesControls();setNotesStatus('กำลังอ่านหมายเหตุส่วนกลางใหม่ · เก็บร่างไว้และตรวจข้อความเปลี่ยน');
     try {
       const result=await services.readNotes();if(!isCurrent())return;
-      applyNotesSnapshot(result?.snapshot||result);
-      notesState.pending=null;notesState.retryBlocked=false;
-      setNotesStatus('อ่านหมายเหตุส่วนกลางแล้ว '+notesState.readAt+(notesState.canSave?'':' · บัญชีนี้อ่านอย่างเดียว'),'ready');
+      const snapshot=result?.snapshot||result;applyNotesSnapshot(snapshot);
+      if(!snapshot.saveUnresolved){notesState.pending=null;notesState.retryBlocked=false;
+      setNotesStatus('อ่านหมายเหตุ/ติดตามส่วนกลางแล้ว '+notesState.readAt+(!notesState.canSave&&!notesState.canEditFollowup?' · บัญชีนี้อ่านอย่างเดียว':''),'ready');}
     } catch(error) {
-      if(!isCurrent())return;notesState.canSave=false;setNotesStatus(error?.message||'อ่านหมายเหตุไม่สำเร็จ · ไม่ถือว่าสำเนาเดิมเป็นข้อมูลล่าสุด','error');
+      if(!isCurrent())return;notesState.canSave=false;notesState.canEditFollowup=false;setNotesStatus(error?.message||'อ่านข้อมูลไม่สำเร็จ · ไม่ถือว่าสำเนาเดิมเป็นข้อมูลล่าสุด','error');
     } finally {notesBusy=false;if(isCurrent())renderStock(select.value);flushQueued();}
   }
   function stageNotes() {
-    if(notesBusy||!notesState.canSave||notesState.retryBlocked||notesState.conflicts.size)return;
-    const changes=eligibleChanges();if(!changes.length)return;
+    const payload=currentChanges(),count=payload.notesChanges.length+payload.followupChanges.length;
+    if(notesBusy||notesState.retryBlocked||notesState.conflicts.size||notesState.followupConflicts.size||!count||payload.notesChanges.length&&!notesState.canSave||payload.followupChanges.length&&!notesState.canEditFollowup)return;
     const root=document.getElementById('notes-confirmation');root.hidden=false;
-    root.innerHTML='<h3>ตรวจหมายเหตุก่อนบันทึก · '+changes.length+' สเปก</h3><p class="small">เปลี่ยนเฉพาะหมายเหตุ ไม่แตะยอดสต๊อก ยอดจอง ราคา หรือข้อมูลติดตาม</p><div class="table-scroll"><table><thead><tr><th>สินค้า</th><th>ข้อความเดิม</th><th>ข้อความใหม่</th></tr></thead><tbody>'+changes.map(change=>'<tr><td>'+esc(change.key)+'</td><td><pre>'+esc(change.before||'(ว่าง)')+'</pre></td><td><pre>'+esc(change.after)+'</pre></td></tr>').join('')+'</tbody></table></div><div class="stock-notes-actions"><button class="plainbutton" type="button" id="notes-confirm">ยืนยันบันทึกหมายเหตุ</button><button class="plainbutton" type="button" id="notes-cancel">กลับไปแก้</button></div>';
-    document.getElementById('notes-confirm').addEventListener('click',()=>saveNotes(changes));
+    const previewRows=[...payload.notesChanges.map(change=>({...change,identity:change.key,label:'หมายเหตุสินค้า'})),...payload.followupChanges.map(change=>({...change,identity:change.rawKey,label:'ติดตามการขาย'}))];
+    root.innerHTML='<h3>ตรวจการเปลี่ยนแปลงก่อนบันทึก</h3><p>หมายเหตุ '+payload.notesChanges.length+' สเปก · ติดตาม '+payload.followupChanges.length+' แถว</p><p class="small">เปลี่ยนเฉพาะข้อความที่แสดง ไม่แตะยอดสต๊อก ยอดจอง หรือราคา · ผู้ติดตามและเวลาให้ระบบบันทึก</p><div class="table-scroll"><table><thead><tr><th>ข้อมูล / สินค้า</th><th>ข้อความเดิม</th><th>ข้อความใหม่</th></tr></thead><tbody>'+previewRows.map(change=>'<tr><td>'+esc(change.label)+'<small class="tracking-source">'+esc(change.identity)+'</small></td><td><pre>'+esc(change.before||'(ว่าง)')+'</pre></td><td><pre>'+esc(change.after||'ล้างข้อความเดิม · ยืนยันให้ว่าง')+'</pre></td></tr>').join('')+'</tbody></table></div><div class="stock-notes-actions"><button class="plainbutton" type="button" id="notes-confirm">ยืนยันบันทึกการเปลี่ยนแปลง</button><button class="plainbutton" type="button" id="notes-cancel">กลับไปแก้</button></div>';
+    document.getElementById('notes-confirm').addEventListener('click',()=>saveChanges(payload));
     document.getElementById('notes-cancel').addEventListener('click',()=>{root.hidden=true;});
+    if(typeof root.scrollIntoView==='function')root.scrollIntoView({block:'nearest'});
   }
   async function prepareNotesFile(file) {
     if(!file||notesBusy||!isCurrent())return;
-    if(notesState.drafts.size||notesState.conflicts.size||notesState.retryBlocked){setNotesStatus('มีร่างหรือผลบันทึกค้าง · กรุณาตรวจให้จบก่อนนำเข้าไฟล์','error');return;}
+    if(notesState.drafts.size||notesState.followupDrafts.size||notesState.conflicts.size||notesState.followupConflicts.size||notesState.retryBlocked){setNotesStatus('มีร่างหรือผลบันทึกค้าง · กรุณาตรวจให้จบก่อนนำเข้าไฟล์','error');return;}
     if(typeof services.prepareNotesFile!=='function'||typeof services.readNotes!=='function'){setNotesStatus('ยังไม่มีช่องทางนำเข้าหมายเหตุที่ยืนยันสิทธิ์','error');return;}
     const options={column:document.getElementById('notes-file-column').value,mode:document.getElementById('notes-file-mode').value};
     if(!['AD','AE'].includes(options.column)||!['append','replace'].includes(options.mode))return;
@@ -556,24 +608,29 @@ function mount(host, review, services = {}) {
     }catch(error){if(isCurrent()){preview.textContent=error?.message||'อ่านหรือตรวจไฟล์ไม่สำเร็จ';setNotesStatus('ยังไม่บันทึกหมายเหตุจากไฟล์ · ตรวจข้อผิดพลาดก่อนลองใหม่','error');}}
     finally{notesBusy=false;if(isCurrent()){document.getElementById('notes-file').value='';updateNotesControls();}flushQueued();}
   }
-  async function saveNotes(changes) {
-    if(notesBusy||!isCurrent()||typeof services.saveNotes!=='function'||!notesState.canSave||notesState.retryBlocked||notesState.conflicts.size)return;
-    // Confirmation binds exact before/after pairs; edits made afterward require another review.
-    if(JSON.stringify(changes)!==JSON.stringify(eligibleChanges())){document.getElementById('notes-confirmation').hidden=true;setNotesStatus('ร่างเปลี่ยนจากชุดที่ตรวจ กรุณากดตรวจอีกครั้ง','error');return;}
-    notesBusy=true;notesState.pending={changes};document.getElementById('notes-confirmation').hidden=true;renderStock(select.value);
-    setNotesStatus('กำลังบันทึกเฉพาะหมายเหตุ และรออ่านกลับส่วนกลาง');
+  async function saveChanges(payload) {
+    const transport=typeof services.saveChanges==='function'?services.saveChanges:!payload.followupChanges.length&&typeof services.saveNotes==='function'?value=>services.saveNotes(value.notesChanges):null;
+    if(notesBusy||!isCurrent()||!transport||notesState.retryBlocked||notesState.conflicts.size||notesState.followupConflicts.size||payload.notesChanges.length&&!notesState.canSave||payload.followupChanges.length&&!notesState.canEditFollowup)return;
+    if(JSON.stringify(payload)!==JSON.stringify(currentChanges())){document.getElementById('notes-confirmation').hidden=true;setNotesStatus('ร่างเปลี่ยนจากชุดที่ตรวจ กรุณากดตรวจอีกครั้ง','error');return;}
+    notesBusy=true;notesState.pending={...payload};document.getElementById('notes-confirmation').hidden=true;renderStock(select.value);
+    setNotesStatus('กำลังบันทึกเฉพาะหมายเหตุ/ติดตาม และรออ่านกลับส่วนกลาง');
     try {
-      const result=await services.saveNotes(changes);if(!isCurrent())return;
-      const snapshot=result?.snapshot||result, parsed=parseNotesSnapshot(snapshot);
-      const matched=changes.every(change=>parsed.liveRows.has(change.key)&&parsed.notes.get(change.key)===change.after);
+      const result=await transport(payload);if(!isCurrent())return;
+      const snapshot=result?.snapshot||result,parsed=parseNotesSnapshot(snapshot);
+      const noteMatch=change=>parsed.liveRows.has(change.key)&&(parsed.notes.get(change.key)||'')===change.after;
+      const followupMatch=change=>parsed.rawRecords.get(change.rawKey)?.followup===change.after;
+      const matched=!snapshot.saveUnresolved&&payload.notesChanges.every(noteMatch)&&payload.followupChanges.every(followupMatch);
       applyNotesSnapshot(snapshot);notesState.pending=null;
-      if(!matched){notesState.retryBlocked=true;for(const change of changes)if(parsed.notes.get(change.key)!==change.after)notesState.drafts.set(change.key,{before:change.before,after:change.after});setNotesStatus('ผลอ่านกลับยังไม่ตรงครบ · เก็บร่างไว้ ต้องโหลดล่าสุดก่อนตรวจส่งใหม่ ไม่ส่งซ้ำอัตโนมัติ','error');}
-      else setNotesStatus('บันทึกและอ่านกลับส่วนกลางตรงครบ '+changes.length+' สเปก · '+notesState.readAt,'ready');
-    } catch(error) {
-      if(!isCurrent())return;
-      notesState.pending=null;notesState.retryBlocked=true;
+      if(!matched){
+        notesState.retryBlocked=true;
+        for(const change of payload.notesChanges)if(snapshot.saveUnresolved||!noteMatch(change))notesState.drafts.set(change.key,{before:change.before,after:change.after});
+        for(const change of payload.followupChanges)if(snapshot.saveUnresolved||!followupMatch(change))notesState.followupDrafts.set(change.rawKey,{before:change.before,after:change.after});
+        setNotesStatus('ผลอ่านกลับยังไม่ตรงครบ · เก็บร่างไว้ ต้องโหลดล่าสุดก่อนตรวจส่งใหม่ ไม่ส่งซ้ำอัตโนมัติ','error');
+      }else setNotesStatus('บันทึกและอ่านกลับส่วนกลางตรงครบ · หมายเหตุ '+payload.notesChanges.length+' สเปก / ติดตาม '+payload.followupChanges.length+' แถว · '+notesState.readAt,'ready');
+    }catch(error){
+      if(!isCurrent())return;notesState.pending=null;notesState.retryBlocked=true;
       setNotesStatus((error?.message||'ยังยืนยันผลบันทึกไม่ได้')+' · เก็บร่างไว้และโหลดล่าสุดก่อนส่งใหม่ ห้ามส่งซ้ำทั้งชุดอัตโนมัติ','error');
-    } finally {notesBusy=false;if(isCurrent()){renderStock(select.value);refreshFreeStockPanel();}flushQueued();}
+    }finally{notesBusy=false;if(isCurrent()){renderStock(select.value);refreshFreeStockPanel();}flushQueued();}
   }
   document.getElementById('review-title').textContent=metadata.title||('ภาพรวมรายการขาย'+(metadata.monthLabel||metadata.month?' · '+(metadata.monthLabel||metadata.month):''));
   select.addEventListener('change',render);
@@ -581,9 +638,10 @@ function mount(host, review, services = {}) {
   document.getElementById('collapse').addEventListener('click',()=>document.querySelectorAll('.order-main button[aria-expanded="true"]').forEach(button=>button.click()));
   document.getElementById('notes-refresh').addEventListener('click',refreshNotes);
   document.getElementById('notes-stage').addEventListener('click',stageNotes);
+  document.getElementById('changes-stage').addEventListener('click',stageNotes);
   document.getElementById('notes-file').addEventListener('change',event=>prepareNotesFile(event.target.files?.[0]));
   render();
-  instance={refreshNotes,stageNotes,render,select,setView(value){if([...select.options].some(option=>option.value===String(value))){select.value=String(value);render();}},applyNotesSnapshot};
+  instance={refreshNotes,stageNotes,render,select,setView(value){if([...select.options].some(option=>option.value===String(value))){select.value=String(value);render();}},applyNotesSnapshot,suspendEditing(message){notesState.canSave=false;notesState.canEditFollowup=false;document.getElementById('notes-confirmation').hidden=true;setNotesStatus(message||'สิทธิ์ยังไม่ยืนยัน · เก็บร่างไว้ กรุณาเข้าสู่ระบบบัญชีเดิมแล้วโหลดล่าสุด','error');renderStock(select.value);}};
   return instance;
   }
   function flushQueued(){if(!destroyed&&!notesBusy&&queuedReview){const value=queuedReview;queuedReview=null;rebuild(value);}}
@@ -592,12 +650,13 @@ function mount(host, review, services = {}) {
   if(typeof services.readNotes==='function')instance.refreshNotes();
   return {
     update(value){if(destroyed)return;if(notesBusy){queuedReview=value;return;}rebuild(value||{});},
-    destroy(){if(destroyed)return;destroyed=true;generation++;shadow.replaceChildren();notesState.drafts.clear();notesState.notes.clear();notesState.liveRows.clear();notesState.legacy.clear();notesState.conflicts.clear();notesState.pending=null;queuedReview=null;currentReview=null;instance=null;},
-    hasDirty(){return !destroyed&&(notesState.drafts.size>0||!!notesState.pending);},
+    destroy(){if(destroyed)return;destroyed=true;generation++;if(typeof global.removeEventListener==='function')global.removeEventListener('beforeunload',unloadGuard);shadow.replaceChildren();notesState.drafts.clear();notesState.followupDrafts.clear();notesState.notes.clear();notesState.liveRows.clear();notesState.rawRecords.clear();notesState.legacy.clear();notesState.conflicts.clear();notesState.followupConflicts.clear();notesState.pending=null;queuedReview=null;currentReview=null;instance=null;},
+    hasDirty,
     refreshNotes(){return !destroyed?instance.refreshNotes():Promise.resolve();},
     setView(value){if(!destroyed)instance.setView(value?.thickness??value);},
     getView(){return {month:uiState.month,thickness:uiState.thickness};},
-    applyNotesSnapshot(snapshot){if(!destroyed)instance.applyNotesSnapshot(snapshot);}
+    applyNotesSnapshot(snapshot){if(!destroyed)instance.applyNotesSnapshot(snapshot);},
+    suspendEditing(message){if(!destroyed)instance.suspendEditing(message);}
   };
 }
 global.AAFOrderReviewUI=Object.freeze({mount});
