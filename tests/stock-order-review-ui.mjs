@@ -85,6 +85,15 @@ test('public renderer is runtime-only and isolated; no data acquisition or auth/
   assert.match(source, /attachShadow\(\{mode:'open'\}\)/);
   assert.match(css, /:host/); assert.doesNotMatch(css, /:root|\bbody\{/);
 });
+test('narrow Box 0 overrides the legacy first-card grid so the two equivalents cannot overlap',()=>{
+  const block='.overview.queue-metrics .metric:first-child{display:block}';
+  const flow='.overview.queue-metrics .metric:first-child .metric-equivalent{grid-column:auto;grid-row:auto;border-left:0;border-top:1px solid var(--line);padding:7px 0 0}';
+  const legacy=css.indexOf('.overview.queue-metrics .metric:first-child{grid-column:1/-1;display:grid;');
+  assert.ok(legacy>=0,'the narrow full-row layout remains available');
+  assert.ok(css.lastIndexOf(block)>legacy,'equal-specificity block override follows the legacy media rule');
+  assert.ok(css.lastIndexOf(flow)>legacy,'both equivalents return to normal flow after the legacy grid placement');
+  assert.doesNotMatch(block,/grid-column/,'do not discard the narrow first-card full-row span');
+});
 test('mount renders six cards, all stock rows, generic reconciliation and does not mutate payload', () => {
   const h = harness();
   assert.equal((h.nodes.get('metrics').innerHTML.match(/data-queue-group=/g) || []).length, 6);
