@@ -27,7 +27,7 @@ test('both report entry points cache-bust the current warehouse renderer and pre
     }
     assert.ok(html.indexOf('stock_order_header.js?')<html.indexOf('stock_summary.js?'),'current warehouse adapter must load before summary');
     for(const file of ['stock_order_controller','stock_review_notes_bridge'])assert.ok(html.includes(file+'.js?v=20261020-annotation-save'));
-    assert.ok(html.includes('stock_order_review.js?v=20261020-money-details'));
+    assert.ok(html.includes('stock_order_review.js?v=20261020-money-details-current-stock-r3'));
   }
   assert.match(fs.readFileSync(new URL('../stock_report.html',import.meta.url),'utf8'),/stock_report.js\?v=20261020-monthly-overview/);
   assert.match(fs.readFileSync(new URL('../stock_manager.html',import.meta.url),'utf8'),/stock_shared.js\?v=20261020-monthly-overview/);

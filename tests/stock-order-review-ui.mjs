@@ -114,6 +114,31 @@ test('selected view notifies shared controller with month and preserves drafts t
   assert.equal(h.api.getView().thickness, '2'); assert.equal(h.input().value, 'draft synthetic');
   h.api.destroy();
 });
+test('current central stock keeps unknown allocation nullable in rows and totals without changing note drafts', () => {
+  const h=harness(),data=copy(h.data);
+  const input=h.input();input.value='shared draft';input.dispatch('input');
+  Object.assign(data.metadata,{stockPoolBasis:'current-central-stock-saved-ledger',stockReportDate:'2000-01-02',stockPoolWarning:'Synthetic current stock; allocation pending'});
+  Object.assign(data.stockPools[0],{allocatedOctober:null,allocatedOther:null,pending:true});
+  data.stockPools.push({...data.stockPools[0],key:'2|B|100|200|sheet',grade:'B',physical:3,free:1,allocatedOctober:2,allocatedOther:0});
+  const before=JSON.stringify(data);h.api.update(data);
+  const html=h.nodes.get('stock-table').innerHTML,footer=html.match(/<tfoot>([\s\S]*?)<\/tfoot>/)[1];
+  assert.match(html,/ส่วนกลาง · 2000-01-02/);assert.match(html,/Free ส่วนกลาง · แผนที่บันทึก/);assert.match(html,/รอทวนคิวใหม่ · ยังไม่จัดสรร/);
+  assert.match(footer,/รวมส่วนกลาง/);assert.match(footer,/>15<\/td>/);assert.match(footer,/>11<\/td>/);
+  assert.equal((footer.match(/ยังไม่ยืนยัน/g)||[]).length,2);assert.doesNotMatch(footer,/>0<\/td>/);
+  assert.equal(h.input().value,'shared draft');assert.equal(h.api.hasDirty(),true);assert.equal(JSON.stringify(data),before);h.api.destroy();
+});
+test('legacy allocation totals also remain unknown when one source amount is absent', () => {
+  const h=harness(),data=copy(h.data);delete data.stockPools[0].allocatedOther;h.api.update(data);
+  const html=h.nodes.get('stock-table').innerHTML,footer=html.match(/<tfoot>([\s\S]*?)<\/tfoot>/)[1];
+  assert.match(html,/Physical<br>ฐานเดิม/);assert.match(footer,/รวมฐานเดิม/);assert.match(footer,/ยังไม่ยืนยัน/);
+  assert.match(footer,/>2<\/td>/);h.api.destroy();
+});
+test('an absent or invalid queue allocation is never displayed as numerical zero',()=>{
+  const text=source.match(/  const queueNumber = .*;/)[0];
+  const render=vm.runInNewContext(text+'\nqueueNumber',{numeric:()=>'<td>ยังไม่ยืนยัน</td>',fmt:String});
+  for(const value of [null,undefined,NaN,Infinity,''])assert.equal(render(value),'<td>ยังไม่ยืนยัน</td>');
+  assert.match(render(0),/>0<\/td>/);assert.match(render(7),/>7<\/td>/);
+});
 test('stale runtime model displays evidence comparisons without replacing dated values', () => {
   const h = harness(), data = copy(h.data);
   data.readModel = { stale: true, sourceIsLive: false, queueApplied: false, warning: 'synthetic stale evidence', reportDateMatches: false, physicalMatches: false, freeMatches: true, pricesMatch: false, fxMatches: null, reviewStockReportDate: '2000-01-01', currentStockReportDate: '2000-01-02', mismatches: [{ key, reviewPhysical: 12, currentPhysical: null, reviewFree: 10, currentFree: 10 }], priceMismatches: [{ key, reviewPrice: 0.106, reviewCurrency: 'USD', currentPrice: null, currentCurrency: null }] };
