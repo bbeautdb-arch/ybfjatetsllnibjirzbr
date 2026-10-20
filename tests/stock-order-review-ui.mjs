@@ -35,7 +35,7 @@ function harness(services = {}) {
     dispatch(type) { return Promise.all((this.listeners[type] || []).map(callback => callback({ target: this }))); }
     click() { return this.dispatch('click'); }
     setAttribute(name, value) { this[name] = value; }
-    focus() {} scrollIntoView() {} setSelectionRange() {}
+    focus() {shadow.activeElement=this;} scrollIntoView() {} setSelectionRange(start,end,direction) {this.selectionStart=start;this.selectionEnd=end;this.selectionDirection=direction;}
     append(...items) { this.children.push(...items); }
     replaceChildren(...items) { this.children = [...items]; }
     insertBefore(item) { this.children.push(item); }
@@ -67,7 +67,7 @@ function harness(services = {}) {
   vm.runInNewContext(source, context, { filename: 'stock_order_review.js' });
   const data = fixture(), before = JSON.stringify(data);
   const api = context.window.AAFOrderReviewUI.mount(host, data, services);
-  return { api, data, before, nodes, shadow,globalEvents,input: () => nodes.get('stock-table').querySelectorAll('[data-stock-note]')[0],followups:()=>nodes.get('stock-table').querySelectorAll('[data-followup-edit]'),stockButtons:attribute=>nodes.get('stock-table').querySelectorAll('['+attribute+']') };
+  return { api, data, before, nodes, shadow,globalEvents,input: () => nodes.get('stock-table').querySelectorAll('[data-stock-note]')[0],freeInput:()=>nodes.get('free-detail-panel').querySelectorAll('[data-stock-note]')[0],followups:()=>nodes.get('stock-table').querySelectorAll('[data-followup-edit]'),stockButtons:attribute=>nodes.get('stock-table').querySelectorAll('['+attribute+']') };
 }
 
 test('public renderer is runtime-only and isolated; no data acquisition or auth/persistence', () => {
@@ -149,12 +149,13 @@ test('Excel preparation stages notes only, requires preview and confirmation, an
   stale = true; await h.nodes.get('notes-file').dispatch('change'); assert.match(h.nodes.get('notes-import-preview').innerHTML, /ยังนำร่างเข้าบันทึกไม่ได้/); assert.equal(writes.length, 1); h.api.destroy();
 });
 test('unit prices preserve precision, unconfirmed money is not fake unpaid zero, receipt events deduplicate', () => {
-  const data = fixture(), nodes = {}, select = { value: 'all' }, notesState = { loaded: true, notes: new Map([[key, '<note>']]), readAt: 'synthetic', drafts: new Map() };
+  const data = fixture(), nodes = {}, select = { value: 'all' }, notesState = { loaded: true, canSave:true,liveRows:new Map([[key,{}]]),notes: new Map([[key, '<note>']]), readAt: 'synthetic', drafts: new Map(),conflicts:new Map() };
   const document = { getElementById: id => nodes[id] ||= { innerHTML: '', addEventListener() {}, setAttribute() {}, focus() {} } };
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-  const context = { data, rows: data.rows, select, document, notesState, uiState: {}, esc, num: Number, fmt: String, fmtEquivalent: String, thick: String, unitLabel: String, dimensions: r => r.w + '×' + r.l };
+  const context = { data, rows: data.rows, select, document, notesState, notesBusy:false,workbookBySpec:new Map(),noteKey:r=>[r.t,r.grade,...[r.w,r.l].sort((a,b)=>a-b),r.unit].join('|'),uiState: {}, esc, num: Number, fmt: String, fmtEquivalent: String, thick: String, unitLabel: String, dimensions: r => r.w + '×' + r.l };
   const start = source.indexOf('  const finance ='), end = source.indexOf('  const commercialTag =', start);
-  const ui = vm.runInNewContext(source.slice(start, end) + '\n({nativeUnitPrice,moneyPartitions,receiptEventMarkup,orderMoneyMarkup,freeCardMarkup,freeNoteMarkup})', context);
+  const noteHelper=source.slice(source.indexOf('  const notesField ='),source.indexOf('  function noteEditorContainers'));
+  const ui = vm.runInNewContext(source.slice(start, end)+noteHelper + '\n({nativeUnitPrice,moneyPartitions,receiptEventMarkup,orderMoneyMarkup,freeCardMarkup,freeNoteMarkup})', context);
   assert.equal(ui.nativeUnitPrice(0.106, 'USD'), 'US$ 0.106');
   assert.match(ui.moneyPartitions({ received: money(), pending: money(), unconfirmed: money(0, 2), unconfirmedLineCount: 1 }), /รอยืนยัน/);
   const event = { id: 'example-event', amount: 1, currency: 'USD', date: '2000-01-01', ref: '<ref>' };
@@ -201,4 +202,18 @@ test('unresolved snapshot preserves matching drafts and retry block until fully 
 test('same-session editing suspension locks controls without losing drafts',async()=>{
   const h=harness({readNotes:async()=>trackingSnapshot(),saveChanges:async()=>trackingSnapshot()});await new Promise(resolve=>setImmediate(resolve));h.followups()[0].value='keep through expiry';await h.followups()[0].dispatch('input');h.api.suspendEditing('synthetic expired session');
   assert.equal(h.api.hasDirty(),true);assert.equal(h.followups()[0].value,'keep through expiry');assert.equal(h.followups()[0].disabled,true);assert.equal(h.nodes.get('changes-stage').disabled,true);await h.api.refreshNotes();assert.equal(h.followups()[0].value,'keep through expiry');assert.equal(h.followups()[0].disabled,false);h.api.destroy();
+});
+test('Free Stock and registry share one draft, preserve input focus, and save one exact note change',async()=>{
+  let remote=snapshot();const writes=[];const h=harness({readNotes:async()=>copy(remote),saveChanges:async payload=>{writes.push(copy(payload));remote=snapshot(payload.notesChanges[0].after);return copy(remote);}});await new Promise(resolve=>setImmediate(resolve));
+  await h.nodes.get('free-detail-toggle').click();const free=h.freeInput(),registry=h.input();assert.equal(free.value,'before synthetic');assert.equal(free.disabled,false);free.focus();free.setSelectionRange(4,4,'none');free.value='from Free';await free.dispatch('input');
+  assert.equal(h.freeInput(),free,'typing does not rebuild the Free editor');assert.equal(h.input(),registry,'typing does not rebuild registry');assert.equal(registry.value,'from Free');assert.equal(h.shadow.activeElement,free);assert.equal(free.selectionStart,4);assert.equal(writes.length,0);
+  registry.focus();registry.value='final from registry';await registry.dispatch('input');assert.equal(free.value,'final from registry');assert.equal(h.shadow.activeElement,registry);assert.match(h.nodes.get('changes-count').textContent,/หมายเหตุ 1 สเปก/);
+  assert.equal(h.nodes.get('free-notes-stage').disabled,false);await h.nodes.get('free-notes-stage').click();assert.equal(writes.length,0);await h.nodes.get('notes-confirm').click();assert.deepEqual(writes,[{notesChanges:[{key,before:'before synthetic',after:'final from registry'}],followupChanges:[]}]);assert.equal(h.input().value,'final from registry');assert.equal(h.freeInput().value,'final from registry');assert.equal(h.api.hasDirty(),false);assert.equal(JSON.stringify(h.data),h.before);h.api.destroy();
+});
+test('Free notes inherit permissions, missing exact spec protection, conflict and failed-save draft retention',async()=>{
+  let remote=snapshot();let calls=0;const h=harness({readNotes:async()=>copy(remote),saveChanges:async()=>{calls++;throw Error('synthetic uncertain');}});await new Promise(resolve=>setImmediate(resolve));await h.nodes.get('free-detail-toggle').click();h.freeInput().value='keep Free draft';await h.freeInput().dispatch('input');await h.nodes.get('changes-stage').click();await h.nodes.get('notes-confirm').click();assert.equal(calls,1);assert.equal(h.freeInput().value,'keep Free draft');assert.equal(h.input().value,'keep Free draft');assert.equal(h.api.hasDirty(),true);
+  remote=snapshot('remote changed');await h.api.refreshNotes();assert.equal(h.freeInput().value,'keep Free draft');assert.equal(h.input().value,'keep Free draft');assert.equal(h.nodes.get('changes-stage').disabled,true);assert.match(h.nodes.get('free-detail-panel').innerHTML,/remote changed/);
+  h.api.suspendEditing('Synthetic session expired');assert.equal(h.freeInput().disabled,true);assert.equal(h.input().disabled,true);h.api.destroy();
+  const denied=harness({readNotes:async()=>snapshot('protected',false),saveChanges:async()=>{throw Error('must not write');}});await new Promise(resolve=>setImmediate(resolve));await denied.nodes.get('free-detail-toggle').click();assert.equal(denied.freeInput().disabled,true);denied.freeInput().value='injected';await denied.freeInput().dispatch('input');assert.equal(denied.api.hasDirty(),false);denied.api.destroy();
+  const missing=harness({readNotes:async()=>({...snapshot(),rows:[]}),saveChanges:async()=>{throw Error('must not write');}});await new Promise(resolve=>setImmediate(resolve));await missing.nodes.get('free-detail-toggle').click();assert.equal(missing.freeInput().disabled,true);assert.match(missing.nodes.get('free-detail-panel').innerHTML,/ไม่พบสเปก/);missing.api.destroy();
 });
