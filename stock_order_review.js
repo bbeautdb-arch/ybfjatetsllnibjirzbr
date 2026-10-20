@@ -2,7 +2,7 @@
 (function (global) {
 'use strict';
 const assetBase = global.document.currentScript && global.document.currentScript.src;
-const stylesheetURL = assetBase ? new URL('stock_order_review.css?v=20261020-free-notes', assetBase).href : 'stock_order_review.css?v=20261020-free-notes';
+const stylesheetURL = assetBase ? new URL('stock_order_review.css?v=20261020-money-details', assetBase).href : 'stock_order_review.css?v=20261020-money-details';
 const STATIC_HTML = "<main>\n<header class=\"top\"><div><h1 id=\"review-title\">ภาพรวมรายการขาย</h1><p class=\"muted\">เรียงกลุ่มและวัน ETD · รายการต้นทางครบ · ตรวจคิวก่อนยืนยันของที่ขาด</p><p class=\"small muted\" id=\"visible-source-date\"></p><span class=\"queue-method-label\" id=\"queue-method\" hidden>คิวตามกติกาในชุดข้อมูล</span></div><span class=\"readonly\">ยอดอ่านอย่างเดียว · หมายเหตุ / ติดตามตามสิทธิ์</span></header>\n<section class=\"changes-toolbar\" aria-label=\"บันทึกการเปลี่ยนแปลง\"><button type=\"button\" class=\"plainbutton changes-save\" id=\"changes-stage\" disabled>บันทึกการเปลี่ยนแปลง</button><span id=\"changes-count\" class=\"small\" role=\"status\" aria-live=\"polite\">ไม่มีการเปลี่ยนแปลง</span><span id=\"changes-permission\" class=\"small muted\"></span></section><section id=\"notes-confirmation\" class=\"notes-confirmation\" hidden></section><section class=\"controls\" aria-label=\"เลือกความหนา\"><label for=\"thickness\">ความหนา</label><select id=\"thickness\"></select><button type=\"button\" class=\"plainbutton\" id=\"back\" hidden>← ภาพรวมทุกความหนา</button><div class=\"facts small muted\" id=\"scope-label\"></div></section>\n<p class=\"callout\" id=\"source-warning\" role=\"note\" hidden></p><section class=\"overview\" id=\"metrics\" aria-label=\"ภาพรวมสินค้าและมูลค่า\"></section>\n<p class=\"money-source-note\" id=\"money-source-note\" hidden></p><section class=\"free-detail-panel\" id=\"free-detail-panel\" aria-label=\"รายละเอียด Free Stock\" hidden></section>\n<details class=\"basis reconciliation\"><summary>ตรวจเทียบกับภาพรวมสต๊อก</summary><div id=\"reconciliation\"></div></details>\n<div class=\"sectionbar\"><h2 id=\"table-title\"></h2><button type=\"button\" id=\"collapse\" class=\"plainbutton\" hidden>ย่อรายละเอียดทั้งหมด</button><span class=\"small muted\" id=\"table-help\"></span></div><div id=\"table-area\"></div>\n<div class=\"help-row\" id=\"allocation-legend\"></div><p class=\"callout\" id=\"unreserved-note\" hidden></p><p class=\"callout\" id=\"pending-note\" hidden></p>\n<details class=\"basis\" id=\"stock-basis\"><summary id=\"stock-title\">ทะเบียนสต๊อกทุกเกรดและขนาด · ติดตามและหมายเหตุ</summary><div class=\"basis-content\">\n<section class=\"stock-notes-tools\" aria-label=\"หมายเหตุร่วมกับ Free Stock\"><strong>หมายเหตุรายสินค้า · ใช้รายการเดียวกับ Free Stock</strong><p class=\"small muted\">จับคู่ความหนา เกรด ขนาดจริง และหน่วย · กรอกได้แม้ Free เป็น 0 · ไม่เปลี่ยนยอดหรือราคา</p>\n<div class=\"stock-notes-actions\"><button type=\"button\" id=\"notes-connect\" hidden></button><button type=\"button\" class=\"plainbutton\" id=\"notes-refresh\">โหลดหมายเหตุล่าสุด</button><button type=\"button\" class=\"plainbutton\" id=\"notes-stage\" disabled>ตรวจและบันทึกการเปลี่ยนแปลง</button></div><details class=\"notes-import\" id=\"notes-import\"><summary>นำเข้าหมายเหตุจาก Excel</summary><p class=\"small muted\">อ่านเฉพาะหมายเหตุ จับคู่สินค้า ไม่เปลี่ยนยอดหรือราคา · ต้องตรวจรายการก่อนบันทึก</p><div class=\"stock-notes-actions\"><label>คอลัมน์ <select id=\"notes-file-column\"><option value=\"AD\">AD · หมายเหตุ</option><option value=\"AE\">AE · เลือกเองหลังตรวจหัวตาราง</option></select></label><label>วิธีเติม <select id=\"notes-file-mode\"><option value=\"append\">ต่อท้ายของเดิม</option><option value=\"replace\">แทนข้อความเดิม · ต้องตรวจทุกแถว</option></select></label><label class=\"plainbutton\">เลือก Excel <input id=\"notes-file\" type=\"file\" accept=\".xlsx,.xls\" aria-label=\"เลือกไฟล์ Excel หมายเหตุ\"></label></div><p class=\"small muted\">AE อาจเป็นคอลัมน์ผู้บันทึกหรือข้อมูลอื่น ต้องตรวจชื่อหัวคอลัมน์ก่อนใช้ · ช่องว่างข้าม ไม่ลบหมายเหตุเดิม</p><div id=\"notes-import-preview\" role=\"status\" aria-live=\"polite\"></div></details><p id=\"notes-status\" class=\"notes-status\" role=\"status\" aria-live=\"polite\"></p><p class=\"notes-draft-warning\">ร่างอยู่ในแท็บนี้จนกว่าจะบันทึกและอ่านกลับ · ช่องว่างไม่ลบหมายเหตุเดิม · การรีโหลดหน้าจะทำให้ร่างที่ยังไม่เซฟหาย</p></section>\n<div id=\"stock-table\"></div><div id=\"stock-legacy\"></div><p class=\"small muted\">ฐานเดิมแยกจากคิวใหม่และยอดส่วนกลางล่าสุด · หมายเหตุใช้ขนาดจริง กลับด้านได้ แต่ไม่รวมขนาดใกล้เคียงหรือต่างเกรด/หน่วย</p></div></details>\n<details class=\"basis\"><summary>วันที่ข้อมูล ขอบเขต และวิธีอ่าน</summary><div class=\"basis-content small\"><p id=\"source-sales\"></p><p id=\"source-stock\"></p><p id=\"source-allocation\"></p><p id=\"queue-order-description\"></p><p>โหลดแล้วไม่หักสต๊อกซ้ำ · รายการยังไม่ยืนยันจำนวนไม่ใช่ศูนย์ · คงต้นทางที่ยกเลิกหรือรอเงื่อนไขไว้ตรวจสอบ</p><p>ยอดเงินสินค้าใช้ราคาขายจริงในใบขาย ส่วน Free ใช้ราคาประเมินสต๊อก ไม่สลับกัน · วันที่ ETD ไม่ใช่วันรับเงิน</p><p>หน่วยแผ่นและชิ้นแยกกัน เทียบ 4×8 หนา 2.5 มม. ใช้ปริมาตรตามขนาดจริง ไม่เปลี่ยนจำนวนสต๊อก</p></div></details><footer>ข้อมูลบริษัทจากชุดที่บัญชีนี้มีสิทธิ์อ่าน · หน้านี้ไม่เปลี่ยนยอดสต๊อก ยอดจอง ราคา หรือสถานะต้นทาง</footer><div id=\"announcement\" role=\"status\" aria-live=\"polite\" class=\"small muted\"></div></main>";
 function mount(host, review, services = {}) {
   if (!host || typeof host.attachShadow !== 'function') throw new TypeError('A host element is required');
@@ -85,9 +85,16 @@ function mount(host, review, services = {}) {
     const match=String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
     return match ? `${match[3]}/${match[2]}/${Number(match[1])+543}` : String(value);
   };
+  const uniqueReceiptEvents = events => {
+    const seen=new Map();return (Array.isArray(events)?events:[]).filter(event=>{
+      const id=typeof event?.id==='string'?event.id.trim():'';
+      if(!id)return true;const signature=JSON.stringify([event.amount,event.currency,event.date,event.month,event.kind]);
+      const signatures=seen.get(id)||new Set();if(signatures.has(signature))return false;signatures.add(signature);seen.set(id,signatures);return true;
+    });
+  };
   const receiptEventMarkup = events => {
     if(!Array.isArray(events)||!events.length)return '<p class="small muted">ยังไม่มีรายการวันและจำนวนรับเงินที่แยกยืนยันได้ · ไม่ใช้ ETD แทนวันรับเงิน</p>';
-    const unique=[...new Map(events.map(event=>[event.id,event])).values()];
+    const unique=uniqueReceiptEvents(events);
     return `<ul class="receipt-events">${unique.map(event=>{
       const future=event.date && finance?.metadata?.asOf && event.date>finance.metadata.asOf;
       const old=event.date && finance?.metadata?.cashAsOf && event.date.slice(0,4)<finance.metadata.cashAsOf.slice(0,4);
@@ -96,14 +103,82 @@ function mount(host, review, services = {}) {
       return `<li><div class="receipt-event-head"><span>${esc(date)}</span><b>${esc(nativeMoney(event.amount,event.currency))}</b></div><span class="receipt-event-source">${esc(kind)}${event.ref?' · '+esc(event.ref):''}${event.customer?' · '+esc(event.customer):''}</span>${future?'<span class="money-unverified">วันที่รับอยู่ในอนาคต · ข้อมูลต้องตรวจ ไม่ใช่เงินคาดว่าจะเข้า</span>':old?'<span class="money-unverified">ปีเก่าตามต้นทาง · ยังไม่แก้วันเอง</span>':''}</li>`;
     }).join('')}</ul>`;
   };
-  const moneyPartitions = group => {
+  const nativeComponents = map => map&&moneyNumber(map.THB)&&moneyNumber(map.USD)?nativeMoney(map.THB,'THB')+' + '+nativeMoney(map.USD,'USD'):'ยังไม่มีข้อมูลสกุลเงินที่ตรวจแล้ว';
+  const usdComponentMarkup = map => {
+    if(!moneyNumber(map?.USD)||map.USD<=0)return '';
+    const rate=finance?.metadata?.fx?.rate,converted=moneyNumber(rate)&&rate>0?map.USD*rate:null;
+    return '<div class="money-conversion">ส่วน USD → '+(moneyNumber(converted)?'≈ ฿ '+moneyFmt(converted):'รอยืนยันอัตราแลกเปลี่ยน')+' · เฉพาะส่วนดอลลาร์ ไม่ใช่ยอดรวม</div>';
+  };
+  const partitionLabels = {received:'รับแล้ว · ส่วนยืนยัน',pending:'รอรับ · ส่วนยืนยัน',unconfirmed:'ยังแยกรับ/รอรับไม่ได้'};
+  const moneyPartitionOrders = (group,kind,options={}) => {
+    const unique=new Map(),blocked=new Set();let missingIdentity=0;
+    const included=order=>options.unknownPrices?!hasMoney(order?.[kind])&&order?.saleComplete===false:hasMoney(order?.[kind]);
+    for(const order of Array.isArray(group?.orders)?group.orders:[]){
+      if(!order||typeof order!=='object')continue;
+      const sourceRowIds=[...new Set((order.rowIds||[]).filter(id=>typeof id==='string'&&id.trim()))].sort();
+      const identity=typeof order.orderId==='string'&&order.orderId.trim()?'order:'+order.orderId:sourceRowIds.length?'rows:'+JSON.stringify(sourceRowIds):null;
+      if(!identity){if(included(order))missingIdentity++;continue;}if(blocked.has(identity))continue;
+      const signature=JSON.stringify([order.ref,order.customer,order.term,order.sourcePayment,order.sale,order.received,order.pending,order.unconfirmed,order.saleComplete,!!order.wholeOrderContext]);
+      const previous=unique.get(identity);
+      if(previous&&previous.signature!==signature){unique.delete(identity);blocked.add(identity);continue;}
+      if(previous){
+        const events=[...(previous.order.receiptEvents||[]),...(order.receiptEvents||[])],eventIds=new Map();let receiptConflict=!!previous.order.receiptConflict;
+        for(const event of events){const id=typeof event?.id==='string'?event.id.trim():'';if(!id)continue;const signature=JSON.stringify([event.amount,event.currency,event.date,event.month,event.kind]);if(eventIds.has(id)&&eventIds.get(id)!==signature)receiptConflict=true;eventIds.set(id,signature);}
+        previous.order={...previous.order,rowIds:[...new Set([...(previous.order.rowIds||[]),...(order.rowIds||[])])],receiptEvents:uniqueReceiptEvents(events),receiptConflict};continue;
+      }
+      unique.set(identity,{signature,order});
+    }
+    const orders=[...unique.values()].map(value=>value.order).filter(included),totals={THB:0,USD:0};
+    let invalid=0;
+    for(const order of orders)for(const currency of ['THB','USD']){const value=order[kind]?.[currency];if(!moneyNumber(value)||value<0)invalid++;else totals[currency]+=value;}
+    const expected=group?.[kind],matched=!missingIdentity&&!blocked.size&&!invalid&&['THB','USD'].every(currency=>moneyNumber(expected?.[currency])&&Math.abs(expected[currency]-totals[currency])<0.005);
+    return {orders,totals,matched,conflictCount:blocked.size,missingIdentity,invalid};
+  };
+  const partitionOrderStatus = order => {
+    const sourceRows=rows.filter(row=>(order.rowIds||[]).includes(row.id));
+    const refs=[...new Set([order.ref,...sourceRows.map(row=>row.sourceRefText)].filter(value=>typeof value==='string').flatMap(value=>value.split(/\r?\n/)).map(value=>value.trim()).filter(Boolean))];
+    const statuses=[...new Set(sourceRows.map(row=>[row.sourceStatus,productStatusLabel(row.productStatus)].filter(Boolean).join(' / ')).filter(Boolean))];
+    return '<p class="partition-order-source">เอกสารต้นทาง: '+esc(refs.join('\n')||'ยังไม่ระบุเอกสาร')+'</p><p class="small">เงื่อนไข '+esc(order.term||'ยังไม่ระบุ')+' · สถานะเงินต้นทาง: '+esc(order.sourcePayment||'ยังไม่ระบุ')+'</p>'+(statuses.length?'<p class="small muted">งานขาย / สินค้า: '+esc(statuses.join(' · '))+'</p>':'');
+  };
+  const partitionOrderReceipts = (order,kind) => {
+    const events=(Array.isArray(order.receiptEvents)?order.receiptEvents:[]).filter(event=>moneyNumber(event.amount)&&event.amount>0&&['THB','USD'].includes(event.currency));
+    if(kind==='received'){
+      let html=receiptEventMarkup(events);
+      if(order.receiptConflict)html+='<p class="money-coverage">รหัสงวดรับซ้ำแต่หลักฐานขัดกัน · วันที่และจำนวนที่แสดงเป็นบริบท ต้องทวนต้นทางก่อนยืนยัน ไม่เติมหรือรวมงวดซ้ำ</p>';
+      const totals={THB:0,USD:0};for(const event of uniqueReceiptEvents(events))totals[event.currency]+=event.amount;
+      if(events.length&&!['THB','USD'].every(currency=>moneyNumber(order.received?.[currency])&&Math.abs(totals[currency]-order.received[currency])<0.005))html+='<p class="money-coverage">วันรับ / จำนวนงวดยังเทียบยอดรับของใบนี้ไม่ครบ · ไม่เติมส่วนที่ขาดเอง</p>';
+      return html;
+    }
+    return '<p class="small muted">'+(kind==='pending'?'ยังไม่มีวันรับ/กำหนดเก็บที่ยืนยัน · ไม่ใช้ ETD แทนวันรับ':'ยังไม่ยืนยันว่าเป็นเงินรับแล้วหรือยอดรอรับ · ไม่ถือทั้งหมดเป็นหนี้ที่ยืนยันแล้ว')+'</p>'+(order.receiptDateText?'<p class="small muted">ข้อความวันรับต้นทาง (บริบทเท่านั้น ไม่ใช้เติมจำนวนเงิน): '+esc(order.receiptDateText)+'</p>':'');
+  };
+  const moneyPartitionDetails = (group,kind) => {
+    const detail=moneyPartitionOrders(group,kind),label=partitionLabels[kind],equivalent=moneyTHB(detail.totals);
+    const list=detail.orders.map(order=>{
+      const map=order[kind],value=moneyTHB(map);
+      return '<li class="partition-order" data-partition-order="'+esc(order.orderId)+'"><div class="partition-order-heading"><strong>'+esc(order.customer||'ไม่ระบุลูกค้า')+'</strong><b class="num">'+(moneyNumber(value)?'≈ ฿ '+moneyFmt(value):'รอยืนยันอัตราแลกเปลี่ยน')+'</b></div><p class="money-native">'+esc(nativeComponents(map))+' · เฉพาะส่วนนี้</p>'+partitionOrderStatus(order)+partitionOrderReceipts(order,kind)+(order.wholeOrderContext?'<p class="money-coverage">เลือกบางสินค้าของใบขาย · ไม่เฉลี่ยเงินรับหรือยอดค้างทั้งใบให้ความหนานี้ เงินส่วนที่เลือกยังแยกไม่ได้</p>':'')+moneyIssuesMarkup(order.issues)+'</li>';
+    }).join('');
+    const unknown=kind==='unconfirmed'?moneyPartitionOrders(group,kind,{unknownPrices:true}):null;
+    const unknownList=unknown?.orders.length?'<section class="unknown-price-orders"><h4>ยังขาดราคาขายจริง / ไม่ทราบมูลค่า · '+fmt(unknown.orders.length)+' ใบ</h4><p class="small muted">ไม่รวมในยอดเงินที่ทราบด้านบน · ไม่ถือเป็นราคา 0</p><ul class="partition-orders">'+unknown.orders.map(order=>'<li class="partition-order"><strong>'+esc(order.customer||'ไม่ระบุลูกค้า')+'</strong><p class="money-coverage">ไม่ทราบมูลค่า · ยังขาดราคาขายจริง</p>'+partitionOrderStatus(order)+moneyIssuesMarkup(order.issues)+'</li>').join('')+'</ul></section>':'';
+    return '<details class="money-partition-details" data-money-partition="'+kind+'"><summary>ดูรายละเอียด '+esc(label)+' · '+fmt(detail.orders.length)+' ใบ'+(unknown?.orders.length?' + รอราคา '+fmt(unknown.orders.length)+' ใบ':'')+'</summary><p class="small muted">แสดงเฉพาะใบที่มีจำนวนเงินมากกว่า 0 ในส่วนนี้ · ใบเดียวไม่นับซ้ำตามจำนวนบรรทัดสินค้า</p>'+(list?'<ul class="partition-orders">'+list+'</ul>':'<p class="small muted">ไม่มีรายการจำนวนเงินบวกที่ตรวจได้ในส่วนนี้ · ไม่ได้แปลว่าทุกรายการรับครบแล้ว</p>')+'<p class="partition-subtotal">รวมรายละเอียด: '+esc(nativeComponents(detail.totals))+(moneyNumber(equivalent)?' = ≈ ฿ '+moneyFmt(equivalent):' · รอยืนยันอัตราแลกเปลี่ยน')+'</p><p class="'+(detail.matched?'small muted':'money-coverage')+'">'+(detail.matched?'ตรงกับยอดสรุปส่วนนี้':'รายละเอียดกับยอดสรุปยังเทียบไม่ครบ · คงยอดต้นทาง ไม่แก้หรือเดาตัวเลข')+'</p>'+unknownList+(detail.conflictCount||detail.missingIdentity||detail.invalid||unknown?.conflictCount||unknown?.missingIdentity?'<p class="money-coverage">ข้อมูลซ้ำขัดกัน / รหัสหรือสกุลเงินไม่ครบ ต้องตรวจต้นทางก่อนสรุป</p>':'')+(num(group.missingPriceLineCount)?'<p class="money-coverage">ยังขาดราคา '+fmt(group.missingPriceLineCount)+' บรรทัด · ไม่รวมเป็นราคา 0 และยังสรุปครบไม่ได้</p>':'')+'</details>';
+  };
+  const partitionRoundingNote = group => {
+    const total=moneyTHB(group.sale),parts=['received','pending','unconfirmed'].map(kind=>moneyTHB(group[kind]));
+    if(!moneyNumber(total)||!parts.every(moneyNumber))return '';
+    const difference=parts.reduce((sum,value)=>sum+Math.round(value*100),0)-Math.round(total*100);
+    if(!difference||Math.abs(parts.reduce((a,b)=>a+b,0)-total)>0.005)return '';
+    return '<p class="money-rounding-note">ยอดย่อยที่ปัด 2 ตำแหน่งรวมต่างจากยอดรวม '+moneyFmt(Math.abs(difference)/100)+' บาทจากการปัดเศษ · ไม่ปรับยอดต้นทาง</p>';
+  };
+  const moneyPartitions = (group,options={}) => {
     if(!group)return '';
     const unresolved=hasMoney(group.unconfirmed)||num(group.unconfirmedLineCount)>0||num(group.missingPriceLineCount)>0;
     const portion=(map,unknown=false)=>{
       if(!hasMoney(map)&&unknown)return 'รอยืนยัน';
-      const value=moneyTHB(map);return moneyNumber(value)?`≈ ฿ ${moneyFmt(value)}`:'รอยืนยัน';
+      const value=moneyTHB(map);return moneyNumber(value)?'≈ ฿ '+moneyFmt(value):'รอยืนยัน';
     };
-    return `<dl class="money-partitions"><div><dt>รับแล้ว · ส่วนยืนยัน</dt><dd>${portion(group.received,unresolved)}</dd></div><div><dt>รอรับ · ส่วนยืนยัน</dt><dd>${portion(group.pending,unresolved)}</dd></div><div class="unconfirmed"><dt>ยังแยกรับ/รอรับไม่ได้</dt><dd>${portion(group.unconfirmed,num(group.missingPriceLineCount)>0)}</dd></div></dl>`;
+    return '<div class="money-partitions">'+['received','pending','unconfirmed'].map(kind=>{
+      const unknown=kind==='unconfirmed'?num(group.missingPriceLineCount)>0:unresolved;
+      return '<div class="money-partition '+(kind==='unconfirmed'?'unconfirmed':'')+'"><div class="money-partition-heading"><span>'+partitionLabels[kind]+'</span><strong class="num">'+portion(group[kind],unknown)+'</strong></div><p class="money-native">'+esc(nativeComponents(group[kind]))+(unknown?' · เฉพาะส่วนที่ทราบ':'')+'</p>'+usdComponentMarkup(group[kind])+(options.details?moneyPartitionDetails(group,kind):'')+'</div>';
+    }).join('')+'</div>'+partitionRoundingNote(group);
   };
   const financeCardMarkup = id => {
     const group=financeGroup(id);
@@ -112,9 +187,9 @@ function mount(host, review, services = {}) {
     const label=num(id)===4?'มูลค่าตามราคาต้นทาง · รอเงื่อนไข':num(id)===0?'มูลค่ารายการทั้งหมด · ราคาขายจริง':'มูลค่ากลุ่มนี้ · ราคาขายจริง';
     const cancelledCount=[...new Set((group.orders||[]).flatMap(order=>order.rowIds||[]))].filter(id=>finance?.byRowId?.[id]?.sale?.status==='cancelled-no-demand').length;
     const coverage=missing?`ยอดที่ทราบ · ยังขาดราคา ${fmt(missing)} บรรทัด ไม่ตีเป็น 0`:num(group.lineCount)?`มูลค่าครบ ${fmt(num(group.lineCount)-cancelledCount)} บรรทัดที่มีจำนวน${cancelledCount?` · ยกเลิก ${fmt(cancelledCount)} บรรทัด = 0`:''}`:'ไม่มีรายการขายในกลุ่มนี้';
-    const convertedUSD=moneyNumber(group.sale?.USD)&&moneyNumber(finance?.metadata?.fx?.rate)?group.sale.USD*finance.metadata.fx.rate:null;
+    const convertedUSD=moneyNumber(group.sale?.USD)&&moneyNumber(finance?.metadata?.fx?.rate)&&finance.metadata.fx.rate>0?group.sale.USD*finance.metadata.fx.rate:null;
     const events=Array.isArray(group.receiptEvents)?group.receiptEvents:[];
-    return `<div class="metric-money" data-money-group="${esc(id)}"><div class="money-label">${label}</div><strong class="money-value num">${moneyNumber(known)?`≈ ฿ ${moneyFmt(known)}`:'รอข้อมูลมูลค่า'}</strong><div class="money-native">${esc(nativeMap(group.sale))}</div>${num(group.sale?.USD)>0?`<div class="money-conversion">ส่วน USD → ${moneyNumber(convertedUSD)?'≈ ฿ '+moneyFmt(convertedUSD):'รอยืนยันอัตราแลกเปลี่ยน'}</div>`:''}<div class="money-coverage ${missing?'':'complete'}">${coverage}</div>${moneyPartitions(group)}${num(group.unconfirmedLineCount)?`<p class="money-coverage">${fmt(group.unconfirmedLineCount)} บรรทัดยังแยกรับ/รอรับไม่ได้${num(id)===4?' · ไม่ถือเป็นลูกหนี้ยืนยันแล้ว':''}</p>`:''}<details class="money-receipts"><summary>รายละเอียดเงิน · วันรับ ${fmt(events.length)} รายการ</summary><p class="small muted">รับแล้ว: ${esc(nativeMap(group.received))}<br>รอรับ: ${esc(nativeMap(group.pending))}<br>ยังแยกไม่ได้: ${esc(nativeMap(group.unconfirmed))}<br>ตัวเลขด้านบนเป็นเฉพาะส่วนที่ยืนยันได้ ไม่ใช้ 0 แทนส่วนที่รอตรวจ</p>${receiptEventMarkup(events)}${moneyIssuesMarkup(group.issues)}<p class="small muted">มูลค่าสินค้าตามหลักฐานฝ่ายขาย ไม่ใช่ยอดเข้าธนาคาร · งวดเดียวไม่นับซ้ำตามบรรทัด</p></details></div>`;
+    return `<div class="metric-money" data-money-group="${esc(id)}"><div class="money-label">${label}</div><strong class="money-value num">${moneyNumber(known)?`≈ ฿ ${moneyFmt(known)}`:'รอข้อมูลมูลค่า'}</strong><div class="money-native">ต้นทาง: ${esc(nativeComponents(group.sale))}</div>${num(group.sale?.USD)>0?`<div class="money-conversion">ส่วน USD → ${moneyNumber(convertedUSD)?'≈ ฿ '+moneyFmt(convertedUSD):'รอยืนยันอัตราแลกเปลี่ยน'} · เฉพาะส่วนดอลลาร์ ไม่ใช่ยอดรวม</div>`:''}<div class="money-coverage ${missing?'':'complete'}">${coverage}</div>${moneyPartitions(group,{details:num(id)===0})}${num(group.unconfirmedLineCount)?`<p class="money-coverage">${fmt(group.unconfirmedLineCount)} บรรทัดยังแยกรับ/รอรับไม่ได้${num(id)===4?' · ไม่ถือเป็นลูกหนี้ยืนยันแล้ว':''}</p>`:''}${num(id)===0?'<p class="small muted">มูลค่าสินค้าตามหลักฐานฝ่ายขาย ไม่ใช่ยอดเข้าธนาคาร · วันที่หรือจำนวนไม่ครบแสดงรอตรวจ ไม่เดา</p>':`<details class="money-receipts"><summary>รายละเอียดเงิน · วันรับ ${fmt(events.length)} รายการ</summary><p class="small muted">รับแล้ว: ${esc(nativeMap(group.received))}<br>รอรับ: ${esc(nativeMap(group.pending))}<br>ยังแยกไม่ได้: ${esc(nativeMap(group.unconfirmed))}<br>ตัวเลขด้านบนเป็นเฉพาะส่วนที่ยืนยันได้ ไม่ใช้ 0 แทนส่วนที่รอตรวจ</p>${receiptEventMarkup(events)}${moneyIssuesMarkup(group.issues)}<p class="small muted">มูลค่าสินค้าตามหลักฐานฝ่ายขาย ไม่ใช่ยอดเข้าธนาคาร · งวดเดียวไม่นับซ้ำตามบรรทัด</p></details>`}</div>`;
   };
   const orderMoneyMarkup = r => {
     const line=finance?.byRowId?.[r.id];
@@ -183,6 +258,21 @@ function mount(host, review, services = {}) {
   };
   const totalsMarkup = (totals,key,zeroDash=false,labels=false) => Object.entries(totals).map(([u,t])=>`<span class="units-block">${zeroDash&&t[key]===0?'—':fmt(t[key])}${labels?` <span class="subqty">${esc(unitLabel(u))}</span>`:''}</span>`).join('') || '—';
   // Display projection only: exact source dimensions, with unit groups kept separate.
+  const equivalentArea = (values,key='ordered') => {
+    const result={};
+    for(const row of values){
+      const unit=unitKey(row.unit),entry=result[unit]||(result[unit]={value:0,missing:0}),quantity=key==='ordered'?row.qty:row[key];
+      if(quantity===null||quantity===undefined||!Number.isFinite(Number(quantity))||Number(quantity)<0){entry.missing++;continue;}
+      if(Number(quantity)===0)continue;
+      if(![row.w,row.l,row.t].every(value=>Number.isFinite(Number(value))&&Number(value)>0)){entry.missing++;continue;}
+      entry.value+=Number(quantity)*Number(row.w)*Number(row.l)/(1220*2440);
+    }
+    return result;
+  };
+  const areaEquivalentMarkup = (values,key='ordered') => {
+    const totals=equivalentArea(values,key);
+    return '<div class="metric-equivalent area-equivalent" data-equivalent-kind="area" title="จำนวน × กว้าง × ยาว ÷ (1220 × 2440) · ใช้ขนาดต้นทางจริง ไม่เปลี่ยนความหนา"><span>เทียบ 4×8 · ความหนาเดิม</span>'+Object.entries(totals).map(([unit,total])=>'<span class="equiv-value num" data-area-unit="'+esc(unit)+'">'+(total.missing?'รอตรวจขนาด/จำนวน '+fmt(total.missing)+' รายการ':'≈ '+fmtEquivalent(total.value))+' <small>'+(total.missing?'':'แผ่นเทียบ · ')+(unit==='strip'?'จากไม้แถบ':unit==='sheet'?'จากแผ่น':esc(unitLabel(unit)))+'</small></span>').join('')+'</div>';
+  };
   const equivalent25 = (values,key) => {
     const result = {};
     values.forEach(r => {
@@ -223,7 +313,7 @@ function mount(host, review, services = {}) {
     const definitions=[['ordered','สั่งทั้งหมด','',counts(values)],['loaded','โหลดแล้ว','loaded',`${showCounts(values,'loaded')} · ไม่หักของซ้ำ`],['allocated','มีของรองรับรอส่ง','ready',`${showCounts(values,'allocated')} · ฐานจัดสรร ฐานเดิม · เฉพาะส่วนไม่กระทบ`],['shortage','ต้องผลิตเพิ่ม','need',`${showCounts(values,'shortage')} · ฐานจัดสรร ฐานเดิม · เฉพาะส่วนไม่กระทบ`]];
     if(extra)definitions.push(['unreserved','ยังไม่จอง','',`${showCounts(values,'unreserved')} · ไม่หักสต๊อก`]);
     if(pending)definitions.push(['pendingQty','รอทวนจัดสรร','',`${showCounts(values,'pendingQty')} · ยังไม่เดายอด`]);
-    root.innerHTML=definitions.map(([key,label,cls,description])=>`<div class="metric ${cls}" data-metric-key="${key}"><div class="label">${label}</div><strong class="num">${totalsMarkup(totals,key,false,true)}</strong>${equivalentMarkup(values,key)}<div class="small muted">${esc(description)}</div></div>`).join('');
+    root.innerHTML=definitions.map(([key,label,cls,description])=>`<div class="metric ${cls}" data-metric-key="${key}"><div class="label">${label}</div><strong class="num">${totalsMarkup(totals,key,false,true)}</strong>${key==='ordered'?areaEquivalentMarkup(values,key):''}${equivalentMarkup(values,key)}<div class="small muted">${esc(description)}</div></div>`).join('');
     document.getElementById('unreserved-note').hidden=!extra;
     document.getElementById('pending-note').hidden=!pending;
     root.classList.toggle('has-pending',pending&&extra);
@@ -505,7 +595,7 @@ function mount(host, review, services = {}) {
   const renderQueueMetrics = values => {
     const root=document.getElementById('metrics');root.className='overview queue-metrics';
     const groups=[{id:0,label:'สั่งทั้งหมด',description:counts(values)},...queueGroups];
-    root.innerHTML=groups.map(g=>{const subset=num(g.id)===0?values:queueGroupRows(values,g.id);const cls=({1:'loaded',2:'ready',3:'need'})[num(g.id)]||'';return `<div class="metric ${cls}" data-queue-group="${esc(g.id)}"><div class="label">${num(g.id)?`${esc(g.id)} · `:''}${esc(g.label)}</div><strong class="num">${queueZeroQty(subset,true)}</strong>${queueEquivalent(subset)}<div class="small muted">${num(g.id)?`${fmt(subset.length)} บรรทัด · `:''}${esc(g.description||'')}</div>${num(g.id)>0&&subset.some(r=>queueKnown(r)||poolRowFor(r))?`<p class="small">${esc(queueKnownSummary(subset))}</p>`:''}${financeCardMarkup(g.id)}</div>`;}).join('')+freeCardMarkup();
+    root.innerHTML=groups.map(g=>{const subset=num(g.id)===0?values:queueGroupRows(values,g.id);const cls=({1:'loaded',2:'ready',3:'need'})[num(g.id)]||'';return `<div class="metric ${cls}" data-queue-group="${esc(g.id)}"><div class="label">${num(g.id)?`${esc(g.id)} · `:''}${esc(g.label)}</div><strong class="num">${queueZeroQty(subset,true)}</strong>${num(g.id)===0?areaEquivalentMarkup(subset):''}${queueEquivalent(subset)}<div class="small muted">${num(g.id)?`${fmt(subset.length)} บรรทัด · `:''}${esc(g.description||'')}</div>${num(g.id)>0&&subset.some(r=>queueKnown(r)||poolRowFor(r))?`<p class="small">${esc(queueKnownSummary(subset))}</p>`:''}${financeCardMarkup(g.id)}</div>`;}).join('')+freeCardMarkup();
     renderMoneySourceNote();refreshFreeStockPanel();
     const freeToggle=document.getElementById('free-detail-toggle');if(freeToggle)freeToggle.addEventListener('click',()=>{freePanelOpen=!freePanelOpen;uiState.freePanelOpen=freePanelOpen;freeToggle.setAttribute('aria-expanded',String(freePanelOpen));freeToggle.textContent=(freePanelOpen?'ย่อ':'ดู')+'รายการ Free · ราคาและหมายเหตุ';refreshFreeStockPanel();if(freePanelOpen)document.getElementById('free-detail-panel').scrollIntoView({block:'nearest'});});
     document.getElementById('unreserved-note').hidden=true;document.getElementById('pending-note').hidden=true;

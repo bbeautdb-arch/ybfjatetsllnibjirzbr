@@ -8,6 +8,15 @@ const css = fs.readFileSync(new URL('../stock_order_review.css', import.meta.url
 const copy = value => JSON.parse(JSON.stringify(value));
 const key = '2|A|100|200|sheet';
 const money = (THB = 0, USD = 0) => ({ THB, USD });
+function financeHarness(group, rows = [], rate = 2) {
+  const data={financial:{metadata:{fx:{rate,date:'2000-01-01'},asOf:'2000-01-02',cashAsOf:'2000-01-02'},views:{all:{groups:{0:group}}}}};
+  const context={data,rows,select:{value:'all'},num:Number,fmt:String,esc:value=>String(value??'').replaceAll('<','&lt;').replaceAll('>','&gt;'),productStatusLabel:value=>String(value||'ไม่ระบุ')};
+  const start=source.indexOf('  const finance ='),end=source.indexOf('  const freeData =',start);
+  return vm.runInNewContext(source.slice(start,end)+'\n({moneyPartitionOrders,moneyPartitionDetails,moneyPartitions,financeCardMarkup,partitionRoundingNote,uniqueReceiptEvents})',context);
+}
+function syntheticOrder(id, received, pending, unconfirmed) {
+  return {orderId:id,ref:'',customer:'Synthetic '+id,rowIds:[id+'-line'],term:'TT',sourcePayment:'synthetic source status',sale:money(received.THB+pending.THB+unconfirmed.THB,received.USD+pending.USD+unconfirmed.USD),received,pending,unconfirmed,saleComplete:true,receiptEvents:[],issues:[]};
+}
 function fixture() {
   const rows = [1, 2, 3, 4].map(group => ({ id: 'synthetic-line-' + group, orderId: 'synthetic-order-' + group, ref: 'EXAMPLE-' + group, customer: '<synthetic customer>', t: 2, w: 100, l: 200, grade: 'A', unit: 'sheet', qty: 10, loaded: group === 1 ? 10 : 0, allocated: null, shortage: null, unreserved: 0, pendingQty: 10, term: 'TT', commercial: { termKind: 'TT', summaryLabel: 'synthetic payment', notes: [] }, queue: { group, eligible: group === 2 || group === 3, etdISO: '2000-01-01', parts: [], allocated: null, shortage: null } }));
   const groups = {};
@@ -162,6 +171,41 @@ test('unit prices preserve precision, unconfirmed money is not fake unpaid zero,
   assert.equal((ui.receiptEventMarkup([event, event]).match(/<li>/g) || []).length, 1);
   for (const row of data.rows) assert.match(ui.orderMoneyMarkup(row), /US\$ 0.106/);
   assert.match(ui.freeNoteMarkup(data.freeStock.rows[0]), /&lt;note&gt;/);
+});
+test('Box 0 partitions show only their positive amounts, source docs/statuses and actual receipt dates',()=>{
+  const paid=syntheticOrder('paid',money(5,10),money(0,2),money()),pending=syntheticOrder('pending',money(),money(0,3),money()),unknown=syntheticOrder('unknown',money(),money(),money(7,4));
+  paid.ref='QT-SYNTH';paid.receiptEvents=[{id:'r1',amount:5,currency:'THB',date:'2000-01-01'},{id:'r2',amount:10,currency:'USD',date:null}];pending.receiptDateText='source contextual date';
+  const group={sale:money(12,19),received:money(5,10),pending:money(0,5),unconfirmed:money(7,4),orders:[paid,pending,unknown],lineCount:3,missingPriceLineCount:0,unconfirmedLineCount:1};
+  const rows=[{id:'paid-line',sourceRefText:'QT-SYNTH\nIV-SYNTH',sourceStatus:'synthetic sales status',productStatus:'loaded',etd:'2099-12-31'}],before=JSON.stringify({group,rows}),ui=financeHarness(group,rows);
+  const received=ui.moneyPartitionDetails(group,'received'),due=ui.moneyPartitionDetails(group,'pending'),unconfirmed=ui.moneyPartitionDetails(group,'unconfirmed');
+  assert.match(received,/Synthetic paid/);assert.doesNotMatch(received,/Synthetic pending|Synthetic unknown|2099/);assert.match(received,/QT-SYNTH\nIV-SYNTH/);assert.equal((received.match(/QT-SYNTH/g)||[]).length,1);assert.match(received,/สถานะเงินต้นทาง/);assert.match(received,/01\/01\/2543/);assert.match(received,/ยังไม่ยืนยันวันรับ/);
+  assert.match(due,/Synthetic paid/);assert.match(due,/Synthetic pending/);assert.doesNotMatch(due,/Synthetic unknown/);assert.match(due,/ยังไม่มีวันรับ\/กำหนดเก็บที่ยืนยัน/);assert.match(due,/บริบทเท่านั้น/);assert.doesNotMatch(due,/receipt-events/);
+  assert.match(unconfirmed,/Synthetic unknown/);assert.doesNotMatch(unconfirmed,/Synthetic paid|Synthetic pending/);assert.match(unconfirmed,/ไม่ถือทั้งหมดเป็นหนี้ที่ยืนยันแล้ว/);
+  for(const kind of ['received','pending','unconfirmed'])assert.equal(ui.moneyPartitionOrders(group,kind).matched,true);
+  const card=ui.financeCardMarkup(0);assert.equal((card.match(/data-money-partition=/g)||[]).length,3);assert.match(card,/฿ 12.00 \+ US\$ 19.00/);assert.match(card,/ส่วน USD → ≈ ฿ 38.00/);assert.match(card,/ส่วน USD → ≈ ฿ 20.00/);assert.match(card,/ส่วน USD → ≈ ฿ 10.00/);assert.match(card,/ส่วน USD → ≈ ฿ 8.00/);assert.match(card,/ไม่ใช่ยอดรวม/);assert.equal(JSON.stringify({group,rows}),before);
+  assert.doesNotMatch(financeHarness(group,rows,0).financeCardMarkup(0),/ส่วน USD → ≈ ฿ 0.00/);
+});
+test('partition order dedup uses stable IDs not blank refs, merges receipt evidence and flags contradictory evidence',()=>{
+  const a=syntheticOrder('one',money(0,3),money(),money()),b=syntheticOrder('two',money(0,4),money(),money());a.receiptEvents=[{id:'first',amount:1,currency:'USD',date:'2000-01-01'}];const a2=copy(a);a2.receiptEvents=[{id:'second',amount:2,currency:'USD',date:'2000-01-02'}];
+  const fallback=syntheticOrder('',money(0,5),money(),money());fallback.rowIds=['fallback-line'];const group={received:money(0,12),pending:money(),unconfirmed:money(),orders:[a,a2,b,fallback]},before=JSON.stringify(group),ui=financeHarness(group),details=ui.moneyPartitionOrders(group,'received');
+  assert.equal(details.orders.length,3);assert.equal(details.totals.USD,12);assert.equal(details.matched,true);assert.equal(details.orders[0].receiptEvents.length,2);assert.equal(JSON.stringify(group),before);
+  const events=[{amount:1,currency:'USD',date:'2000-01-01'},{amount:1,currency:'USD',date:'2000-01-01'}];assert.equal(ui.uniqueReceiptEvents(events).length,2,'missing IDs do not collapse installments');
+  const conflicted=copy(a);conflicted.receiptEvents=[{id:'first',amount:2,currency:'USD',date:'2000-01-01'}];const conflictGroup={...group,orders:[a,conflicted,b,fallback]};const html=ui.moneyPartitionDetails(conflictGroup,'received');assert.match(html,/รหัสงวดรับซ้ำแต่หลักฐานขัดกัน/);assert.match(html,/US\$ 1.00/);assert.match(html,/US\$ 2.00/);
+  const amountConflict=copy(a);amountConflict.received=money(0,99);const bad=ui.moneyPartitionOrders({...group,orders:[a,amountConflict]},'received');assert.equal(bad.orders.length,0);assert.equal(bad.conflictCount,1);assert.equal(bad.matched,false);
+});
+test('missing-price orders stay visible outside known subtotal and partial-thickness receipts are not prorated',()=>{
+  const partial=syntheticOrder('part',money(),money(),money(0,10));partial.wholeOrderContext=true;partial.wholeOrderSettlement={receivedAmount:12345,currency:'USD'};
+  const missing=syntheticOrder('missing',money(),money(),money());missing.saleComplete=false;missing.issues=['missing-actual-price'];
+  const group={sale:money(0,10),received:money(),pending:money(),unconfirmed:money(0,10),orders:[partial,missing,copy(missing)],missingPriceLineCount:1,unconfirmedLineCount:2};const ui=financeHarness(group),html=ui.moneyPartitionDetails(group,'unconfirmed');
+  assert.match(html,/Synthetic part/);assert.match(html,/ไม่เฉลี่ยเงินรับหรือยอดค้างทั้งใบ/);assert.doesNotMatch(html,/12345|12,345/);assert.equal((html.match(/Synthetic missing/g)||[]).length,1);assert.match(html,/ยังขาดราคาขายจริง \/ ไม่ทราบมูลค่า/);assert.match(html,/ไม่รวมในยอดเงินที่ทราบ/);assert.equal(ui.moneyPartitionOrders(group,'unconfirmed').totals.USD,10);
+  assert.match(ui.partitionRoundingNote({sale:money(0,0.003),received:money(0,0.001),pending:money(0,0.001),unconfirmed:money(0,0.001)}),/0.01 บาทจากการปัดเศษ/);
+});
+test('area-only 4x8 keeps actual dimensions and separate units, alongside volume equivalent in Box 0',()=>{
+  const start=source.indexOf('  const equivalentArea ='),end=source.indexOf('  const anyUnreserved =',start),context={unitKey:value=>value,unitLabel:String,esc:String,fmt:String,fmtEquivalent:value=>value.toFixed(2)};
+  const ui=vm.runInNewContext(source.slice(start,end)+'\n({equivalentArea,areaEquivalentMarkup,equivalent25})',context),rows=[{qty:2,w:1220,l:2440,t:1.6,unit:'sheet'},{qty:3,w:1200,l:2400,t:2.5,unit:'sheet'},{qty:10,w:122,l:244,t:3.2,unit:'strip'}],before=JSON.stringify(rows);
+  const area=ui.equivalentArea(rows),volume=ui.equivalent25(rows,'ordered');assert.equal(area.sheet.value,2+3*1200*2400/(1220*2440));assert.equal(area.strip.value,0.1);assert.notEqual(area.sheet.value,volume.sheet.value);assert.match(ui.areaEquivalentMarkup(rows),/data-area-unit="sheet"/);assert.match(ui.areaEquivalentMarkup(rows),/data-area-unit="strip"/);assert.equal(JSON.stringify(rows),before);
+  assert.match(ui.areaEquivalentMarkup([{qty:1,w:null,l:2440,t:2,unit:'sheet'}]),/รอตรวจขนาด\/จำนวน 1 รายการ/);assert.equal(ui.equivalentArea([{qty:0,w:null,l:null,t:null,unit:'sheet'}]).sheet.missing,0);
+  const h=harness();assert.equal((h.nodes.get('metrics').innerHTML.match(/data-equivalent-kind="area"/g)||[]).length,1);assert.match(h.nodes.get('metrics').innerHTML,/เทียบ 4×8 · หนา 2.5 มม./);h.api.destroy();
 });
 test('tracking-only top save sends raw-key-only change, verifies metadata, and does not touch other fields',async()=>{
   let remote=trackingSnapshot(),writes=[];remote.canSave=false;
