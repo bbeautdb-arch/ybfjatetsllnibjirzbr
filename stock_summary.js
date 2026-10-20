@@ -69,6 +69,9 @@
     if(overview)overview.innerHTML=renderCardOverview('physical','สต๊อกจริง · Physical','',{
       byUnit:{sheet:latest.total.byUnit.sheet.qty,strip:latest.total.byUnit.strip.qty}
     },null,latest);
+    // The monthly sales header must also follow asynchronously verified current
+    // catalog/FX values. Only repaint cards, never rebuild notes or draft editors.
+    if(window.AAFOrderHeader)setSalesSummary(latest.salesSummary||null);
   }
   function setSavedStockCatalog(value){savedStockCatalog=value;repaintSavedCatalog();}
 
@@ -91,7 +94,7 @@
     return {rate:fx.rate,status:prefix+' · '+reportDay(fx.date)+' · บาท / 1 USD · อัตรารายวัน ไม่ใช่เรทรับเงินจริง'};
   }
   function paintExchangeRate(){
-    const display=orderHeader?{rate:orderHeader.fx.rate,status:'เรทของชุดรายงานเดือนที่เลือก · '+orderHeader.fx.date+' · ไม่ใช่เรทรับเงินจริง'}:exchangeRateDisplay(latest?.salesSummary,headerExchangeRate);
+    const display=exchangeRateDisplay(window.AAFOrderHeader?null:latest?.salesSummary,headerExchangeRate);
     const value=root?.querySelector('.ss-exchange b');if(value)value.textContent=display.rate===null?'—':number(display.rate,4);
     const status=root?.querySelector('.ss-exchange small');if(status)status.textContent=display.status;
     const dailySource=root?.querySelector('.ss-overview-source');if(dailySource)dailySource.textContent=overviewSourceText(latest);
@@ -448,8 +451,7 @@
     // Legacy whole-ledger callbacks remain active for catalog/export services,
     // but must never overwrite it or leak an old month after a failed reload.
     if(window.AAFOrderHeader){
-      if(orderHeader)return window.AAFOrderHeader.render(orderHeader,expandedCards);
-      return ['สต๊อกจริง · ทั้งคลัง','ขายแล้ว · เดือนที่เลือก','จองอื่น · เดือนที่เลือก','Free Stock · ทั้งคลัง'].map(label=>`<div class="ss-kpi"><h3>${esc(label)}</h3><p role="status">${esc(orderHeaderError)}</p><small>ยังไม่แสดงชุดเก่าหรือเดือนอื่นแทน</small></div>`).join('');
+      return window.AAFOrderHeader.render(orderHeader,expandedCards,currentWarehouse(m),orderHeaderError);
     }
     if(!summary){const basic=basicStockKpis(m);if(basic)return basic;}
     if(summary?.version>=2)return partitionKpiHTML(summary,m);
@@ -472,11 +474,13 @@
     if(latest)latest={...latest,salesSummary:summary};
     const cards=root?.querySelector('.ss-kpis');if(cards){
       const opened=new Set([...cards.querySelectorAll('[data-stock-gap-group]')].filter(node=>node.open).map(node=>node.dataset.stockGapGroup));
+      const receipts=new Set([...cards.querySelectorAll('[data-stock-receipt-details]')].filter(node=>node.open).map(node=>node.dataset.stockReceiptDetails));
       cards.innerHTML=kpiHTML(summary,latest);
       cards.querySelectorAll('[data-stock-gap-group]').forEach(node=>{node.open=opened.has(node.dataset.stockGapGroup);});
+      cards.querySelectorAll('[data-stock-receipt-details]').forEach(node=>{node.open=receipts.has(node.dataset.stockReceiptDetails);});
     }
     paintExchangeRate();
-    const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=orderHeader?window.AAFOrderHeader.sourceText(orderHeader):window.AAFOrderHeader?orderHeaderError:summarySourceText(summary,latest);
+    const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=window.AAFOrderHeader?window.AAFOrderHeader.sourceText(orderHeader,currentWarehouse(latest)):summarySourceText(summary,latest);
     const dailySource=root?.querySelector('.ss-overview-source');if(dailySource)dailySource.textContent=overviewSourceText(latest);
     syncPriceDrafts();
   }
@@ -488,6 +492,10 @@
     }
     if(latest)latest={...latest,orderHeader};
     setSalesSummary(latest?.salesSummary||null);
+  }
+  function currentWarehouse(m){
+    try{return window.AAFOrderHeader?.warehouseProjection(m)||null;}
+    catch{return null;}
   }
   function syncPriceDrafts(){
     if(!root)return;
@@ -524,7 +532,7 @@
   }
   root?.addEventListener('input',editGapPrice);root?.addEventListener('change',editGapPrice);root?.addEventListener('click',saveGapPrices);root?.addEventListener('click',overviewClick);
   function overviewSourceText(m){
-    if(window.AAFOrderHeader)return orderHeader?window.AAFOrderHeader.sourceText(orderHeader):orderHeaderError;
+    if(window.AAFOrderHeader)return window.AAFOrderHeader.sourceText(orderHeader,currentWarehouse(m));
     const e=m?.salesSummary?.evidence,fx=exchangeRateDisplay(m?.salesSummary,m?.headerExchangeRate);
     const sales=e?.salesReportDate?'ขายอ้างอิง '+e.salesReportDate+(e.needsSalesRefresh?' · ยังไม่ได้อ่านยอดขายใหม่':' · ชุดข้อมูลที่บันทึกไว้'):'ยังไม่ยืนยันวันที่ชุดยอดขาย';
     return 'สต๊อก '+(m?.reportDate||'รอยืนยัน')+' · '+sales+(fx.rate!==null?' · USD/THB '+number(fx.rate,4)+' ('+fx.status+')':' · ยังไม่ยืนยันเรท USD')+' · ใช้ภายในบริษัท';
@@ -534,9 +542,10 @@
   }
   function html(m){
     const t=m.total,overrides=m.rows.filter(r=>r.physicalAt||r.freeAt).length,followed=m.rows.filter(r=>String(r.followup).trim()).length;
+    const displayedFx=exchangeRateDisplay(window.AAFOrderHeader?null:m.salesSummary,m.headerExchangeRate);
     let index=0;
     return `<article class="ss-sheet">
-      <header class="ss-hero"><div><div class="ss-eyebrow">AAF / STOCK & SALES FOLLOW-UP</div><h2>รายงานสต๊อกและติดตามการขาย</h2><p>อ้างอิงรายงานเมล ${esc(reportDay(m.reportDate))}</p></div><div class="ss-hero-meta"><div class="ss-stamp">ข้อมูลที่บันทึกแล้ว<br><b>ครบ ${number(m.rows.length)} สเปก</b><br>ทุกเกรด · ทุกขนาด</div><div class="ss-exchange"><span>อัตราแลกเปลี่ยน USD → บาท</span><b>${exchangeRateDisplay(m.salesSummary,m.headerExchangeRate).rate===null?'—':number(exchangeRateDisplay(m.salesSummary,m.headerExchangeRate).rate,4)}</b><small>${esc(exchangeRateDisplay(m.salesSummary,m.headerExchangeRate).status)}</small></div></div></header>
+      <header class="ss-hero"><div><div class="ss-eyebrow">AAF / STOCK & SALES FOLLOW-UP</div><h2>รายงานสต๊อกและติดตามการขาย</h2><p>อ้างอิงรายงานเมล ${esc(reportDay(m.reportDate))}</p></div><div class="ss-hero-meta"><div class="ss-stamp">ข้อมูลที่บันทึกแล้ว<br><b>ครบ ${number(m.rows.length)} สเปก</b><br>ทุกเกรด · ทุกขนาด</div><div class="ss-exchange"><span>อัตราแลกเปลี่ยน USD → บาท</span><b>${displayedFx.rate===null?'—':number(displayedFx.rate,4)}</b><small>${esc(displayedFx.status)}</small></div></div></header>
       <div class="ss-content"><div class="ss-context"><span>ข้อมูลส่วนกลางล่าสุด <b>${esc(when(m.updatedAt))}</b></span><span>เวลาไทย (UTC+7) · ภาพรวมทั้งชุด ไม่ใช้ตัวกรองในหน้าสต๊อก</span></div>
       <p class="ss-sales-summary-source" role="status">${esc(window.AAFOrderHeader?overviewSourceText(m):summarySourceText(m.salesSummary,m))}</p>
       ${dailyOverviewHTML(m)}

@@ -81,3 +81,109 @@ test('summary keeps hidden legacy services and the new review host alive across 
   assert.match(source,/ss-legacy-sales-services" hidden/);assert.match(source,/ss-legacy-detail" hidden/);
   assert.match(source,/id="stock-order-review-slot"/);assert.match(source,/orderPreview\?\.remove\(\)/);assert.match(source,/AAFOrderReview\?\.attach/);
 });
+
+function currentStockFixture(){
+  const row={key:'current-sheet',w:1220,l:2440,t:2.5,grade:'B',unit:'sheet',qty:73,freeQty:29,committedQty:50,
+    baseQty:73,d90:73,d180:0,d270:0,d360:0,dOver:0,price:999,curr:'USD'};
+  const rows=[row,{...row,key:'current-strip',w:20,l:1000,t:3.2,unit:'strip',qty:400,freeQty:150,committedQty:250,baseQty:400,d90:400}];
+  const stock={revision:8,reportDate:'2026-04-04',updatedAt:'2026-04-04T06:00:00Z',rows};
+  const catalog={revision:8,reportDate:stock.reportDate,catalogRevision:4,rows:rows.map(r=>({...r,price:r.unit==='sheet'?2:0.1,currency:r.unit==='sheet'?'USD':'THB'}))};
+  const fx={rate:30,date:'2026-04-03',status:'current',basis:'BOT_USD_THB_BUYING_TRANSFER'};
+  return {stock,catalog,fx};
+}
+function summaryRuntime(root=null,extra={}){
+  const window={AAFOrderHeader:api,...extra};
+  vm.runInNewContext(fs.readFileSync(new URL('../stock_summary.js',import.meta.url),'utf8'),
+    {window,document:{getElementById:()=>root,createElement:()=>({}),head:{append(){}}},location:{hash:''}});
+  return window.AAFStockSummary;
+}
+const cardSection=(html,id)=>html.split(`data-stock-card="${id}"`)[1]?.split('data-stock-card="')[0]||'';
+
+test('current warehouse cards and table use the same catalog, units and saved Free, independent of stale month',()=>{
+  const {stock,catalog,fx}=currentStockFixture(),before=JSON.stringify({stock,catalog}),summary=summaryRuntime();
+  const current=api.warehouseProjection(summary.withSavedCatalog({...stock,headerExchangeRate:fx},catalog,fx));
+  assert.deepEqual(current.physical.quantity,{sheet:73,strip:400});assert.deepEqual(current.free.quantity,{sheet:29,strip:150});
+  assert.equal(current.physical.value.equivalentTHB,4420);assert.equal(current.free.value.equivalentTHB,1755);
+  assert.notEqual(current.free.quantity.sheet,stock.rows[0].qty-stock.rows[0].committedQty,'saved/manual Free is authoritative');
+  assert.equal(current.physical.eq4x8,73+400*20*1000/(1220*2440));
+  assert.equal(current.physical.eq25,73+400*20*1000/(1220*2440)*3.2/2.5);
+  const monthly=api.build(fixture(),{stale:true}),html=api.render(monthly,new Set(),current);
+  assert.match(cardSection(html,'physical'),/<strong>73<\/strong>/);assert.match(cardSection(html,'physical'),/4,420/);
+  assert.doesNotMatch(cardSection(html,'physical'),/<strong>100<\/strong>|4,000|999/);
+  assert.match(cardSection(html,'free'),/<strong>29<\/strong>/);assert.match(cardSection(html,'free'),/1,755/);
+  assert.match(cardSection(html,'sold'),/USD 148/);assert.match(cardSection(html,'sold'),/ชุดตรวจย้อนหลัง/);
+  assert.match(api.sourceText(monthly,current),/2026-04-04 · รุ่น 8/);assert.match(api.sourceText(monthly,current),/ไม่ใช่ฟีดขายสด/);
+  assert.equal(JSON.stringify({stock,catalog}),before);
+});
+
+test('current stock is visible before the monthly review or price catalog arrives, with money unknown not zero',()=>{
+  const {stock}=currentStockFixture(),current=api.warehouseProjection(stock),html=api.render(null,new Set(),current,'รอตรวจเดือนใหม่');
+  assert.equal(current.physical.knownValueTHB,null);assert.equal(current.free.knownValueTHB,null);
+  assert.match(cardSection(html,'physical'),/<strong>73<\/strong>/);assert.match(cardSection(html,'free'),/<strong>29<\/strong>/);
+  assert.match(cardSection(html,'sold'),/รอตรวจเดือนใหม่/);assert.match(cardSection(html,'reserved'),/รอตรวจเดือนใหม่/);
+  assert.match(cardSection(html,'physical'),/รอยืนยันชุดราคาหรือเรทส่วนกลาง/);assert.doesNotMatch(cardSection(html,'physical'),/฿ 0(?:[< ·]|$)/);
+});
+
+test('wrong catalog revision, date or per-spec quantity cannot value the current warehouse',()=>{
+  const {stock,catalog,fx}=currentStockFixture(),summary=summaryRuntime();
+  for(const alter of [c=>c.revision=7,c=>c.reportDate='2026-04-03',c=>c.rows[0].freeQty=28]){
+    const changed=clone(catalog);alter(changed);
+    const decorated=summary.withSavedCatalog(stock,changed,fx),current=api.warehouseProjection(decorated);
+    assert.equal(decorated.savedCatalog,null);assert.equal(current.physical.value,null);assert.equal(current.physical.knownValueTHB,null);
+    assert.deepEqual(current.physical.quantity,{sheet:73,strip:400});assert.deepEqual(current.free.quantity,{sheet:29,strip:150});
+  }
+});
+
+test('missing USD FX leaves partial known THB valuation and exact unpriced unit coverage',()=>{
+  const {stock,catalog}=currentStockFixture(),summary=summaryRuntime();
+  const current=api.warehouseProjection(summary.withSavedCatalog(stock,catalog,null)),html=api.render(api.build(fixture()),new Set(),current);
+  assert.equal(current.physical.value,null);assert.equal(current.physical.knownValueTHB,40);assert.equal(current.free.knownValueTHB,15);
+  assert.deepEqual(current.physical.unknownQuantity,{sheet:73,strip:0});assert.equal(current.physical.unpricedSpecCount,1);
+  assert.match(cardSection(html,'physical'),/เฉพาะส่วนที่ยืนยันราคาได้/);assert.match(cardSection(html,'physical'),/73 แผ่น/);
+  assert.doesNotMatch(cardSection(html,'physical'),/4,000|4,420|999/);
+});
+
+test('late catalog and FX repaint current cards without rebuilding editors or collapsing expanded cards',()=>{
+  let cardHtml='',receiptNodes=[];
+  const handlers={},cards={
+    get innerHTML(){return cardHtml;},
+    set innerHTML(value){cardHtml=value;receiptNodes=['sold','reserved'].map(id=>({dataset:{stockReceiptDetails:id},open:false}));},
+    querySelectorAll:selector=>selector==='[data-stock-receipt-details]'?receiptNodes:[]
+  },status={textContent:''},source={textContent:''};
+  let rootRebuilds=0;
+  const root={classList:{remove(){}},addEventListener:(name,fn)=>{handlers[name]=fn;},querySelectorAll:()=>[],
+    querySelector:selector=>selector==='.ss-kpis'?cards:selector==='.ss-status'?status:selector==='.ss-overview-source'?source:selector==='.ss-download'?{addEventListener(){}}:null,
+    set innerHTML(value){rootRebuilds++;},get innerHTML(){return '';}};
+  const summary=summaryRuntime(root),{stock,catalog,fx}=currentStockFixture();
+  const data={...stock,report:{reportDate:stock.reportDate,sourceRowCount:2},exchangeRate:30};
+  summary.update(data,r=>({eq:r.qty*r.w*r.l/(1220*2440)*r.t/2.5,price:999,curr:'USD',value:999*r.qty,freeValue:999*r.freeQty}));
+  summary.setOrderReview(fixture(),{stale:true});
+  receiptNodes[0].open=true;
+  const card={querySelector:()=>null},toggle={dataset:{stockCardToggle:'free'},closest:selector=>selector==='[data-stock-card-toggle]'?toggle:selector==='[data-stock-card]'?card:null};
+  handlers.click({target:toggle});
+  const initialRebuilds=rootRebuilds;
+  summary.setSavedStockCatalog(catalog);
+  assert.match(cardSection(cards.innerHTML,'physical'),/ส่วนที่ยืนยันได้/);assert.match(cardSection(cards.innerHTML,'free'),/aria-expanded="true"/);
+  assert.equal(receiptNodes[0].open,true);assert.equal(receiptNodes[1].open,false);
+  summary.setExchangeRate(fx);
+  assert.match(cardSection(cards.innerHTML,'physical'),/4,420/);assert.match(cardSection(cards.innerHTML,'free'),/1,755/);
+  assert.match(cardSection(cards.innerHTML,'free'),/aria-expanded="true"/);assert.match(source.textContent,/2026-04-04 · รุ่น 8/);
+  assert.equal(receiptNodes[0].open,true);
+  summary.setSavedStockCatalog({...catalog,revision:7});
+  assert.match(cardSection(cards.innerHTML,'physical'),/<strong>73<\/strong>/);assert.doesNotMatch(cardSection(cards.innerHTML,'physical'),/4,420/);
+  assert.match(cardSection(cards.innerHTML,'free'),/aria-expanded="true"/);assert.equal(rootRebuilds,initialRebuilds,'catalog/FX arrival must not rebuild active note editors');
+  assert.equal(receiptNodes[0].open,true);
+});
+
+test('initial hero and current warehouse use current FX, while dated sales retain their own rate',()=>{
+  const summary=summaryRuntime(),{stock,catalog,fx}=currentStockFixture();
+  const monthly=fixture();monthly.financial.metadata.fx={rate:31,date:'2026-04-02'};
+  summary.setOrderReview(monthly,{stale:true});
+  let m=summary.buildModel({...stock,report:{reportDate:stock.reportDate},exchangeRate:30},
+    r=>({eq:r.qty*r.w*r.l/(1220*2440)*r.t/2.5,price:999,curr:'USD',value:r.qty*999,freeValue:r.freeQty*999}));
+  m=summary.withSavedCatalog({...m,headerExchangeRate:fx,salesSummary:{catalog:{fxThbPerUsd:31,fxStatus:'OLD SYNTHETIC FX'}}},catalog,fx);
+  const html=summary.renderHTML(m),hero=html.split('class="ss-exchange"')[1].split('</header>')[0];
+  assert.match(hero,/<b>30<\/b>/);assert.doesNotMatch(hero,/OLD SYNTHETIC FX|<b>31<\/b>/);
+  assert.match(cardSection(html,'physical'),/4,420/);assert.match(cardSection(html,'sold'),/4,588/);
+  assert.match(html,/เรทประเมินสต๊อก USD\/THB 30 \(2026-04-03\)/);assert.match(html,/เรทชุดขาย USD\/THB 31 \(2026-04-02\)/);
+});

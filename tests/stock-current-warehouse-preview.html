@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="th">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Synthetic current warehouse cards</title>
+<style>
+  body{margin:0;background:#edf1f5;color:#18334b;font:14px/1.5 system-ui,sans-serif}
+  main{max-width:1360px;margin:auto;padding:18px}.notice{padding:14px;background:#fff0bf;border-bottom:1px solid #c5a95f}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0}.controls button{font:inherit;padding:7px 12px}
+  .expected{padding:12px;background:white;border:1px solid #ccd8e2;border-radius:8px}
+</style>
+<div class="notice"><b>SYNTHETIC TEST DATA ONLY</b> · จำนวน ราคา ลูกค้า วันที่ และรหัสทั้งหมดสมมติ · ไม่มี API / ไม่มีการบันทึกส่วนกลาง</div>
+<main>
+  <div class="expected">
+    ฐานคลังปัจจุบันสมมติ: 4 เม.ย. รุ่น 8 · Physical 73 แผ่น + ไม้แถบ 400 ชิ้น · Free ที่บันทึก 29 แผ่น + 150 ชิ้น<br>
+    ชุดขายเก่าสมมติ: ฐานคลัง 3 เม.ย. Physical 100 แผ่น + 900 ชิ้น / Free 40 แผ่น + 300 ชิ้น — ห้ามแทนคลังปัจจุบัน<br>
+    หลังโหลดชุดราคาแต่ยังไม่มี FX: มูลค่าที่ทราบ Physical 40 บาท / Free 15 บาท · หลังโหลด FX สมมติ: 4,420 / 1,755 บาท
+  </div>
+  <div class="controls">
+    <button id="catalog" type="button">1. โหลดชุดราคาตรงรุ่น</button>
+    <button id="fx" type="button">2. โหลด FX สมมติ 30 บาท</button>
+    <button id="wrong" type="button">3. ส่งชุดราคาผิดรุ่น</button>
+    <button id="month" type="button">4. รออ่านเดือนขายใหม่</button>
+    <button id="restore" type="button">5. คืนชุดขายเก่าเพื่อเทียบ</button>
+    <span id="state" role="status">ยังไม่โหลดชุดราคา/FX</span>
+  </div>
+  <div id="stock-summary" data-aaf-stock-summary></div>
+</main>
+<script src="../stock_order_header.js"></script>
+<script src="../stock_summary.js"></script>
+<script>
+'use strict';
+// Invented values only. The page can neither contact nor write a backend.
+const base={w:1220,l:2440,t:2.5,grade:'B',unit:'sheet',qty:73,freeQty:29,committedQty:50,baseQty:73,d90:73,d180:0,d270:0,d360:0,dOver:0,note:'หมายเหตุสมมติ'};
+const stock={revision:8,report:{reportDate:'2026-04-04',sourceRowCount:2},updatedAt:'2026-04-04T06:00:00Z',exchangeRate:30,
+  rows:[{...base,key:'SYNTHETIC-SHEET',sku:'SYNTHETIC-SHEET'},
+    {...base,key:'SYNTHETIC-STRIP',sku:'SYNTHETIC-STRIP',w:20,l:1000,t:3.2,unit:'strip',qty:400,freeQty:150,committedQty:250,baseQty:400,d90:400}]};
+const catalog={revision:8,reportDate:stock.report.reportDate,catalogRevision:4,rows:stock.rows.map(r=>({...r,price:r.unit==='sheet'?2:0.1,currency:r.unit==='sheet'?'USD':'THB'}))};
+const rows=[{id:'SYNTH-A',qty:12,group:1},{id:'SYNTH-B',qty:18,group:2},{id:'SYNTH-C',qty:9,group:3},{id:'SYNTH-D',qty:11,group:4}]
+  .map((r,i)=>({...r,w:1220,l:2440,t:2.5,grade:'B',unit:'sheet',ref:'SYNTH-INVOICE-'+i,customer:'ลูกค้าสมมติ '+i,queue:{group:r.group},commercial:{termKind:'TT',etdValid:r.group===3}}));
+const review={metadata:{month:'2026-04',monthLabel:'เมษายน 2569 · ข้อมูลสมมติ',sourceSalesCapturedAt:'2026-04-03T03:00:00Z',stockReportDate:'2026-04-03'},queueReview:{rows},
+  stockPools:[{...base,physical:100,free:40},{...base,w:20,l:1000,t:3.2,unit:'strip',physical:900,free:300}],
+  financial:{metadata:{month:'2026-04',fx:{rate:31,date:'2026-04-02'}},byRowId:Object.fromEntries(rows.map(r=>[r.id,{...r,sale:{status:'verified',amount:r.qty*4,currency:'USD',unitPrice:4}}])),
+    orders:rows.map((r,i)=>({id:r.id,orderId:r.id,ref:r.ref,customer:r.customer,rowIds:[r.id],settlement:i===0?{currency:'USD',saleAmount:48,receivedAmount:30,pendingAmount:18,unconfirmedAmount:0,receiptEvents:[{id:'SYNTH-EVENT',currency:'USD',amount:30,date:'2026-04-02'}]}:null}))},
+  reconciliation:{headerStockValuations:{physical:{equivalentTHB:4000},free:{equivalentTHB:1200},otherReservationDemand:{equivalentTHB:700}}}};
+const summary=window.AAFStockSummary;
+summary.update(stock,r=>({eq:r.qty*r.w*r.l/(1220*2440)*r.t/2.5,price:999,curr:'USD',value:r.qty*999,freeValue:r.freeQty*999}));
+summary.setOrderReview(review,{selectedMonth:'2026-04',stale:true});
+const say=text=>document.getElementById('state').textContent=text;
+document.getElementById('catalog').onclick=()=>{summary.setSavedStockCatalog(catalog);say('โหลดชุดราคาตรงรุ่นแล้ว · ตรวจยอด/สถานะ FX และการคงขยายกล่อง');};
+document.getElementById('fx').onclick=()=>{summary.setExchangeRate({rate:30,date:'2026-04-03',status:'stale',basis:'BOT_USD_THB_BUYING_TRANSFER'});say('โหลด FX สมมติ 30 แล้ว · ชุดขายเดิมยังใช้ 31 แยกจากราคาคลัง');};
+document.getElementById('wrong').onclick=()=>{summary.setSavedStockCatalog({...catalog,revision:7});say('ชุดราคาผิดรุ่น · จำนวนคลังต้องคงเดิม แต่มูลค่าต้องรอยืนยัน');};
+document.getElementById('month').onclick=()=>{summary.setOrderReview(null,null);say('รอชุดขายใหม่ · Physical/Free ล่าสุดยังต้องอยู่');};
+document.getElementById('restore').onclick=()=>{summary.setOrderReview(review,{selectedMonth:'2026-04',stale:true});say('คืนชุดขายสมมติเดิม · ห้ามแทน Physical/Free ปัจจุบัน');};
+</script>
+</html>
