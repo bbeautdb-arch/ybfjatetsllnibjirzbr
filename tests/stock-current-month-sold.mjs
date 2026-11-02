@@ -49,7 +49,7 @@ test('current-month cards never use archive selection as quantity or money',()=>
   assert.match(card,/ยังไม่มีหลักฐานราคาขาย\/รับเงินตรงชุดนี้/);assert.doesNotMatch(card,/USD 999|฿ 0|<strong>35<\/strong>|<strong>99<\/strong>|2000-10|ชุดตรวจย้อนหลัง/);
   assert.doesNotMatch(reservedCard(html),/data-order-header-month="2000-10"|<strong>/);
   const source=api.sourceText(model,undefined,undefined,undefined,input);
-  assert.match(source,/ขายแล้วเดือนนี้:/);assert.match(source,/รายละเอียดหัวข้อ02: Archived synthetic month/);
+  assert.match(source,/ขายแล้วเดือนนี้:/);assert.match(source,/รายละเอียดหัวข้อ02 เดือนนี้: รอชุดเดือนปัจจุบัน/);assert.doesNotMatch(source,/Archived synthetic month/);
   assert.doesNotMatch(source,/ชุดเดียวกับหัวข้อ02|เดือนขายเดียวกัน/);
   assert.equal(JSON.stringify({review,input}),before);
 });

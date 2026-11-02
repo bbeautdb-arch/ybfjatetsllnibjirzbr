@@ -27,7 +27,7 @@ test('same selected month and disjoint sold/other/waiting quantities, LC with ET
 });
 test('Physical and Free remain whole warehouse and sheet/strip units never add together',()=>{
   const m=api.build(fixture());assert.deepEqual(m.physical.quantity,{sheet:100,strip:900});assert.deepEqual(m.free.quantity,{sheet:40,strip:300});
-  assert.ok(m.free.eq25>40);assert.match(api.render(m),/รวมไม้แถบ/);assert.match(api.sourceText(m),/ทั้งคลัง|Physical\/Free/);
+  assert.ok(m.free.eq25>40);assert.match(api.render(m,new Set(),m),/รวมไม้แถบ/);assert.match(api.sourceText(m,m),/ทั้งคลัง|Physical\/Free/);
 });
 test('actual prices and order-level receipt partition remain independent of stock valuation',()=>{
   const r=fixture(),m=api.build(r);assert.deepEqual(m.sold.money.sale,{THB:0,USD:148});
@@ -60,12 +60,12 @@ test('invalid month, duplicate lines, or missing financial line coverage fail cl
 test('missing prices are unknown, not zero sale values; missing stock valuation remains unknown',()=>{
   const r=fixture();r.financial.byRowId.b.sale={status:'pending',amount:null,currency:null};delete r.reconciliation;delete r.freeStock;
   const m=api.build(r);assert.equal(m.sold.money.complete,false);assert.equal(m.sold.money.missingPriceLineCount,1);
-  const html=api.render(m);assert.match(html,/ยังยืนยันไม่ได้/);assert.equal(m.physical.value,null);assert.equal(m.free.knownValueTHB,null);
+  const html=api.render(m,new Set(),m);assert.match(html,/ยังยืนยันไม่ได้/);assert.equal(m.physical.value,null);assert.equal(m.free.knownValueTHB,null);
 });
 test('render escapes pending evidence text, keeps four cards and does not expose dated receipts in current cards',()=>{
-  const r=fixture(),html=api.render(api.build(r,{stale:true}),new Set(),undefined,undefined,undefined,{version:1,status:'pending',month:api.currentBangkokMonth(),reason:'<script>bad()</script>'});
+  const r=fixture(),m=api.build(r,{stale:true}),html=api.render(m,new Set(),m,undefined,undefined,{version:1,status:'pending',month:api.currentBangkokMonth(),reason:'<script>bad()</script>'});
   assert.equal((html.match(/data-stock-card="/g)||[]).length,4);assert.equal((html.match(/aria-expanded="false"/g)||[]).length,2,'pending current-month cards must not expand dated receipts');
-  assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>bad/);assert.match(html,/ชุดตรวจย้อนหลัง/);assert.match(html,/Free นี้ยังเป็นยอดที่บันทึกไว้/);
+  assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>bad|ชุดตรวจย้อนหลัง/);assert.match(html,/Free นี้ยังเป็นยอดที่บันทึกไว้/);
 });
 test('legacy summary callbacks cannot replace new monthly header; clear never falls back to old sales',()=>{
   const window={AAFOrderHeader:api};
@@ -112,7 +112,7 @@ test('current warehouse cards and table use the same catalog, units and saved Fr
   assert.doesNotMatch(cardSection(html,'physical'),/<strong>100<\/strong>|4,000|999/);
   assert.match(cardSection(html,'free'),/<strong>29<\/strong>/);assert.match(cardSection(html,'free'),/1,755/);
   assert.match(cardSection(html,'sold'),/ขายแล้วเดือนนี้/);assert.match(cardSection(html,'sold'),/รอข้อมูลขายเดือน/);assert.doesNotMatch(cardSection(html,'sold'),/USD 148|ชุดตรวจย้อนหลัง/);
-  assert.match(api.sourceText(monthly,current),/2026-04-04 · รุ่น 8/);assert.match(api.sourceText(monthly,current),/ไม่ใช่ฟีดขายสด/);
+  assert.match(api.sourceText(monthly,current),/2026-04-04 · รุ่น 8/);assert.match(api.sourceText(monthly,current),/ไม่ใช้เดือนก่อนแทน/);assert.doesNotMatch(api.sourceText(monthly,current),/Synthetic month/);
   assert.equal(JSON.stringify({stock,catalog}),before);
 });
 
@@ -175,7 +175,7 @@ test('late catalog and FX repaint current cards without rebuilding editors or co
   assert.equal(receiptNodes[0].open,true);
 });
 
-test('initial hero and current warehouse use current FX, while dated sales retain their own rate',()=>{
+test('initial hero and current warehouse use current FX, and prior-month sales rates cannot return through the summary',()=>{
   const summary=summaryRuntime(),{stock,catalog,fx}=currentStockFixture();
   const monthly=fixture();monthly.financial.metadata.fx={rate:31,date:'2026-04-02'};
   summary.setOrderReview(monthly,{stale:true});
@@ -185,5 +185,16 @@ test('initial hero and current warehouse use current FX, while dated sales retai
   const html=summary.renderHTML(m),hero=html.split('class="ss-exchange"')[1].split('</header>')[0];
   assert.match(hero,/<b>30<\/b>/);assert.doesNotMatch(hero,/OLD SYNTHETIC FX|<b>31<\/b>/);
   assert.match(cardSection(html,'physical'),/4,420/);assert.doesNotMatch(cardSection(html,'sold'),/4,588/);assert.match(cardSection(html,'sold'),/ขายแล้วเดือนนี้/);
-  assert.match(html,/เรทประเมินสต๊อก USD\/THB 30 \(2026-04-03\)/);assert.match(html,/เรทชุดขาย USD\/THB 31 \(2026-04-02\)/);
+  assert.match(html,/เรทประเมินสต๊อก USD\/THB 30 \(2026-04-03\)/);assert.doesNotMatch(html,/เรทชุดขาย USD\/THB 31 \(2026-04-02\)/);
+});
+
+test('Bangkok rollover strips an already captured November header from render/sourceText and current review build',()=>{
+  let clock=Date.parse('2026-11-30T16:59:59Z');
+  class Clock extends Date{constructor(...args){super(...(args.length?args:[clock]));}static now(){return clock;}}
+  const context={module:{exports:{}},Date:Clock,Intl,Set,Map};vm.runInNewContext(fs.readFileSync(new URL('../stock_order_header.js',import.meta.url),'utf8'),context);
+  const header=context.module.exports,r=fixture();r.metadata.month='2026-11';r.metadata.monthLabel='Synthetic November';r.financial.metadata.month='2026-11';
+  const captured=header.build(r,{kind:'current-month-order-review'});assert.match(header.sourceText(captured),/Synthetic November/);
+  clock=Date.parse('2026-11-30T17:00:00Z');assert.throws(()=>header.build(r,{kind:'current-month-order-review'}),/เดือนปัจจุบัน/);
+  assert.doesNotMatch(header.sourceText(captured),/Synthetic November|เรทชุดขาย/);assert.doesNotMatch(header.render(captured),/data-order-header-month="2026-11"/);
+  assert.match(header.sourceText(captured),/ไม่ใช้เดือนก่อนแทน/);
 });

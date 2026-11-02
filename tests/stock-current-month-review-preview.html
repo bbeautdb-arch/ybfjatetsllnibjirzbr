@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic current-month review preview</title>
+<style>body{margin:0;padding:20px;background:#edf3f7;font-family:Arial,sans-serif;color:#20364a}.banner{padding:14px;background:#fff0bf;border:1px solid #d1b164}.demo-controls{display:flex;gap:8px;flex-wrap:wrap;padding:16px 0}button{cursor:pointer;padding:9px 14px}#synthetic-top{background:white;padding:16px;border-radius:10px;line-height:1.7}#review-slot{margin-top:16px}</style></head><body>
+<div class="banner"><b>SYNTHETIC FIXTURE ONLY — ไม่ใช่ข้อมูลบริษัท</b><br>ใช้ renderer/controller จริง กับข้อมูลสมมุติทั้งหมด · ไม่เชื่อม API ไม่บันทึกข้อมูล · ทดสอบเดือนปัจจุบัน/แหล่งเดียวกัน/ข้ามเดือน</div>
+<div class="demo-controls"><button id="source-change">เปลี่ยน source รุ่นเดิม</button><button id="old-response">จำลองตอบเดือนเก่า</button><button id="restore">คืนชุดปัจจุบัน</button><button id="rollover">จำลองข้ามเดือน</button></div>
+<section id="synthetic-top" aria-label="Synthetic upper source binding"></section><main id="review-slot"></main>
+<script>
+  const RealDate=Date;let fixtureNow=RealDate.parse('2026-11-03T05:00:00Z');
+  window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[fixtureNow]));}static now(){return fixtureNow;}};
+  let sourceDigit='a',oldResponse=false,reads=0,centralReads=0;
+  const month=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit'}).formatToParts(new Date()).filter(p=>p.type==='year'||p.type==='month').map(p=>p.value).join('-');
+  const sha=d=>'sha256:'+d.repeat(64),copy=v=>JSON.parse(JSON.stringify(v)),noteKey='2.5|A|1220|2440|sheet';
+  const binding=()=>{const m=month(),capture=m+'-01T00:00:00Z';return {revision:8,reportDate:'2026-11-01',currentMonthSold:{status:'verified-quantities',month:m,source:{page:9,capturedAt:capture,checksum:sha(sourceDigit),sourceIsLive:false}},currentAllocation:{status:'verified-allocation',month:m,source:{checksum:sha(sourceDigit),capturedAt:capture},stock:{revision:8,reportDate:'2026-11-01',planChecksum:sha('b'),planCapturedAt:capture}}};};
+  const buildReview=()=>{
+    const m=month(),rows=[1,2,3,4].map(group=>{const eligible=group===2||group===3,qty=group===4?0:10,strip=group===3;return {id:'SYNTH-LINE-'+group,orderId:'SYNTH-ORDER-'+group,customer:'Synthetic customer '+group,ref:'EXAMPLE-'+group,w:strip?25:1220,l:strip?1000:2440,t:2.5,grade:'A',unit:strip?'strip':'sheet',qty,sourceQty:group===4?7:qty,cancelled:group===4,loaded:group===1?qty:0,allocated:eligible?6:0,shortage:eligible?4:0,unreserved:0,pendingQty:0,term:'TT',commercial:{summaryLabel:'Synthetic source status',notes:[]},sourceStatus:group===4?'cancelled':'synthetic',queue:{group,eligible,allocationStatus:eligible?'saved-central-ledger':'not-required',allocated:eligible?6:0,shortage:eligible?4:0,etdISO:m+'-15',parts:[],reason:'Synthetic saved ledger'}};});
+    const stock={key:noteKey,noteKey,t:2.5,w:1220,l:2440,grade:'A',unit:'sheet',physical:30,allocatedCurrent:6,allocatedOther:2,allocatedOctober:null,free:22,price:null,currency:null};
+    const freeView={rows:[stock],specCount:1,totals:{sheet:{qty:22,eq25:22},strip:{qty:0,eq25:0}},valuation:{knownValueTHB:null,valuedSpecCount:0,totalSpecCount:1,complete:false}};
+    const groups=Object.fromEntries([0,1,2,3,4].map(id=>[id,{sale:{THB:null,USD:null},received:{THB:null,USD:null},pending:{THB:null,USD:null},unconfirmed:{THB:null,USD:null},lineCount:id?1:4,saleComplete:false,missingPriceLineCount:1,orders:[],receiptEvents:[]} ]));
+    return {metadata:{month:m,title:'Synthetic current month',sourceSalesReadLabel:'Synthetic Page09 '+m,stockReportDate:'2026-11-01',allocationBasis:'same-saved-central-allocation-ledger',stockPoolBasis:'current-central-stock-saved-ledger'},rows,stockPools:[stock],queueReview:{rows,poolQueues:[],stockBasis:{},groups:[{id:1,label:'โหลดแล้ว'},{id:2,label:'รับเงิน/มัดจำแล้ว · ยังไม่โหลด'},{id:3,label:'จองอื่นและ LC'},{id:4,label:'ยังไม่จอง / ยกเลิก'}]},financial:{metadata:{month:m,fx:null},views:{all:{groups},'2.5':{groups}},byRowId:{}},freeStock:{metadata:{reportDate:'2026-11-01'},views:{all:freeView,'2.5':freeView}},trackingImport:{items:[]}};
+  };
+  const snapshot=()=>({rows:[{key:noteKey,w:1220,l:2440,t:2.5,grade:'A',unit:'sheet',records:[]}],notesBySpec:{[noteKey]:'Synthetic note — editable draft only'},legacyNotesByThickness:{},revision:8,catalogRevision:1,reportDate:'2026-11-01',readAt:new Date().toISOString(),canSave:true,canEditFollowup:false});
+  window.AAFStockAccess={token:()=> 'synthetic-only-not-a-credential'};
+  window.AAFStockNotesCore={parseSnapshot:()=>({snapshot:snapshot()}),verifiedAnnotationWrite:()=>false};
+  window.AAFStockSummary={setOrderReview:(review)=>{document.getElementById('synthetic-top').dataset.lower=review?.metadata?.month||'pending';},invalidateCurrentMonthSold:()=>{document.getElementById('synthetic-top').textContent='เปลี่ยนเดือนแล้ว · ทั้งบนและล่างรอข้อมูลเดือนใหม่ · ไม่ใช้เดือนก่อนแทน';}};
+  window.fetch=async(url,options={})=>{
+    if(options.method==='POST')throw Error('Synthetic fixture never writes');
+    let data={ok:true,revision:8};
+    if(String(url).includes('view=orderReview')){reads++;const b=binding(),m=oldResponse?'2026-10':month(),review=buildReview();review.metadata.month=m;review.financial.metadata.month=m;data={ok:true,selectedMonth:m,revision:8,stockReportDate:b.reportDate,review,readModel:{kind:'current-month-order-review',status:'verified',sourceIsLive:false,queueApplied:false,source:{page:9,month:month(),...b.currentMonthSold.source},stock:b.currentAllocation.stock,warning:'Synthetic source snapshot — ไม่ใช่ข้อมูลบริษัท'}};}
+    return {ok:true,status:200,json:async()=>copy(data)};
+  };
+</script>
+<script src="../stock_order_review.js?v=20261103-current-month-review-r1"></script><script src="../stock_order_controller.js?v=20261103-current-month-review-r1"></script>
+<script>
+  async function centralRefresh(){centralReads++;const b=binding();document.getElementById('synthetic-top').innerHTML='<b>ตัวอย่างกล่องบน · เดือน '+month()+'</b><br>แหล่งหน้า 09 ชุด '+sourceDigit.toUpperCase()+' · ส่วนกลางรุ่น 8 · โหลดส่วนกลางจำลอง '+centralReads+' ครั้ง<br>จำนวนตัวอย่างแยก 20 แผ่น / 10 ชิ้นไม้แถบ · ราคาและเงินรับยังไม่ยืนยัน';AAFOrderReview.setAccess({...b,refreshReport:true});await AAFOrderReview.attach(document.getElementById('review-slot'));}
+  AAFOrderReview.setRefreshHandler(centralRefresh);
+  document.getElementById('source-change').onclick=()=>{sourceDigit=sourceDigit==='a'?'c':'a';oldResponse=false;return centralRefresh();};
+  document.getElementById('old-response').onclick=()=>{oldResponse=true;return centralRefresh();};
+  document.getElementById('restore').onclick=()=>{oldResponse=false;return centralRefresh();};
+  document.getElementById('rollover').onclick=()=>{fixtureNow=RealDate.parse('2026-11-30T17:00:00Z');AAFOrderReview.checkCurrentMonth();};
+  centralRefresh();
+</script></body></html>

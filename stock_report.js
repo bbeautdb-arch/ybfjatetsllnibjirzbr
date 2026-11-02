@@ -23,6 +23,7 @@
     document.title='รายงานสต๊อก AAF';
   }
   async function load(force=false){
+    window.AAFOrderReview?.checkCurrentMonth?.();
     if(busy)return;
     const token=sessionToken();if(!token){fail('ต้องเข้าสู่ระบบ AAF ก่อนดูรายงาน — ใช้สิทธิ์เดียวกับหน้าสต๊อก',true);return;}
     busy=true;refresh.disabled=true;
@@ -38,9 +39,9 @@
       // The API remains the authorization authority; the client role is never a grant.
       if(force||revision===null||String(data.revision)!==revision){
         window.AAFSalesPreview?.setAccess?.({refreshReport:force,salesMode:data.actor?.owner!==true,revision:data.revision,reportDate:data.report?.reportDate,rows:data.rows});
-        window.AAFOrderReview?.setAccess?.({refreshReport:force,notesReadOnly:true,revision:data.revision,reportDate:data.report?.reportDate});
+        window.AAFOrderReview?.setAccess?.({refreshReport:force,notesReadOnly:true,revision:data.revision,reportDate:data.report?.reportDate,currentMonthSold:data.currentMonthSold,currentAllocation:data.currentAllocation});
         window.AAFStockSummary.update(data,r=>values(r,data));revision=String(data.revision);
-      }else window.AAFStockSummary.setCurrentMonthSold?.(data.currentMonthSold,data.currentAllocation);
+      }else{window.AAFStockSummary.setCurrentMonthSold?.(data.currentMonthSold,data.currentAllocation);window.AAFOrderReview?.syncCurrentSource?.({revision:data.revision,reportDate:data.report?.reportDate,currentMonthSold:data.currentMonthSold,currentAllocation:data.currentAllocation});}
       signin.hidden=true;authRequired=false;
       const now=new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'});
       tell('ข้อมูลที่กดเซฟแล้วทั้งชุด · ตรวจสอบล่าสุด '+now+' · หน้านี้ดูข้อมูลอย่างเดียว');
@@ -48,6 +49,7 @@
     }catch(e){fail(e.name==='AbortError'?'ระบบตอบกลับช้า กรุณากดโหลดข้อมูลล่าสุดอีกครั้ง':'ยังแสดงรายงานไม่ได้: '+e.message);}
     finally{clearTimeout(timeout);busy=false;refresh.disabled=false;}
   }
+  window.AAFOrderReview?.setRefreshHandler?.(()=>load(true));
   refresh.addEventListener('click',()=>load(true));
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});
   window.addEventListener('pageshow',e=>{if(e.persisted)load(true);});

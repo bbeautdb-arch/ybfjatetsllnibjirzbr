@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic saved allocation readiness</title>
+<style>body{margin:0;padding:20px;background:#edf3f7;font-family:Arial,sans-serif}.fixture-banner{padding:14px;background:#fff0bf;border:1px solid #d1b164}.fixture-controls{display:flex;gap:8px;padding:12px 0;flex-wrap:wrap}.fixture-controls button{padding:10px 14px;cursor:pointer}#stock-summary .ss-report-intro,#stock-summary .ss-status,#stock-summary .ss-tools,#stock-summary .ss-hero,#stock-summary .ss-context,#stock-summary .ss-groups,#stock-summary .ss-aging,#stock-summary .ss-reservation-help,#stock-summary>.ss-sheet .ss-section-title{display:none}</style></head><body>
+<div class="fixture-banner"><b>SYNTHETIC FIXTURE ONLY — ไม่ใช่ข้อมูลบริษัท</b><br>แผงอ่านอย่างเดียว: ของจริง → ของที่กันไว้ → Free / ขาดผลิต · ทุกตัวเลขและสเปกสมมุติ · ไม่มี API หรือการบันทึก</div>
+<div class="fixture-controls"><button id="ready">ชุดที่ตรวจตรงกัน</button><button id="pending">แผนยังตรวจไม่ตรง</button><button id="old-review">จำลอง backend เดิม: ภาพรวมขายยังไม่มีเดือนนี้</button></div>
+<main id="stock-summary" data-aaf-stock-summary></main>
+<script src="../stock_order_header.js?v=20261103-current-month-review-r1"></script>
+<script src="../stock_readiness.js?v=20261103-stock-readiness-r1"></script>
+<script>window.AAFOrderReview={attach:slot=>{if(slot)slot.textContent='เดือนนี้ยังไม่มีชุดภาพรวมขายที่ตรวจครบ · ไม่ใช้เดือนอื่นแทน (Synthetic v101 compatibility)';}};</script>
+<script src="../stock_summary.js?v=20261103-stock-readiness-r1"></script>
+<script>
+const header=AAFOrderHeader,u=(sheet,strip=0)=>({sheet,strip});
+function fixture(){
+  const month=header.currentBangkokMonth(),capturedAt=new Date().toISOString(),checksum='sha256:'+'a'.repeat(64),planChecksum='sha256:'+'b'.repeat(64),reportDate=month+'-01';
+  const sold={version:1,status:'verified-quantities',month,source:{page:9,capturedAt,sourceIsLive:false,checksum,orderCount:8,lineCount:10},quantity:u(22,7),loaded:u(10,2),paidOrDeposit:u(12,5),lcETD:u(0),orderCount:2,lineCount:2};
+  const allocation={version:1,status:'verified-allocation',month,source:{page:9,capturedAt,sourceIsLive:false,checksum},stock:{revision:8,reportDate,planChecksum,planCapturedAt:capturedAt},current:{soldUnloaded:{demand:u(12,5),allocated:u(10,4),shortage:u(2,1)},other:{demand:u(8,4),allocated:u(7,3),shortage:u(1,1)}},carry:{demand:u(5.25,4),allocated:u(3,3),shortage:u(2.25,1)},totals:{physical:u(100,10),demand:u(25.25,13),allocated:u(20,10),shortage:u(5.25,3),formulaFree:u(80),savedFree:u(78),manualFreeDelta:u(-2)},manualFreeOverrideCount:1};
+  const row=(sku,qty,committedQty,freeQty,extra={})=>{const r={sku,desc:'Synthetic only',w:1220,l:2440,t:2.5,grade:'B',unit:'sheet',qty,committedQty,freeQty,baseQty:qty,d90:qty,d180:0,d270:0,d360:0,dOver:0,...extra};return {...r,key:`w${r.w}_l${r.l}_t${r.t}_g${r.grade}`};};
+  return {revision:8,reportDate,report:{reportDate,sourceRowCount:4},exchangeRate:30,rows:[row('SYNTH-DONOR',30,20,10),row('SYNTH-REQUESTED',0,5.25,0,{w:1200,l:2400}),row('SYNTH-SPARE',70,0,68,{w:1000,l:2000,manualFreeOverride:true,freeOverride:{value:68,at:capturedAt,reportDate}}),row('SYNTH-STRIP',10,13,0,{w:25,l:1000,unit:'strip'})],sellablePlan:{checksum:planChecksum,source:{capturedAt}},currentMonthSold:sold,currentAllocation:allocation};
+}
+
+const stock=fixture(),calc=r=>({eq:r.qty,price:1,curr:'THB',value:r.qty,freeValue:r.freeQty});
+function showReady(){AAFStockSummary.update(stock,calc);}
+document.getElementById('ready').onclick=showReady;
+document.getElementById('pending').onclick=()=>AAFStockSummary.setCurrentMonthSold(stock.currentMonthSold,{version:1,status:'pending',month:header.currentBangkokMonth(),reason:'Synthetic allocation mismatch — รอตรวจ ไม่ใช่ยอดขาด 0'});
+document.getElementById('old-review').onclick=()=>{showReady();AAFStockSummary.setOrderReview(null,{status:'pending'});};showReady();
+</script></body></html>
+

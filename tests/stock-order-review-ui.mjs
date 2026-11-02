@@ -295,3 +295,35 @@ test('Free notes inherit permissions, missing exact spec protection, conflict an
   const denied=harness({readNotes:async()=>snapshot('protected',false),saveChanges:async()=>{throw Error('must not write');}});await new Promise(resolve=>setImmediate(resolve));await denied.nodes.get('free-detail-toggle').click();assert.equal(denied.freeInput().disabled,true);denied.freeInput().value='injected';await denied.freeInput().dispatch('input');assert.equal(denied.api.hasDirty(),false);denied.api.destroy();
   const missing=harness({readNotes:async()=>({...snapshot(),rows:[]}),saveChanges:async()=>{throw Error('must not write');}});await new Promise(resolve=>setImmediate(resolve));await missing.nodes.get('free-detail-toggle').click();assert.equal(missing.freeInput().disabled,true);assert.match(missing.nodes.get('free-detail-panel').innerHTML,/ไม่พบสเปก/);missing.api.destroy();
 });
+test('current saved-ledger quantities use real backed allocations, split units and retain cancelled source amounts',()=>{
+  const h=harness(),data=copy(h.data);
+  data.readModel={kind:'current-month-order-review',status:'verified',source:{capturedAt:'2000-01-01T00:00:00Z'},stock:{revision:3,reportDate:'2000-01-01'}};
+  Object.assign(data.metadata,{allocationBasis:'same-saved-central-allocation-ledger',stockPoolBasis:'current-central-stock-saved-ledger',stockReportDate:'2000-01-01'});
+  for(const r of data.rows){r.pendingQty=0;r.queue.allocationStatus=r.queue.eligible?'saved-central-ledger':'not-required';if(r.queue.eligible){r.allocated=r.queue.allocated=6;r.shortage=r.queue.shortage=4;}}
+  data.rows[2].unit='strip';data.rows[2].w=25;data.rows[2].l=1000;
+  Object.assign(data.rows[3],{qty:0,sourceQty:7,cancelled:true});
+  data.queueReview.rows=data.rows;
+  Object.assign(data.stockPools[0],{allocatedOctober:null,allocatedCurrent:2,allocatedOther:0});
+  h.api.update(data);
+  const metrics=h.nodes.get('metrics').innerHTML,table=h.nodes.get('table-area').innerHTML,stock=h.nodes.get('stock-table').innerHTML;
+  assert.match(metrics,/จัดสรรส่วนกลางที่บันทึกแล้ว/);assert.match(metrics,/ต้องผลิต 4 แผ่น/);assert.match(metrics,/ต้องผลิต 4 ชิ้นไม้แถบ/);
+  assert.doesNotMatch(metrics,/ต้องผลิต 8 แผ่น|ตัวอย่างจัดสรร|ไม่ใช่ Free หลังคิวใหม่/);
+  assert.match(table,/data-known-shortage="4"/);assert.match(table,/data-provisional-shortage="0"/);assert.doesNotMatch(table,/\* ตัวอย่างจัดสรร/);
+  assert.match(stock,/จัดให้เดือนนี้ · ของจริง/);assert.match(stock,/จัดให้ภาระเดือนอื่น · ของจริง/);assert.doesNotMatch(stock,/รอทวนคิวใหม่/);
+  h.api.setView({thickness:2});
+  const body=h.nodes.get('table-area').querySelector('table').children.at(-1);
+  assert.match(body.children.map(r=>r.innerHTML).join(''),/จำนวนต้นทาง 7 แผ่น \(ไม่นับในยอดสั่งปัจจุบัน\)/);
+  h.api.destroy();
+});
+test('sales suspension preserves mounted draft nodes and caret, hides old quantities through notes refresh and render',async()=>{
+  const h=harness({readNotes:async()=>trackingSnapshot(),saveChanges:async()=>trackingSnapshot()});await new Promise(resolve=>setImmediate(resolve));
+  const note=h.input(),follow=h.followups()[0];note.value='unsaved synthetic note';await note.dispatch('input');follow.value='unsaved synthetic followup';await follow.dispatch('input');note.focus();note.setSelectionRange(3,8,'forward');
+  const stockNode=h.nodes.get('stock-table'),salesNode=h.nodes.get('table-area');
+  h.api.suspendSales('Synthetic month rollover pending');
+  assert.equal(h.input(),note);assert.equal(h.followups()[0],follow);assert.equal(h.nodes.get('stock-table'),stockNode);assert.equal(h.nodes.get('table-area'),salesNode);assert.equal(h.shadow.activeElement,note);assert.equal(note.selectionStart,3);assert.equal(note.selectionEnd,8);assert.equal(h.api.hasDirty(),true);
+  const style=()=>h.shadow.children.find(el=>el.id==='current-sales-suspension');
+  assert.match(style().textContent,/#metrics.*#table-area.*#free-detail-panel/);assert.match(style().textContent,/nth-child\(n\+2\):nth-child\(-n\+5\)/);assert.equal(h.nodes.get('stock-basis').open,true);
+  await h.api.refreshNotes();assert.equal(h.input().value,'unsaved synthetic note');assert.equal(h.followups()[0].value,'unsaved synthetic followup');assert.ok(style());
+  h.api.setView({thickness:2});assert.ok(style());assert.match(h.nodes.get('review-title').textContent,/รอชุดข้อมูลที่ตรงกัน/);assert.equal(h.nodes.get('source-warning').textContent,'Synthetic month rollover pending');
+  h.api.update(copy(h.data));assert.equal(style(),undefined);assert.equal(h.input().value,'unsaved synthetic note');h.api.destroy();
+});

@@ -21,15 +21,24 @@ test('both report entry points cache-bust the current sold renderer and auth con
     const html=fs.readFileSync(new URL('../'+page+'.html',import.meta.url),'utf8');
     assert.ok(html.includes('stock_sales_preview.js?v=20261019-notes-only'));assert.ok(html.includes('stock_sales_controller.js?v=20261019-notes-only'));
     for(const file of ['stock_order_header','stock_summary','stock_order_controller']){
-      const version=file==='stock_summary'?'20261103-thickness-grades-r1':'20261103-current-allocation-r1';
+      const version=file==='stock_summary'?'20261103-stock-readiness-r1':'20261103-current-month-review-r1';
       const expected=new RegExp('<script\\s+src="'+file+'\\.js\\?v='+version+'"><\\/script>','g');
       assert.equal([...html.matchAll(expected)].length,1,page+' must load exactly one current '+file+' asset');
       assert.doesNotMatch(html,new RegExp(file+'\\.js\\?v=20261020-monthly-overview'),page+' must not retain a cached dated-stock renderer');
     }
     assert.ok(html.indexOf('stock_order_header.js?')<html.indexOf('stock_summary.js?'),'current warehouse adapter must load before summary');
+    assert.ok(html.includes('stock_readiness.js?v=20261103-stock-readiness-r1'));assert.ok(html.indexOf('stock_readiness.js?')<html.indexOf('stock_summary.js?'));
     assert.ok(html.includes('stock_review_notes_bridge.js?v=20261020-annotation-save'));
-    assert.ok(html.includes('stock_order_review.js?v=20261020-money-details-current-stock-r3'));
+    assert.ok(html.includes('stock_order_review.js?v=20261103-current-month-review-r1'));
   }
-  assert.match(fs.readFileSync(new URL('../stock_report.html',import.meta.url),'utf8'),/stock_report.js\?v=20261103-current-allocation-r1/);
-  assert.match(fs.readFileSync(new URL('../stock_manager.html',import.meta.url),'utf8'),/stock_shared.js\?v=20261103-current-allocation-r1/);
+  assert.match(fs.readFileSync(new URL('../stock_report.html',import.meta.url),'utf8'),/stock_report.js\?v=20261103-current-month-review-r1/);
+  assert.match(fs.readFileSync(new URL('../stock_manager.html',import.meta.url),'utf8'),/stock_shared.js\?v=20261103-current-month-review-r1/);
+});
+test('existing refresh lifecycle synchronizes both views and checks month before dirty or busy guards without adding timers',()=>{
+  const shared=fs.readFileSync(new URL('../stock_shared.js',import.meta.url),'utf8');
+  for(const script of [shared,source])assert.equal((script.match(/\bsetInterval\(/g)||[]).length,1,'keep one existing interval per entry');
+  assert.match(shared,/setInterval\(async\(\)=>\{window\.AAFOrderReview\?\.checkCurrentMonth\?\.\(\);if\(accessDenied\|\|busy\|\|dirty\|\|editing\(\)\|\|document\.hidden\)return/);
+  assert.match(source,/async function load\(force=false\)\{\s*window\.AAFOrderReview\?\.checkCurrentMonth\?\.\(\);\s*if\(busy\)return/);
+  assert.match(shared,/setRefreshHandler\?\.\(refresh\)/);assert.match(source,/setRefreshHandler\?\.\(\(\)=>load\(true\)\)/);
+  for(const script of [shared,source])assert.match(script,/syncCurrentSource\?\.\(\{revision:[^}]*currentMonthSold:[^}]*currentAllocation:/);
 });

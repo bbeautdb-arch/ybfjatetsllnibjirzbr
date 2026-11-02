@@ -70,8 +70,12 @@ test('read/retry cannot clear pending uncertainty while combined POST is in flig
   release();await writing;assert(!h.api.isUncertain());assert(!h.api.isBusy());
 });
 class Node{constructor(){this.children=[];this.style={};this.listeners={};}append(...n){this.children.push(...n);}replaceChildren(...n){this.children=n;}setAttribute(){}addEventListener(k,v){this.listeners[k]=v;}}
-function browser(){let token='synthetic-auth';const calls=[],summaries=[],mounted=[],responses=[],soldInvalidations=[];const win={document:{createElement:()=>new Node()},AAFStockAccess:{token:()=>token},AAFStockNotesCore:core,AAFStockSummary:{setOrderReview:(...args)=>summaries.push(args),invalidateCurrentMonthSold:()=>soldInvalidations.push(true)},AAFOrderReviewUI:{mount:(host,review,services)=>{const v={dirty:false,destroyed:false,hasDirty(){return this.dirty;},update(r){this.review=r;},destroy(){this.destroyed=true;}};mounted.push({host,review,services,v});return v;}},addEventListener(){},async fetch(url,options){calls.push({url,options});const value=await responses.shift();return{status:value.status||200,ok:!value.status,json:async()=>value};}};return{api:boot(win),win,calls,summaries,mounted,responses,soldInvalidations,setToken:v=>token=v};}
-const report=()=>({ok:true,revision:1,stockReportDate:'2026-01-01',availableMonths:['2026-01'],selectedMonth:'2026-01',review:{metadata:{month:'2026-01'},rows:[]},readModel:{sourceIsLive:false,queueApplied:false,warning:'dated evidence'}});
+function binding(month='2026-01',digit='a'){
+  const source={page:9,capturedAt:month+'-01T01:00:00Z',checksum:'sha256:'+digit.repeat(64),sourceIsLive:false};
+  return {revision:1,reportDate:'2026-01-01',currentMonthSold:{status:'verified-quantities',month,source},currentAllocation:{status:'verified-allocation',month,source,stock:{revision:1,reportDate:'2026-01-01',planChecksum:'sha256:'+'b'.repeat(64),planCapturedAt:month+'-01T01:05:00Z'}}};
+}
+function browser(){let token='synthetic-auth',clock=Date.parse('2026-01-15T00:00:00Z');const calls=[],summaries=[],mounted=[],responses=[],soldInvalidations=[],created=[];const win={Date:{now:()=>clock},document:{createElement:()=>{const n=new Node();created.push(n);return n;}},AAFStockAccess:{token:()=>token},AAFStockNotesCore:core,AAFStockSummary:{setOrderReview:(...args)=>summaries.push(args),invalidateCurrentMonthSold:()=>soldInvalidations.push(true)},AAFOrderReviewUI:{mount:(host,review,services)=>{const v={dirty:false,destroyed:false,suspensions:[],hasDirty(){return this.dirty;},update(r){this.review=r;},suspendSales(message){this.suspensions.push(message);},destroy(){this.destroyed=true;}};mounted.push({host,review,services,v});return v;}},addEventListener(){},async fetch(url,options){calls.push({url,options});const value=await responses.shift();return{status:value.status||200,ok:!value.status,json:async()=>value};}};const api=boot(win),setAccess=api.setAccess;api.setAccess=next=>setAccess({...binding(),...next});return{api,win,calls,summaries,mounted,responses,soldInvalidations,created,setToken:v=>token=v,setClock:v=>clock=Date.parse(v)};}
+const report=(b=binding())=>({ok:true,revision:b.revision,stockReportDate:b.reportDate,availableMonths:[b.currentMonthSold.month],selectedMonth:b.currentMonthSold.month,review:{metadata:{month:b.currentMonthSold.month},rows:[]},readModel:{kind:'current-month-order-review',status:'verified',sourceIsLive:false,queueApplied:false,source:{...b.currentMonthSold.source,month:b.currentMonthSold.month},stock:{...b.currentAllocation.stock},warning:'verified captured source, not live'}});
 test('authorized overview is GET only, same month and no-store; reattach preserves drafts',async()=>{
   const h=browser();h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push(report());await h.api.attach(new Node());assert.equal(h.mounted.length,1);assert.equal(h.calls[0].options.method,'GET');assert.equal(h.calls[0].options.cache,'no-store');assert.equal(h.calls[0].options.headers.Authorization,'Bearer synthetic-auth');assert(!h.calls[0].url.includes('synthetic-auth'));h.mounted[0].v.dirty=true;await h.api.attach(new Node());assert.equal(h.mounted.length,1);assert(h.api.isDirty());assert.equal(h.api.selectMonth('2026-02'),false);
 });
@@ -110,4 +114,47 @@ test('401 on preflight or post-write readback retains drafts but actual logout d
 test('read-only standalone snapshot suppresses both notes and followup editing',async()=>{
   const h=browser();h.api.setAccess({revision:1,reportDate:'2026-01-01',notesReadOnly:true});h.responses.push(report());await h.api.attach(new Node());const f=fixture();f.stock.permissions={followup:true};h.responses.push(f.stock,f.catalog);
   const snapshot=await h.mounted[0].services.readNotes();assert.equal(snapshot.canSave,false);assert.equal(snapshot.canEditFollowup,false);
+});
+
+test('current Bangkok month is explicit; no historic selector or backend default can select an old month',async()=>{
+  const h=browser();h.api.setAccess(binding());h.responses.push(report());await h.api.attach(new Node());
+  assert.match(h.calls[0].url,/\?view=orderReview&month=2026-01$/);assert.equal(h.api.selectMonth('2025-12'),false);
+  assert(h.created.some(n=>n.textContent==='ภาพรวมขายเดือนนี้ · 2026-01 · เวลาไทย'));
+  for(const mutate of [d=>d.selectedMonth='2025-12',d=>d.review.metadata.month='2025-12',d=>d.review.financial={metadata:{month:'2025-12'}},d=>d.readModel.source.month='2025-12',d=>d.readModel.source.checksum='sha256:'+'c'.repeat(64),d=>d.readModel.stock.planChecksum='sha256:'+'c'.repeat(64)]){
+    const b=browser(),value=report();mutate(value);b.api.setAccess(binding());b.responses.push(value);await b.api.attach(new Node());assert.equal(b.mounted.length,0);assert(!b.summaries.some(([r])=>r));
+  }
+});
+test('same-revision source changes coalesce and stale source replies cannot overwrite the current pair',async()=>{
+  const h=browser(),a=binding(),b=binding('2026-01','c');h.api.setAccess(a);h.responses.push(report(a));await h.api.attach(new Node());
+  const count=h.calls.length;await h.api.syncCurrentSource(a);await h.api.syncCurrentSource(a);assert.equal(h.calls.length,count,'unchanged stock/source does not add GETs');
+  let release;h.responses.push(new Promise(resolve=>release=resolve));const old=h.api.syncCurrentSource(b);await h.api.syncCurrentSource(b);assert.equal(h.calls.length,count+1,'same source in-flight is coalesced');
+  const c=binding('2026-01','d');h.responses.push(report(c));await h.api.syncCurrentSource(c);release(report(b));await old;
+  assert.equal(h.mounted[0].v.review.readModel.source.checksum,c.currentMonthSold.source.checksum);assert.equal(h.summaries.at(-1)[1].source.checksum,c.currentMonthSold.source.checksum);
+  const recaptured=JSON.parse(JSON.stringify(c));recaptured.currentMonthSold.source.capturedAt='2026-01-02T01:00:00Z';recaptured.currentAllocation.source.capturedAt=recaptured.currentMonthSold.source.capturedAt;
+  h.responses.push(report(recaptured));const before=h.calls.length;await h.api.syncCurrentSource(recaptured);assert.equal(h.calls.length,before+1,'capture identity changes refresh lower even if checksum and revision stay equal');
+  assert.equal(h.mounted[0].v.review.readModel.source.capturedAt,recaptured.currentMonthSold.source.capturedAt);
+});
+test('Bangkok rollover hides November with dirty drafts and rejects late November at unchanged stock revision',async()=>{
+  const h=browser(),nov=binding('2026-11');h.setClock('2026-11-30T16:59:59Z');h.api.setAccess(nov);h.responses.push(report(nov));await h.api.attach(new Node());
+  const view=h.mounted[0].v;view.dirty=true;h.setClock('2026-11-30T17:00:00Z');assert.equal(h.api.checkCurrentMonth(),true);
+  assert.equal(view.destroyed,false);assert.equal(view.dirty,true);assert.match(view.suspensions.at(-1),/2026-12/);assert.equal(h.summaries.at(-1)[0],null);
+  const late=browser();late.setClock('2026-11-30T16:59:59Z');late.api.setAccess(nov);let release;late.responses.push(new Promise(resolve=>release=resolve));const request=late.api.attach(new Node());
+  late.setClock('2026-11-30T17:00:00Z');release(report(nov));await request;assert.equal(late.mounted.length,0);assert(!late.summaries.some(([r])=>r));
+  const dec=binding('2026-12');late.setClock('2026-12-02T00:00:00Z');late.responses.push(report(dec));await late.api.syncCurrentSource(dec);assert.equal(late.mounted.length,1);assert.match(late.calls.at(-1).url,/month=2026-12$/);
+});
+test('pending current data stays unknown; dirty edits started during a source read are retained and never rebuilt',async()=>{
+  const h=browser(),a=binding();h.api.setAccess(a);h.responses.push({...report(),review:null,readModel:{...report().readModel,status:'pending',warning:'current evidence unavailable'}});await h.api.attach(new Node());assert.equal(h.mounted.length,0);assert(!h.summaries.some(([r])=>r));
+  const b=binding('2026-01','c');h.responses.push(report(b));await h.api.syncCurrentSource(b);const view=h.mounted[0].v;
+  const c=binding('2026-01','d');let release;h.responses.push(new Promise(resolve=>release=resolve));const request=h.api.syncCurrentSource(c);view.dirty=true;release(report(c));await request;
+  assert.equal(view.destroyed,false);assert.equal(view.review,undefined,'incoming data must not rebuild a dirty view');assert(view.suspensions.length>0);assert.equal(h.summaries.at(-1)[0],null);
+  view.dirty=false;h.responses.push(report(c));await h.api.syncCurrentSource(c);assert.equal(view.review.readModel.source.checksum,c.currentMonthSold.source.checksum);
+});
+test('lower refresh delegates to the existing central refresh handler, without a separate review-only request',async()=>{
+  const h=browser();h.api.setAccess(binding());h.responses.push(report());await h.api.attach(new Node());let central=0;
+  h.api.setRefreshHandler(()=>{central++;});const count=h.calls.length;h.created.find(n=>n.textContent==='โหลดข้อมูลเดือนนี้ล่าสุด').listeners.click();assert.equal(central,1);assert.equal(h.calls.length,count);
+});
+test('older backend422 for current lower review is a Thai pending state, not an October fallback or top allocation invalidation',async()=>{
+  const h=browser();h.api.setAccess(binding());h.responses.push({status:422,ok:false});await h.api.attach(new Node());
+  assert.equal(h.mounted.length,0);assert.equal(h.soldInvalidations.length,0);assert(h.created.some(n=>/เดือนนี้ยังไม่มีชุดข้อมูลที่ตรวจครบ ไม่ใช้เดือนอื่นแทน/.test(n.textContent||'')));
+  assert.equal(h.calls.length,1);assert.match(h.calls[0].url,/month=2026-01$/);assert.equal(h.calls[0].options.method,'GET');assert(!h.summaries.some(([review])=>review));
 });

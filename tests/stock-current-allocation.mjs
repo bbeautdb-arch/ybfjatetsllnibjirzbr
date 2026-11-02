@@ -41,9 +41,11 @@ test('current other demand is separate from backed stock, shortage and carry; Fr
   assert.match(other,/มีของรองรับ<\/span><b>10.25 แผ่น/);assert.match(other,/ต้องผลิตเพิ่ม<\/span><b>5 แผ่น/);assert.doesNotMatch(other,/<strong>30<\/strong>|฿ 0|USD|700/);
   assert.match(card(html,'sold'),/<strong>30<\/strong>/,'loaded sales remain in sold headline but not allocation');
   assert.match(free,/<strong>68<\/strong>/);assert.match(free,/ไม้แถบ 14 ชิ้น/);assert.match(free,/มีของรองรับขายแล้วเดือนนี้ · ยังไม่โหลด<\/span><b>12 แผ่น/);
-  assert.match(free,/มีของรองรับจองอื่นเดือนนี้<\/span><b>10.25 แผ่น/);assert.match(free,/มีของรองรับยอดค้างเดือนอื่น<\/span><b>7.75 แผ่น/);
+  assert.match(free,/มีของรองรับจองอื่นเดือนนี้<\/span><b>10.25 แผ่น/);assert.match(free,/มีของรองรับภาระเดือนอื่นในแผน<\/span><b>7.75 แผ่น/);
   assert.match(free,/Free ตามสูตร · Physical ลบของที่จัดสรร<\/span><b>70 แผ่น/);assert.match(free,/ปรับ Free ด้วยมือ 1 สเปก · ส่วนต่างจากสูตร<\/span><b>-2 แผ่น/);
   assert.doesNotMatch(free,/<strong>70<\/strong>|<strong>50<\/strong>/);
+  assert.match(free,/รวมทุกเดือนในแผนที่บันทึกและทุกความหนา/);assert.doesNotMatch(free,/รวมทุกเดือนและทุกความหนา/);
+  assert.match(api.sourceText(null,f.warehouse,undefined,undefined,f.sold,f.allocation),/ภาระเดือนอื่นในแผน/);
 });
 test('missing, pending and stale allocation never show old reservation quantity; saved Free stays with an explicit warning',()=>{
   const f=fixture(),archive={month:'2000-10',monthLabel:'Archived synthetic',sourceCapturedAt:'2000-10-01',fx:{rate:30,date:'2000-10-01'},reserved:{quantity:u(999),money:{sale:{THB:999,USD:999}}}};
@@ -53,7 +55,7 @@ test('missing, pending and stale allocation never show old reservation quantity;
     assert.match(card(html,'free'),/<strong>68<\/strong>/);assert.match(card(html,'free'),/Free นี้ยังเป็นยอดที่บันทึกไว้/);
   }
   const source=api.sourceText(archive,f.warehouse,undefined,undefined,f.sold,f.allocation);
-  assert.match(source,/จองอื่นๆ: /);assert.match(source,/รายละเอียดหัวข้อ02: Archived synthetic/);assert.doesNotMatch(source,/เดือนขายเดียวกัน|จองอื่น\/รายละเอียด/);
+  assert.match(source,/จองอื่นๆ: /);assert.match(source,/รายละเอียดหัวข้อ02 เดือนนี้: รอชุดเดือนปัจจุบัน/);assert.doesNotMatch(source,/Archived synthetic|เดือนขายเดียวกัน|จองอื่น\/รายละเอียด/);
 });
 test('DTO drops unknown properties and money; pending reason is escaped; rollover cannot preserve prior month allocation',()=>{
   const f=fixture(),input=clone(f.allocation);input.money={THB:999};input.current.other.money=999;input.source.private='hidden';
@@ -68,7 +70,7 @@ function runtime(){
   let html='',cardsHTML='',rootWrites=0;const replacements=[],source={textContent:''},status={textContent:'',classList:{add(){}}};
   const cards={get innerHTML(){return cardsHTML;},set innerHTML(v){cardsHTML=v;},querySelectorAll:()=>[]};
   const root={classList:{remove(){}},addEventListener(){},querySelectorAll:()=>[],get innerHTML(){return html;},set innerHTML(v){html=v;rootWrites++;},querySelector(selector){
-    if(selector==='.ss-kpis')return cards;if(selector==='.ss-status')return status;if(['.ss-sales-summary-source','.ss-overview-source'].includes(selector))return source;
+    if(selector==='.ss-kpis')return cards;if(selector==='.ss-status')return status;if(selector==='.ss-sales-summary-source')return source;if(selector==='.ss-overview-source')return{textContent:''};
     const match=selector.match(/^\.ss-kpis \[data-stock-card="([^"]+)"\]$/);if(match)return{replaceWith(value){cardsHTML=cardsHTML.replace(card(cardsHTML,match[1]),value.outerHTML);replacements.push(match[1]);}};
     if(selector==='.ss-download')return{addEventListener(){}};if(selector==='.ss-sheet')return{remove(){html='';cardsHTML='';}};return null;
   }};
@@ -77,6 +79,17 @@ function runtime(){
   return {summary:window.AAFStockSummary,replacements,source,get cards(){return cardsHTML;},get rootWrites(){return rootWrites;},get html(){return html;}};
 }
 const calc=r=>({eq:r.qty,price:1,curr:'THB',value:r.qty,freeValue:r.freeQty});
+test('current lower provenance publishes with unknown exact prices and no FX without invoking legacy financial header build',()=>{
+  const f=fixture(),h=runtime(),review={metadata:{month:f.sold.month},financial:{metadata:{month:f.sold.month,fx:null},views:{},byRowId:{}}};
+  const readModel={kind:'current-month-order-review',status:'verified',source:{...f.sold.source,month:f.sold.month},stock:{...f.allocation.stock}};
+  h.summary.update(f.stock,calc);
+  const oldBuild=api.build;api.build=()=>{throw Error('Legacy financial builder must not run for current provenance');};
+  try{h.summary.setOrderReview(review,readModel);}finally{api.build=oldBuild;}
+  assert.match(h.source.textContent,/รายละเอียดหัวข้อ02 เดือนนี้:/);assert.doesNotMatch(h.source.textContent,/รายละเอียดหัวข้อ02 เดือนนี้: รอ|เรทชุดขาย/);
+  assert.match(card(h.cards,'sold'),/<strong>30<\/strong>/);assert.match(card(h.cards,'sold'),/ยังไม่มีหลักฐานราคาขาย\/รับเงินตรงชุดนี้/);
+  for(const change of [r=>r.source.month='2000-10',r=>r.source.checksum='sha256:'+'c'.repeat(64),r=>r.stock.reportDate='2000-10-01',r=>r.stock.planCapturedAt='2000-10-01T00:00:00Z']){const mismatch=clone(readModel);change(mismatch);h.summary.setOrderReview(review,mismatch);assert.match(h.source.textContent,/รายละเอียดหัวข้อ02 เดือนนี้: รอ/);}
+  const malformed=clone(f.stock);delete malformed.currentAllocation.stock;h.summary.update(malformed,calc);assert.doesNotThrow(()=>h.summary.setOrderReview(review,{...readModel,stock:undefined}));assert.match(h.source.textContent,/รายละเอียดหัวข้อ02 เดือนนี้: รอ/);
+});
 test('normalization and same-revision refresh update three current cards without rebuilding Physical, stock tables or editors',()=>{
   const f=fixture(),h=runtime(),before=JSON.stringify(f.stock),model=h.summary.buildModel(f.stock,calc);
   assert.equal(model.currentAllocation.status,'verified-allocation');assert.equal(JSON.stringify(f.stock),before);assert.equal(model.rows.filter(r=>r.manualFreeOverride).length,1);
