@@ -109,14 +109,14 @@ assert(/\.ss-aging-svg\{[^}]*height:190px/.test(source),'Aging chart keeps the c
 assert(/\.ss-aging-insights h4\{font-size:10px/.test(source)&&/\.ss-aging-insights span\{[^}]*font-size:9px/.test(source)&&/\.ss-aging-insights b\{[^}]*font-size:10px/.test(source),'Aging insight text keeps compact 10/9px sizing');
 const summaryGroups=[...agingHTML.matchAll(/<section class="ss-group">[\s\S]*?<\/section>/g)].map(match=>match[0]);
 assert.equal(summaryGroups.length,2,'grade and thickness summaries both render');
-assert(!summaryGroups[1].includes('<th scope="row">5.0</th>')&&!summaryGroups[1].includes('<th scope="row">1.6</th>'),'Physical-zero thickness rows are omitted from this summary only');
-assert(summaryGroups[1].includes('<th scope="row">5.5</th>'),'nonzero fractional thickness remains unchanged');
+assert(!summaryGroups[1].includes('data-thickness-parent="5"')&&!summaryGroups[1].includes('data-thickness-parent="1.6"'),'Physical-zero thickness rows are omitted from this summary only');
+assert(summaryGroups[1].includes('data-thickness-parent="5.5"'),'nonzero fractional thickness remains unchanged');
 assert(agingHTML.includes('ความหนา 5 mm')&&agingHTML.includes('รวม Aging 166 แผ่นเทียบ'),'zero display filtering preserves detail and original Aging evidence');
 assert(summaryGroups[0].includes('<th scope="row">AAA</th>'),'grade labels are not formatted as thickness');
 for(const thick of [2,3]){
   const wholeSource={...data,rows:[{...row,t:String(thick)}]},wholeBefore=JSON.stringify(wholeSource),wholeModel=buildModel(wholeSource,calculate);
   const wholeHTML=renderHTML(wholeModel),wholeTable=[...wholeHTML.matchAll(/<section class="ss-group">[\s\S]*?<\/section>/g)][1][0];
-  assert(wholeTable.includes('<th scope="row">'+thick+'.0</th>'),'whole thickness follows owner examples 2.0 and 3.0');
+  assert(wholeTable.includes('data-thickness-toggle="'+thick+'"')&&wholeTable.includes('<span>'+thick+'.0</span></button>'),'whole thickness follows owner examples 2.0 and 3.0');
   assert.equal(wholeModel.thickness[0][0],String(thick),'display formatting preserves matching keys');
   assert.equal(JSON.stringify(wholeSource),wholeBefore,'display formatting preserves data and calculations');
 }

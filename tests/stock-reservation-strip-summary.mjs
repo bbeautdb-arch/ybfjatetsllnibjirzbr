@@ -66,7 +66,7 @@ test('both section01 group tables expose12 columns, reservation subsets before F
     assert.match(footer,/ไม้แถบ/);assert.match(footer,/แผ่น/);
     assert.doesNotMatch(html,/>1,150(?: แผ่น)?</,'raw pieces and sheets must not be summed into a displayed stock count');
   }
-  const thickness32=tables[1].match(/<tr><th scope="row">3\.2<\/th>[\s\S]*?<\/tr>/)?.[0];assert.ok(thickness32,'3.2mm group is visible');
+  const thickness32=tables[1].match(/<tr data-thickness-parent="3\.2">[\s\S]*?<\/tr>/)?.[0];assert.ok(thickness32,'3.2mm group is visible');
   assert.match(thickness32,/ไม้แถบ/);assert.ok(text(thickness32).includes(shown(m.total.stripEq4x8)));assert.ok(text(thickness32).includes(shown(m.total.stripEq)));
 });
 
@@ -93,7 +93,7 @@ test('a production-only thickness remains visible while all-zero retained catalo
   const production=m.thickness.find(([t])=>t==='6')?.[1];assert.ok(production,'production-only thickness is included');
   near(production.qty,0);near(production.committedQty,90);near(production.reservedInStockQty,0);near(production.reservedProductionQty,90);near(production.freeQty,0);
   assert.equal(m.thickness.some(([t])=>t==='9'),true,'all-zero retained thickness remains available to the detail catalog');
-  const thicknessTable=groupTables(renderHTML(m))[1];assert.match(thicknessTable,/<tr><th scope="row">6\.0<\/th>/);assert.doesNotMatch(thicknessTable,/<tr><th scope="row">9\.0<\/th>/);
+  const thicknessTable=groupTables(renderHTML(m))[1];assert.match(thicknessTable,/<tr data-thickness-parent="6">/);assert.doesNotMatch(thicknessTable,/<tr data-thickness-parent="9">/);
   near(m.total.byUnit.sheet.qty,150);near(m.total.byUnit.strip.qty,1000);
   near(m.total.byUnit.sheet.committedQty,base.total.byUnit.sheet.committedQty+90);near(m.total.byUnit.sheet.reservedProductionQty,base.total.byUnit.sheet.reservedProductionQty+90);
   near(m.total.byUnit.sheet.freeQty,base.total.byUnit.sheet.freeQty);near(m.total.eq,base.total.eq);near(m.total.eq4x8,base.total.eq4x8);near(m.total.stripEq,base.total.stripEq);near(m.total.stripEq4x8,base.total.stripEq4x8);

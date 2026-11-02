@@ -18,6 +18,7 @@
   let latest=null,exporting=false,canvasLoader=null,headerExchangeRate=null,savedStockCatalog=null;
   let orderHeader=null,orderHeaderError='กำลังรอชุดรายงานเดือนที่ตรวจครบ';
   const expandedCards=new Set();
+  const expandedThickness=new Set();
 
   // Saved stock prices are independent of the sales-allocation package. Exact
   // identity is required; never apply yesterday's prices/quantities as today's
@@ -149,9 +150,14 @@
       for(const k of ['freeEq4x8','freeEq','reservedEq4x8','reservedEq','reservedValue'])if(!Number.isFinite(result[k])||result[k]<0)throw new Error('ข้อมูลยอดเทียบไม่ถูกต้อง');
       return result;
     }).sort((a,b)=>Number(a.t)-Number(b.t)||Number(a.w)-Number(b.w)||Number(a.l)-Number(b.l)||String(a.grade).localeCompare(String(b.grade))||String(a.key).localeCompare(String(b.key)));
-    const total=blank(),grades=new Map(gradeOrder.map(g=>[g,blank()])),thickness=new Map(),aging=agingKeys.map(()=>0),agingEquivalent=agingKeys.map(()=>0),agingEquivalentByThickness=new Map();
+    const total=blank(),grades=new Map(gradeOrder.map(g=>[g,blank()])),thickness=new Map(),thicknessGrades=new Map(),aging=agingKeys.map(()=>0),agingEquivalent=agingKeys.map(()=>0),agingEquivalentByThickness=new Map();
     for(const r of rows){
       add(total,r);if(!grades.has(r.grade))grades.set(r.grade,blank());add(grades.get(r.grade),r);const t=String(Number(r.t));if(!thickness.has(t))thickness.set(t,blank());add(thickness.get(t),r);
+      // Detail only: include every grade actually retained in this thickness,
+      // even at zero. Reuse per-spec subsets and unit buckets, never a second
+      // allocation or an aggregate Physical-minus-demand calculation.
+      if(!thicknessGrades.has(t))thicknessGrades.set(t,new Map());
+      const children=thicknessGrades.get(t);if(!children.has(r.grade))children.set(r.grade,blank());add(children.get(r.grade),r);
       agingKeys.forEach((k,i)=>aging[i]+=r[k]);
       if(r.rawSource&&r.unit!=='strip'){
         if(!agingEquivalentByThickness.has(t))agingEquivalentByThickness.set(t,agingKeys.map(()=>0));
@@ -170,7 +176,9 @@
     }
     const currentMonthSold=window.AAFOrderHeader?.currentMonthSoldView(data.currentMonthSold)||null;
     const reservationPlan={checksum:typeof data.sellablePlan?.checksum==='string'?data.sellablePlan.checksum:null,capturedAt:typeof data.sellablePlan?.source?.capturedAt==='string'?data.sellablePlan.source.capturedAt:null};
-    const m={rows,total,grades:[...grades],thickness:[...thickness],aging,agingEquivalent,agingEquivalentByThickness:[...agingEquivalentByThickness],reportDate:data.report.reportDate,updatedAt:data.updatedAt,importedAt:data.importedAt,revision:String(data.revision??''),exchangeRate:data.exchangeRate,sourceRowCount:data.report.sourceRowCount,renderedAt:new Date().toISOString(),cash,cashError,sold,currentMonthSold,reservationPlan};
+    const gradeRank=g=>gradeOrder.includes(g)?gradeOrder.indexOf(g):gradeOrder.length;
+    const orderedThicknessGrades=[...thicknessGrades].map(([t,children])=>[t,[...children].sort(([a],[b])=>gradeRank(a)-gradeRank(b)||(a<b?-1:a>b?1:0))]);
+    const m={rows,total,grades:[...grades],thickness:[...thickness],thicknessGrades:orderedThicknessGrades,aging,agingEquivalent,agingEquivalentByThickness:[...agingEquivalentByThickness],reportDate:data.report.reportDate,updatedAt:data.updatedAt,importedAt:data.importedAt,revision:String(data.revision??''),exchangeRate:data.exchangeRate,sourceRowCount:data.report.sourceRowCount,renderedAt:new Date().toISOString(),cash,cashError,sold,currentMonthSold,reservationPlan};
     m.currentAllocation=window.AAFOrderHeader?.currentAllocationView(data.currentAllocation,currentWarehouse(m),currentMonthSold)||null;
     return m;
   }
@@ -184,10 +192,25 @@
     const v=m.total;
     return `<dl class="ss-physical-equivalents ss-physical-with-strips">${[['เทียบ 4×8 · ความหนาเดิม','eq4x8','stripEq4x8'],['เทียบ 4×8 · หนา 2.5 มม.','eq','stripEq']].map(([label,sheet,strip])=>`<div><dt>${label} · เฉพาะแผ่น</dt><dd>${number(v[sheet],2)} <small>แผ่น</small>${stripEquivalent(v,strip)}<span class="ss-combined-equivalent">รวมไม้แถบแล้ว <b>${number(v[sheet]+v[strip],2)}</b> แผ่นเทียบ</span></dd></div>`).join('')}</dl>`;
   }
-  function groupTable(title,groups,label,total){
+  function groupTable(title,groups,label,total,detail=null){
     const agingCells=v=>stockQuantityCell(v,'aging90',false,'ss-aging-mail')+stockQuantityCell(v,'aging180',false,'ss-aging-mail')+stockQuantityCell(v,'agingOver180',false,'ss-aging-mail ss-aging-over');
     const quantities=v=>stockQuantityCell(v,'qty')+stockQuantityCell(v,'committedQty')+stockQuantityCell(v,'reservedInStockQty',false,'ss-reserved-stock')+stockQuantityCell(v,'reservedProductionQty',false,'ss-reserved-production')+stockQuantityCell(v,'freeQty',true);
-    return `<section class="ss-group"><div class="ss-group-heading"><h3>${title}</h3><small>Aging เมล = ยอดต้นฉบับก่อนโยก</small></div><div class="ss-group-scroll" role="region" tabindex="0" aria-label="${esc(title)} 12 คอลัมน์ เลื่อนแนวนอนได้"><table><caption class="ss-sr">${title} · Aging เมลจากต้นฉบับ · ยอดเทียบขนาดคำนวณจาก Physical</caption><thead><tr><th scope="col" rowspan="2">${label}</th><th scope="col" rowspan="2" class="ss-num">สเปก</th><th scope="col" rowspan="2" class="ss-num">Physical</th><th scope="col" rowspan="2" class="ss-num">จองรวม</th><th scope="col" rowspan="2" class="ss-num ss-reserved-stock">จองมีของ</th><th scope="col" rowspan="2" class="ss-num ss-reserved-production">จองต้องผลิตเพิ่ม</th><th scope="col" rowspan="2" class="ss-num">Free</th><th scope="colgroup" colspan="3" class="ss-num ss-aging-mail-group">Aging เมล</th><th scope="col" rowspan="2" class="ss-num ss-equivalent">เทียบ 4×8<br><small>หนาเดิม · เฉพาะแผ่น</small></th><th scope="col" rowspan="2" class="ss-num ss-equivalent">เทียบ 4×8<br><small>หนา 2.5 mm · เฉพาะแผ่น</small></th></tr><tr><th scope="col" class="ss-num ss-aging-mail">0–90</th><th scope="col" class="ss-num ss-aging-mail">91–180</th><th scope="col" class="ss-num ss-aging-mail ss-aging-over">&gt;180 วัน</th></tr></thead><tbody>${groups.map(([k,v])=>`<tr><th scope="row">${esc(k)}</th>${cell(v.count)}${quantities(v)}${agingCells(v)}${equivalents(v)}</tr>`).join('')}</tbody><tfoot><tr><th scope="row">รวม</th>${cell(total.count)}${quantities(total)}${agingCells(total)}${equivalents(total)}</tr><tr class="ss-combined-total"><th scope="row" colspan="10">รวมเทียบแผ่น · รวมไม้แถบแล้ว<small>รวมเฉพาะหน่วยเทียบเดียวกัน ไม่บวกชิ้นกับแผ่นจริง</small></th><td class="ss-num ss-equivalent">${number(total.eq4x8+total.stripEq4x8,2)}<small>แผ่นเทียบ 4×8</small></td><td class="ss-num ss-equivalent">${number(total.eq+total.stripEq,2)}<small>แผ่นเทียบ 4×8 @ 2.5</small></td></tr></tfoot></table></div></section>`;
+    const values=v=>cell(v.count)+quantities(v)+agingCells(v)+equivalents(v);
+    const children=new Map(detail?.grades||[]);
+    const body=detail?groups.map(([k,v])=>{
+      const id='ss-thickness-grades-'+k.replaceAll('.','_'),open=detail.expanded.has(k),shown=thicknessLabel(k);
+      return `<tbody><tr data-thickness-parent="${esc(k)}"><th scope="row"><button type="button" class="ss-thickness-toggle" data-thickness-toggle="${esc(k)}" aria-expanded="${open}" aria-controls="${esc(id)}" aria-label="${open?'ซ่อน':'แสดง'}เกรดความหนา ${esc(shown)} มม."><span class="ss-thickness-marker" aria-hidden="true">${open?'▾':'▸'}</span><span>${esc(shown)}</span></button></th>${values(v)}</tr></tbody><tbody class="ss-thickness-grades" id="${esc(id)}"${open?'':' hidden'}>${(children.get(k)||[]).map(([grade,totals])=>`<tr data-thickness-grade="${esc(k)}" data-grade="${esc(grade)}"><th scope="row">${esc(shown+' '+grade)}</th>${values(totals)}</tr>`).join('')}</tbody>`;
+    }).join(''):`<tbody>${groups.map(([k,v])=>`<tr><th scope="row">${esc(k)}</th>${values(v)}</tr>`).join('')}</tbody>`;
+    return `<section class="ss-group"><div class="ss-group-heading"><h3>${title}</h3><small>Aging เมล = ยอดต้นฉบับก่อนโยก</small></div>${detail?'<p class="ss-thickness-help">คลิกความหนาเพื่อดูเกรดในทะเบียน · รวมเกรดที่ยอดเป็นศูนย์ · แถวเกรดเป็นส่วนย่อย ไม่บวกซ้ำกับยอดรวม · พิมพ์/ดาวน์โหลดตามแถวที่เปิดไว้</p>':''}<div class="ss-group-scroll" role="region" tabindex="0" aria-label="${esc(title)} 12 คอลัมน์ เลื่อนแนวนอนได้"><table><caption class="ss-sr">${title} · Aging เมลจากต้นฉบับ · ยอดเทียบขนาดคำนวณจาก Physical</caption><thead><tr><th scope="col" rowspan="2">${label}</th><th scope="col" rowspan="2" class="ss-num">สเปก</th><th scope="col" rowspan="2" class="ss-num">Physical</th><th scope="col" rowspan="2" class="ss-num">จองรวม</th><th scope="col" rowspan="2" class="ss-num ss-reserved-stock">จองมีของ</th><th scope="col" rowspan="2" class="ss-num ss-reserved-production">จองต้องผลิตเพิ่ม</th><th scope="col" rowspan="2" class="ss-num">Free</th><th scope="colgroup" colspan="3" class="ss-num ss-aging-mail-group">Aging เมล</th><th scope="col" rowspan="2" class="ss-num ss-equivalent">เทียบ 4×8<br><small>หนาเดิม · เฉพาะแผ่น</small></th><th scope="col" rowspan="2" class="ss-num ss-equivalent">เทียบ 4×8<br><small>หนา 2.5 mm · เฉพาะแผ่น</small></th></tr><tr><th scope="col" class="ss-num ss-aging-mail">0–90</th><th scope="col" class="ss-num ss-aging-mail">91–180</th><th scope="col" class="ss-num ss-aging-mail ss-aging-over">&gt;180 วัน</th></tr></thead>${body}<tfoot><tr><th scope="row">รวม</th>${values(total)}</tr><tr class="ss-combined-total"><th scope="row" colspan="10">รวมเทียบแผ่น · รวมไม้แถบแล้ว<small>รวมเฉพาะหน่วยเทียบเดียวกัน ไม่บวกชิ้นกับแผ่นจริง</small></th><td class="ss-num ss-equivalent">${number(total.eq4x8+total.stripEq4x8,2)}<small>แผ่นเทียบ 4×8</small></td><td class="ss-num ss-equivalent">${number(total.eq+total.stripEq,2)}<small>แผ่นเทียบ 4×8 @ 2.5</small></td></tr></tfoot></table></div></section>`;
+  }
+  function thicknessClick(event){
+    const button=event.target.closest?.('[data-thickness-toggle]');if(!button)return;
+    const key=button.dataset.thicknessToggle,body=root.querySelector('#'+button.getAttribute('aria-controls'));
+    if(!body||!latest?.thickness.some(([t])=>t===key))return;
+    const open=!expandedThickness.has(key);open?expandedThickness.add(key):expandedThickness.delete(key);
+    body.hidden=!open;button.setAttribute('aria-expanded',String(open));
+    button.setAttribute('aria-label',(open?'ซ่อน':'แสดง')+'เกรดความหนา '+thicknessLabel(key)+' มม.');
+    const marker=button.querySelector('.ss-thickness-marker');if(marker)marker.textContent=open?'▾':'▸';
   }
   function memo(r,key,title){return `<div><b>${title}</b><div class="ss-text">${esc(r[key]||'—')}</div>${r[key+'At']?`<small>${esc(r[key+'By']||'ไม่ระบุผู้บันทึก')} · ${esc(when(r[key+'At']))}</small>`:''}</div>`;}
   function provenance(r){
@@ -398,6 +421,7 @@
     button.setAttribute('aria-expanded',String(open));button.textContent=button.textContent.replace(/^(ดู|ซ่อน)รายละเอียด/,open?'ซ่อนรายละเอียด':'ดูรายละเอียด');content.hidden=!open;overview.hidden=open;
   }
   function overviewClick(event){
+    thicknessClick(event);
     const toggle=event.target.closest?.('[data-stock-card-toggle]'),action=event.target.closest?.('[data-stock-overview-action]');
     if(toggle){const id=toggle.dataset.stockCardToggle,open=!expandedCards.has(id);open?expandedCards.add(id):expandedCards.delete(id);setCardView(toggle.closest('[data-stock-card]'),open);}
     if(action){const open=action.dataset.stockOverviewAction==='expand';for(const card of root.querySelectorAll('[data-stock-card]')){open?expandedCards.add(card.dataset.stockCard):expandedCards.delete(card.dataset.stockCard);setCardView(card,open);}}
@@ -564,7 +588,7 @@
   function dailyOverviewHTML(m){
     return `<section class="ss-daily-overview" aria-label="ภาพรวมรายวัน 4 กล่อง"><header class="ss-overview-header"><div><span>AAF · DAILY OVERVIEW</span><h3>ภาพรวมสต๊อกและยอดขาย</h3><small>ข้อมูลส่วนกลาง ${esc(when(m.updatedAt))} · ${number(m.rows.length)} สเปก</small></div><div class="ss-overview-actions" data-html2canvas-ignore><button type="button" data-stock-overview-action="collapse">ย่อทั้ง 4 กล่อง</button><button type="button" data-stock-overview-action="expand">ดูรายละเอียดทั้งหมด</button><button type="button" class="ss-overview-download" ${exporting?'disabled':''}>ดาวน์โหลดภาพ 4 กล่อง</button></div></header><p class="ss-overview-source">${esc(overviewSourceText(m))}</p><div class="ss-kpis">${kpiHTML(m.salesSummary,m)}</div><p class="ss-overview-footer">สต๊อก / จอง / Free ใช้ราคาประเมิน · ยอดขายใช้ราคาขายจริง · ห้ามบวกทั้ง 4 กล่องเข้าด้วยกันเพราะมีส่วนซ้อนกัน</p></section>`;
   }
-  function html(m){
+  function html(m,thicknessOpen=expandedThickness){
     const t=m.total,overrides=m.rows.filter(r=>r.physicalAt||r.freeAt).length,followed=m.rows.filter(r=>String(r.followup).trim()).length;
     const displayedFx=exchangeRateDisplay(window.AAFOrderHeader?null:m.salesSummary,m.headerExchangeRate);
     let index=0;
@@ -575,7 +599,7 @@
       ${dailyOverviewHTML(m)}
       <div class="ss-section-title"><span>01</span><h3>ภาพรวมแยกเกรดและความหนา · ทั้งคลัง</h3></div>
       <p class="ss-help ss-reservation-help"><strong>จำนวนจองตามแผนทั้งคลังเดิม ไม่ใช่จองเฉพาะเดือนหรือคิวใหม่หัวข้อ02</strong><br>จองรวม = จองมีของ + จองต้องผลิตเพิ่ม · Physical − จองมีของ = Free · แยกคำนวณรายสเปกก่อนรวม ไม่เอาของคนละสเปกหักกัน${m.rows.some(r=>r.freeReconciliationException)?'<br><strong class="ss-manual">มีค่า Free ที่บันทึกไว้ต่างจากสูตรในบางสเปก · คงค่าที่บันทึกไว้ ไม่ล้างค่าปรับเอง</strong>':''}<br>เทียบ 4×8 ใช้ขนาด 1,220 × 2,440 มม. · เทียบหนา 2.5 เพิ่มสัดส่วนความหนา ÷ 2.5 · ไม้แถบเป็นยอดเทียบเพื่อแสดงผล ไม่ใช่การเพิ่มแผ่นจริง</p>
-      <div class="ss-groups">${groupTable('แยกตามเกรด',m.grades,'เกรด',t)}${groupTable('แยกตามความหนา',m.thickness.filter(([,totals])=>totals.qty>0||totals.committedQty>0||totals.freeQty>0).map(([thick,totals])=>[thicknessLabel(thick),totals]),'หนา (mm)',t)}</div>
+      <div class="ss-groups">${groupTable('แยกตามเกรด',m.grades,'เกรด',t)}${groupTable('แยกตามความหนา',m.thickness.filter(([,totals])=>totals.qty>0||totals.committedQty>0||totals.freeQty>0),'หนา (mm)',t,{grades:m.thicknessGrades,expanded:thicknessOpen})}</div>
       ${agingPanel(m)}
       <section class="ss-sales-block" data-html2canvas-ignore><div class="ss-section-title"><span>02</span><h3>ภาพรวมรายการขาย · รายละเอียดเดือนที่เลือก</h3></div><p class="ss-help">เลือกเดือนสำหรับรายละเอียดหัวข้อ 02 เท่านั้น · กล่องขายแล้วและจองอื่นใช้เดือนปัจจุบันตามเวลาไทย · Free รวมการจัดสรรทุกเดือน · ตัวกรองความหนาด้านล่างไม่เปลี่ยนขอบเขตกล่องด้านบน</p><div id="stock-order-review-slot"></div></section>
       <section class="ss-legacy-sales-services" hidden aria-hidden="true"><div id="stock-sales-preview-slot"></div></section>
@@ -732,6 +756,15 @@
     [data-aaf-stock-summary] .ss-group thead tr:first-child th:nth-child(8){width:24%}
     [data-aaf-stock-summary] .ss-group thead tr:first-child th:nth-child(9),[data-aaf-stock-summary] .ss-group thead tr:first-child th:nth-child(10){width:11%}
     [data-aaf-stock-summary] .ss-group thead small{font-size:9px;font-weight:400;white-space:normal}
+    [data-aaf-stock-summary] .ss-thickness-help{font-size:10px;color:#52657a;margin:0 0 8px}
+    [data-aaf-stock-summary] button.ss-thickness-toggle{display:inline-flex;align-items:center;gap:3px;min-height:28px;padding:2px 0;border-radius:3px;background:transparent;color:#234c7b;font:inherit;font-weight:700;white-space:nowrap}
+    [data-aaf-stock-summary] .ss-thickness-toggle:focus-visible{outline:3px solid #268fcb;outline-offset:2px}
+    [data-aaf-stock-summary] .ss-thickness-marker{width:8px;flex-shrink:0}
+    [data-aaf-stock-summary] .ss-thickness-grades[hidden]{display:none!important}
+    [data-aaf-stock-summary] .ss-thickness-grades th{padding-left:8px;border-left:3px solid #a7c5df;background:#f2f7fb;color:#34556e;font-size:10px}
+    [data-aaf-stock-summary] .ss-thickness-grades td{border-bottom-style:dashed}
+    [data-aaf-stock-summary].ss-export .ss-thickness-marker{display:none}
+    @media print{[data-aaf-stock-summary] .ss-thickness-marker{display:none}[data-aaf-stock-summary] .ss-thickness-toggle{color:inherit!important}}
     [data-aaf-stock-summary] .ss-group td.ss-num{white-space:nowrap}
     [data-aaf-stock-summary] .ss-group .ss-equivalent{background:#eff5ff;color:#234c7b}
     [data-aaf-stock-summary] .ss-group .ss-reserved-stock{background:#f0f7fb;color:#2c526d}
@@ -858,12 +891,12 @@
     return canvasLoader;
   }
   async function download(which='stock'){
-    if(!latest||exporting)return;exporting=true;const captured=latest;let box=null;
+    if(!latest||exporting)return;exporting=true;const captured=latest,capturedThickness=new Set(expandedThickness);let box=null;
     const status=text=>{const p=root.querySelector('.ss-status');if(p)p.textContent=text;};
     root.querySelectorAll('.ss-download,.cash-download,.ss-overview-download').forEach(b=>b.disabled=true);status(which==='overview'?'กำลังสร้างภาพรวม 4 กล่อง…':'กำลังสร้างภาพยาวครบทุกแถว กรุณารอสักครู่…');
     try{
       const canvasFn=await loadCanvas();await document.fonts?.ready;
-      box=document.createElement('div');box.dataset.aafStockSummary='';box.className='ss-export'+(which==='overview'?' ss-overview-export':'');box.style.cssText='position:absolute;left:-20000px;top:0;width:1440px;box-sizing:border-box;padding:0;background:white;';box.innerHTML=which==='cash'?window.AAFStockCash.render(captured.cash):which==='overview'?dailyOverviewHTML(captured):html(captured);document.body.append(box);
+      box=document.createElement('div');box.dataset.aafStockSummary='';box.className='ss-export'+(which==='overview'?' ss-overview-export':'');box.style.cssText='position:absolute;left:-20000px;top:0;width:1440px;box-sizing:border-box;padding:0;background:white;';box.innerHTML=which==='cash'?window.AAFStockCash.render(captured.cash):which==='overview'?dailyOverviewHTML(captured):html(captured,capturedThickness);document.body.append(box);
       for(const card of box.querySelectorAll('[data-stock-card]'))setCardView(card,which!=='overview');
       const sheet=which==='overview'?box:box.querySelector(which==='cash'?'.cash-sheet':'.ss-sheet'),width=Math.ceil(sheet.getBoundingClientRect().width),height=Math.ceil(sheet.getBoundingClientRect().height),scale=Math.min(1.5,30000/height,Math.sqrt(48000000/(width*height)));
       if(scale<0.65)throw new Error('ข้อความยาวเกินขนาดภาพที่อ่านได้ในรูปเดียว กรุณาถ่ายภาพเต็มหน้าผ่านเบราว์เซอร์แทน');
