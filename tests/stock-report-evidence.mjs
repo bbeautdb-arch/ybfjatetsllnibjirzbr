@@ -21,7 +21,7 @@ test('both report entry points cache-bust the current sold renderer and auth con
     const html=fs.readFileSync(new URL('../'+page+'.html',import.meta.url),'utf8');
     assert.ok(html.includes('stock_sales_preview.js?v=20261019-notes-only'));assert.ok(html.includes('stock_sales_controller.js?v=20261019-notes-only'));
     for(const file of ['stock_order_header','stock_summary','stock_order_controller']){
-      const expected=new RegExp('<script\\s+src="'+file+'\\.js\\?v=20261103-current-month-sold-r1"><\\/script>','g');
+      const expected=new RegExp('<script\\s+src="'+file+'\\.js\\?v=20261103-current-allocation-r1"><\\/script>','g');
       assert.equal([...html.matchAll(expected)].length,1,page+' must load exactly one current '+file+' asset');
       assert.doesNotMatch(html,new RegExp(file+'\\.js\\?v=20261020-monthly-overview'),page+' must not retain a cached dated-stock renderer');
     }
@@ -29,6 +29,6 @@ test('both report entry points cache-bust the current sold renderer and auth con
     assert.ok(html.includes('stock_review_notes_bridge.js?v=20261020-annotation-save'));
     assert.ok(html.includes('stock_order_review.js?v=20261020-money-details-current-stock-r3'));
   }
-  assert.match(fs.readFileSync(new URL('../stock_report.html',import.meta.url),'utf8'),/stock_report.js\?v=20261103-current-month-sold-r1/);
-  assert.match(fs.readFileSync(new URL('../stock_manager.html',import.meta.url),'utf8'),/stock_shared.js\?v=20261103-current-month-sold-r1/);
+  assert.match(fs.readFileSync(new URL('../stock_report.html',import.meta.url),'utf8'),/stock_report.js\?v=20261103-current-allocation-r1/);
+  assert.match(fs.readFileSync(new URL('../stock_manager.html',import.meta.url),'utf8'),/stock_shared.js\?v=20261103-current-allocation-r1/);
 });

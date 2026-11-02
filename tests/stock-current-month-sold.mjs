@@ -40,16 +40,16 @@ test('quantity DTO is guarded and copied without prices, receipts, unknown units
     const invalid=dto();change(invalid);assert.equal(api.currentMonthSoldView(invalid).status,'pending');
   }
 });
-test('only current-month sold card changes; archive selection never supplies its quantity or money',()=>{
+test('current-month cards never use archive selection as quantity or money',()=>{
   const review=archive(),model=api.build(review,{stale:true}),input=dto(),before=JSON.stringify({review,input});
   const html=api.render(model,new Set(),undefined,'selected-month pending',input),card=soldCard(html);
   assert.match(card,/<h3>ขายแล้วเดือนนี้<\/h3>/);assert.match(card,/<strong>30<\/strong>/);assert.match(card,/ไม้แถบ 5 ชิ้น/);
   assert.match(card,new RegExp('data-order-header-month="'+api.currentBangkokMonth()+'"'));
   assert.match(card,/โหลดแล้ว/);assert.match(card,/รับเงิน\/มัดจำ · ยังไม่โหลด/);assert.match(card,/LCมีETD/);
   assert.match(card,/ยังไม่มีหลักฐานราคาขาย\/รับเงินตรงชุดนี้/);assert.doesNotMatch(card,/USD 999|฿ 0|<strong>35<\/strong>|<strong>99<\/strong>|2000-10|ชุดตรวจย้อนหลัง/);
-  assert.match(reservedCard(html),/data-order-header-month="2000-10"/);
+  assert.doesNotMatch(reservedCard(html),/data-order-header-month="2000-10"|<strong>/);
   const source=api.sourceText(model,undefined,undefined,undefined,input);
-  assert.match(source,/ขายแล้วเดือนนี้:/);assert.match(source,/จองอื่น\/รายละเอียดหัวข้อ02: Archived synthetic month/);
+  assert.match(source,/ขายแล้วเดือนนี้:/);assert.match(source,/รายละเอียดหัวข้อ02: Archived synthetic month/);
   assert.doesNotMatch(source,/ชุดเดียวกับหัวข้อ02|เดือนขายเดียวกัน/);
   assert.equal(JSON.stringify({review,input}),before);
 });
@@ -98,7 +98,7 @@ test('a later stock response without the DTO clears it instead of retaining a pr
   const missing=clone(data);delete missing.currentMonthSold;h.summary.update(missing,calc);h.summary.setOrderReview(archive(),{stale:true});
   assert.doesNotMatch(soldCard(h.cards),/<strong>|999/);assert.match(soldCard(h.cards),/รอข้อมูลขายเดือน/);
 });
-test('same-revision source refresh replaces only the sold card and source text, with no editor or whole-report rebuild',()=>{
+test('same-revision sold refresh does not rebuild the whole report while allocation remains pending',()=>{
   const h=runtime(),data=stock();h.summary.update(data,calc);h.summary.setOrderReview(archive(),{stale:true});
   const writes=h.rootWrites,other=reservedCard(h.cards),fresh=dto();fresh.loaded.sheet=11;fresh.quantity.sheet=31;
   h.summary.setCurrentMonthSold(fresh);assert.match(soldCard(h.cards),/<strong>31<\/strong>/);assert.equal(h.rootWrites,writes);assert.equal(h.soldReplacements,1);assert.equal(reservedCard(h.cards),other);

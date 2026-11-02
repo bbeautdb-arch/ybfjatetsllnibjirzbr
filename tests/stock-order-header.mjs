@@ -35,13 +35,13 @@ test('actual prices and order-level receipt partition remain independent of stoc
   r.reconciliation.headerStockValuations.physical.equivalentTHB=999;
   assert.deepEqual(api.build(r).sold.money,m.sold.money);
 });
-test('other reservation native currency breakdown is explicitly actual sale, not the stock estimate above it',()=>{
+test('archived other-reservation money stays in the review model and never substitutes current allocation evidence',()=>{
   const model=api.build(fixture()),before=JSON.stringify(model),html=api.render(model);
   const reserved=html.slice(html.indexOf('class="ss-kpi ss-kpi-reserved"'),html.indexOf('class="ss-kpi ss-kpi-free"'));
-  assert.match(reserved,/มูลค่าความต้องการ · ราคาประเมินสต๊อก/);
-  assert.match(reserved,/<small>ราคาขายจริงตามใบขาย \(ไม่ใช่ราคาประเมินสต๊อก\): THB 0 · USD 36<\/small>/);
-  assert.doesNotMatch(reserved,/<small>THB 0 · USD 36<\/small>/);
-  assert.match(reserved,/มูลค่าขายตามใบในกลุ่มนี้/);
+  assert.equal(model.reserved.money.sale.USD,36);
+  assert.match(reserved,/จองอื่นๆ · ไม่ซ้ำขายแล้ว/);
+  assert.match(reserved,/รอยืนยันยอดจองเดือนนี้/);
+  assert.doesNotMatch(reserved,/USD 36|฿ 700|<strong>/);
   assert.equal(JSON.stringify(model),before,'label-only correction must not alter any value or classification');
 });
 test('LC without ETD is not promoted from group3 to sold',()=>{
@@ -62,17 +62,17 @@ test('missing prices are unknown, not zero sale values; missing stock valuation 
   const m=api.build(r);assert.equal(m.sold.money.complete,false);assert.equal(m.sold.money.missingPriceLineCount,1);
   const html=api.render(m);assert.match(html,/ยังยืนยันไม่ได้/);assert.equal(m.physical.value,null);assert.equal(m.free.knownValueTHB,null);
 });
-test('render escapes customer text, keeps all four cards collapsed and labels dated stock',()=>{
-  const r=fixture();r.financial.orders[3].customer='<script>bad()</script>';const html=api.render(api.build(r,{stale:true}));
-  assert.equal((html.match(/data-stock-card="/g)||[]).length,4);assert.equal((html.match(/aria-expanded="false"/g)||[]).length,3,'pending current-month sold must not expand dated receipts');
-  assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>bad/);assert.match(html,/ชุดตรวจย้อนหลัง/);assert.match(html,/แผนเดิม/);
+test('render escapes pending evidence text, keeps four cards and does not expose dated receipts in current cards',()=>{
+  const r=fixture(),html=api.render(api.build(r,{stale:true}),new Set(),undefined,undefined,undefined,{version:1,status:'pending',month:api.currentBangkokMonth(),reason:'<script>bad()</script>'});
+  assert.equal((html.match(/data-stock-card="/g)||[]).length,4);assert.equal((html.match(/aria-expanded="false"/g)||[]).length,2,'pending current-month cards must not expand dated receipts');
+  assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>bad/);assert.match(html,/ชุดตรวจย้อนหลัง/);assert.match(html,/Free นี้ยังเป็นยอดที่บันทึกไว้/);
 });
 test('legacy summary callbacks cannot replace new monthly header; clear never falls back to old sales',()=>{
   const window={AAFOrderHeader:api};
   vm.runInNewContext(fs.readFileSync(new URL('../stock_summary.js',import.meta.url),'utf8'),{window,document:{getElementById:()=>null,createElement:()=>({}),head:{append(){}}}});
   const summary=window.AAFStockSummary;
   summary.setOrderReview(fixture(),{selectedMonth:'2026-04'});const html=summary.renderKpis({sold:{byUnit:{sheet:987654}}},null);
-  assert.match(html,/data-order-header-month="2026-04"/);assert.doesNotMatch(html,/987,654/);
+  assert.doesNotMatch(html,/data-order-header-month="2026-04"|987,654/);assert.match(html,/รอยืนยันยอดจองเดือนนี้/);
   summary.setSalesSummary({sold:{byUnit:{sheet:987654}}});assert.equal(summary.renderKpis({},null),html);
   summary.setOrderReview(null,null);assert.doesNotMatch(summary.renderKpis({sold:{byUnit:{sheet:987654}}},null),/987,654|data-order-header-month="2026-04"/);
 });
@@ -120,7 +120,7 @@ test('current stock is visible before the monthly review or price catalog arrive
   const {stock}=currentStockFixture(),current=api.warehouseProjection(stock),html=api.render(null,new Set(),current,'รอตรวจเดือนใหม่');
   assert.equal(current.physical.knownValueTHB,null);assert.equal(current.free.knownValueTHB,null);
   assert.match(cardSection(html,'physical'),/<strong>73<\/strong>/);assert.match(cardSection(html,'free'),/<strong>29<\/strong>/);
-  assert.match(cardSection(html,'sold'),/รอข้อมูลขายเดือน/);assert.match(cardSection(html,'reserved'),/รอตรวจเดือนใหม่/);
+  assert.match(cardSection(html,'sold'),/รอข้อมูลขายเดือน/);assert.match(cardSection(html,'reserved'),/รอยืนยันยอดจองเดือนนี้/);
   assert.match(cardSection(html,'physical'),/รอยืนยันชุดราคาหรือเรทส่วนกลาง/);assert.doesNotMatch(cardSection(html,'physical'),/฿ 0(?:[< ·]|$)/);
 });
 

@@ -1,4 +1,5 @@
-/* Data-free selected-month header. Read-only: no storage, tokens or network. */
+/* Data-free current-month cards with a separate selected-month review.
+   Read-only: no storage, tokens or network. */
 (function (root, factory) {
   'use strict';
   const api = factory();
@@ -49,6 +50,40 @@
   const currentSoldSource = view => view.status==='verified-quantities'
     ? 'ขายแล้วเดือนนี้: '+view.monthLabel+' · หน้า 09 · อ่านต้นทาง '+new Date(view.source.capturedAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})+' · ชุดข้อมูลที่ตรวจแล้ว ไม่ใช่ฟีดขายสด'
     : 'ขายแล้วเดือนนี้: '+view.monthLabel+' · '+view.reason;
+
+  function currentAllocationView(value, warehouse, soldValue, now = Date.now()) {
+    const sold=currentMonthSoldView(soldValue,now),month=sold.month,monthLabel=sold.monthLabel;
+    const pending=reason=>({version:1,status:'pending',month,monthLabel,reason:reason||'รอยืนยันยอดจองเดือนนี้และการจัดสรรกับสต๊อกที่บันทึก · ไม่ใช้เดือนอื่นแทน'});
+    if(value?.version!==1||value.month!==month)return pending();
+    if(value.status==='pending')return pending(typeof value.reason==='string'&&value.reason.length<=2000?value.reason:undefined);
+    const hundredths=(v,signed=false)=>typeof v==='number'&&Number.isFinite(v)&&(signed||v>=0)&&Number.isSafeInteger(Math.round(v*100))&&Math.abs(v*100-Math.round(v*100))<1e-6;
+    const bucket=(v,signed=false)=>v&&['sheet','strip'].every(k=>hundredths(v[k],signed));
+    const close=(a,b)=>Math.abs(a-b)<1e-7;
+    const group=v=>v&&['demand','allocated','shortage'].every(k=>bucket(v[k]))&&['sheet','strip'].every(u=>close(v.demand[u],v.allocated[u]+v.shortage[u]));
+    const source=value.source,stock=value.stock,t=value.totals;
+    if(value.status!=='verified-allocation'||sold.status!=='verified-quantities'||!warehouse||
+      source?.page!==9||source.sourceIsLive!==false||source.checksum!==sold.source.checksum||source.capturedAt!==sold.source.capturedAt||
+      !Number.isSafeInteger(stock?.revision)||stock.revision<0||String(stock.revision)!==String(warehouse.stockRevision)||stock.reportDate!==warehouse.stockReportDate||
+      !/^sha256:[a-f0-9]{64}$/.test(stock.planChecksum||'')||stock.planChecksum!==warehouse.planChecksum||stock.planCapturedAt!==warehouse.planCapturedAt||
+      !Number.isFinite(Date.parse(stock.planCapturedAt))||Date.parse(stock.planCapturedAt)>Number(now)||
+      !group(value.current?.soldUnloaded)||!group(value.current?.other)||!group(value.carry)||
+      !t||!['demand','allocated','shortage','physical','formulaFree','savedFree'].every(k=>bucket(t[k]))||!bucket(t.manualFreeDelta,true)||
+      !Number.isSafeInteger(value.manualFreeOverrideCount)||value.manualFreeOverrideCount<0||value.manualFreeOverrideCount!==warehouse.manualFreeOverrideCount)return pending();
+    for(const u of ['sheet','strip']){
+      if(!close(value.current.soldUnloaded.demand[u],sold.quantity[u]-sold.loaded[u])||
+        !['demand','allocated','shortage'].every(k=>close(t[k][u],value.current.soldUnloaded[k][u]+value.current.other[k][u]+value.carry[k][u]))||
+        !close(t.demand[u],t.allocated[u]+t.shortage[u])||!close(t.physical[u],t.allocated[u]+t.formulaFree[u])||
+        !close(t.savedFree[u],t.formulaFree[u]+t.manualFreeDelta[u])||
+        !close(t.physical[u],warehouse.physical.quantity[u])||!close(t.savedFree[u],warehouse.free.quantity[u])||
+        !close(t.demand[u],warehouse.reservationTotals?.demand[u])||!close(t.allocated[u],warehouse.reservationTotals?.allocated[u])||
+        !close(t.shortage[u],warehouse.reservationTotals?.shortage[u])||!close(t.manualFreeDelta[u],warehouse.reservationTotals?.manualFreeDelta[u]))return pending();
+    }
+    const copy=v=>({sheet:v.sheet,strip:v.strip}),copyGroup=v=>Object.fromEntries(['demand','allocated','shortage'].map(k=>[k,copy(v[k])]));
+    return {version:1,status:'verified-allocation',month,monthLabel,source:{page:9,capturedAt:source.capturedAt,sourceIsLive:false,checksum:source.checksum},
+      stock:{revision:stock.revision,reportDate:stock.reportDate,planChecksum:stock.planChecksum,planCapturedAt:stock.planCapturedAt},
+      current:{soldUnloaded:copyGroup(value.current.soldUnloaded),other:copyGroup(value.current.other)},carry:copyGroup(value.carry),
+      totals:Object.fromEntries(['demand','allocated','shortage','physical','formulaFree','savedFree','manualFreeDelta'].map(k=>[k,copy(t[k])])),manualFreeOverrideCount:value.manualFreeOverrideCount};
+  }
 
   function summarizeMoney(rows, financial) {
     const ids = new Set(rows.map(row => row.id));
@@ -148,12 +183,19 @@
     const bucket = () => ({quantity: units(), eq4x8: 0, eq25: 0, value: null,
       knownValueTHB: null, complete: false, unknownQuantity: units(), unpricedSpecCount: 0, valuedSpecCount: 0});
     const physical = bucket(), free = bucket(), catalogVerified = !!stock.savedCatalog;
+    const reservationTotals={demand:units(),allocated:units(),shortage:units(),manualFreeDelta:units()};let manualFreeOverrideCount=0;
     let physicalKnown = 0, freeKnown = 0;
     for (const row of stock.rows) {
       requireValue(typeof row.key === 'string' && row.key && !keys.has(row.key), 'ทะเบียนสต๊อกซ้ำหรือไม่มีรหัส');
       keys.add(row.key);
       requireValue(['sheet','strip'].includes(row.unit) && valid(row.qty) && valid(row.freeQty) &&
         [row.w,row.l,row.t].every(v => Number.isFinite(Number(v)) && Number(v) > 0), 'ยอดหรือหน่วยสต๊อกไม่ครบ');
+      if(valid(row.committedQty)){
+        reservationTotals.demand[row.unit]+=row.committedQty;reservationTotals.allocated[row.unit]+=Math.min(row.qty,row.committedQty);
+        reservationTotals.shortage[row.unit]+=Math.max(row.committedQty-row.qty,0);
+        reservationTotals.manualFreeDelta[row.unit]+=row.freeQty-Math.max(row.qty-row.committedQty,0);
+      }else reservationTotals.demand[row.unit]=NaN;
+      if(row.manualFreeOverride===true||row.freeOverride)manualFreeOverrideCount++;
       for (const [target, field, valueField] of [[physical,'qty','catalogValue'],[free,'freeQty','catalogFreeValue']]) {
         const qty = row[field], area = Number(row.w) * Number(row.l) / (1220 * 2440);
         target.quantity[row.unit] += qty;
@@ -176,15 +218,19 @@
     }
     return {physical,free,stockReportDate:stock.reportDate,stockRevision:stock.revision,
       catalogRevision:stock.savedCatalog?.catalogRevision ?? null,stockUpdatedAt:stock.updatedAt || '',
-      fx:stock.headerExchangeRate || null,source:'current-central-saved-stock',queueApplied:false};
+      fx:stock.headerExchangeRate || null,source:'current-central-saved-stock',queueApplied:false,
+      planChecksum:stock.reservationPlan?.checksum||stock.sellablePlan?.checksum||null,planCapturedAt:stock.reservationPlan?.capturedAt||stock.sellablePlan?.source?.capturedAt||null,
+      reservationTotals,manualFreeOverrideCount};
   }
-  function sourceText(model, warehouse, _expanded, _pendingMessage, currentMonthSold) {
-    const sales = model ? `จองอื่น/รายละเอียดหัวข้อ02: ${model.monthLabel} · ทุกความหนา · อ่านขาย ${model.sourceCapturedAt || 'ไม่ระบุเวลา'} · เป็นชุดตรวจย้อนหลัง ไม่ใช่ฟีดขายสด`
-      : 'จองอื่น/รายละเอียดหัวข้อ02: รอโหลดชุดรายงานเดือนที่ตรวจครบ';
+  function sourceText(model, warehouse, _expanded, _pendingMessage, currentMonthSold, currentAllocation) {
+    const allocation=currentAllocationView(currentAllocation,warehouse,currentMonthSold);
+    const allocationSource=allocation.status==='verified-allocation'?`จองอื่นๆ: ${allocation.monthLabel} · แผนจองส่วนกลางรุ่น ${allocation.stock.revision} · รวมยอดค้างเดือนอื่นในการคำนวณ Free แยกต่างหาก`:`จองอื่นๆ/การจัดสรร: ${allocation.reason}`;
+    const sales = model ? `รายละเอียดหัวข้อ02: ${model.monthLabel} · ทุกความหนา · อ่านขาย ${model.sourceCapturedAt || 'ไม่ระบุเวลา'} · เป็นชุดตรวจย้อนหลัง ไม่ใช่ฟีดขายสด`
+      : 'รายละเอียดหัวข้อ02: รอโหลดชุดรายงานเดือนที่ตรวจครบ';
     const current = warehouse === undefined ? model : warehouse;
-    const stock = current ? `Physical/Free ทั้งคลังรายงาน ${current.stockReportDate}${current.stockRevision !== undefined ? ' · รุ่น '+current.stockRevision : ''} · Freeตามยอดที่บันทึก ไม่ใช่คิวใหม่` : 'Physical/Free รอยืนยันข้อมูลส่วนกลาง';
+    const stock = current ? `Physical/Free ทั้งคลังรายงาน ${current.stockReportDate}${current.stockRevision !== undefined ? ' · รุ่น '+current.stockRevision : ''} · ${allocation.status==='verified-allocation'?'Free จากแผนจองที่ยืนยันกับรุ่นนี้ · คงค่าปรับมือ':'Free ตามยอดที่บันทึก · การจัดสรรล่าสุดยังรอตรวจ'}` : 'Physical/Free รอยืนยันข้อมูลส่วนกลาง';
     const fx = warehouse?.fx;
-    return `${currentSoldSource(currentMonthSoldView(currentMonthSold))} · ${sales} · ${stock}${fx ? ` · เรทประเมินสต๊อก USD/THB ${fx.rate} (${fx.date})` : ''}${model ? ` · เรทชุดขาย USD/THB ${model.fx.rate} (${model.fx.date})` : ''}`;
+    return `${currentSoldSource(currentMonthSoldView(currentMonthSold))} · ${allocationSource} · ${sales} · ${stock}${fx ? ` · เรทประเมินสต๊อก USD/THB ${fx.rate} (${fx.date})` : ''}${model ? ` · เรทชุดขาย USD/THB ${model.fx.rate} (${model.fx.date})` : ''}`;
   }
   const line = (label, value, warning = false) => `<div class="ss-overview-row${warning ? ' ss-overview-warning' : ''}"><span>${esc(label)}</span><b>${value}</b></div>`;
   function receiptsHTML(info, fx) {
@@ -196,9 +242,10 @@
   function receiptDetails(info, id) {
     return `<details class="ss-settlement-details" data-stock-receipt-details="${esc(id)}"><summary>รับเมื่อไร / หลักฐานรายใบ</summary>${info.money.orders.map(order => `<div><b>${esc(order.ref || 'ยังไม่มีเลขใบ')} · ${esc(order.customer)}</b><span>ยอดขาย ${esc(nativeText(order.sale))}</span>${order.receiptEvents.map(event => `<small>${esc(event.date || (event.month ? event.month + ' · ไม่ระบุวัน' : 'ยังไม่ระบุวันรับ'))} · ${esc(event.currency)} ${n(event.amount)}</small>`).join('')}${order.unconfirmed.THB || order.unconfirmed.USD ? `<small>ยังแยกรับ/คงเหลือไม่ได้ ${esc(nativeText(order.unconfirmed))}${order.partial ? ' · เลือกไม่ครบใบ จึงไม่เฉลี่ยงวดเงิน' : ''}</small>` : ''}</div>`).join('')}</details>`;
   }
-  function render(model, expanded = new Set(), warehouse, pendingMessage = 'รอโหลดรายงานเดือนที่ตรวจครบ', currentMonthSold) {
+  function render(model, expanded = new Set(), warehouse, pendingMessage = 'รอโหลดรายงานเดือนที่ตรวจครบ', currentMonthSold, currentAllocation) {
     const fx = model?.fx.rate;
     const sold = currentMonthSoldView(currentMonthSold);
+    const allocation=currentAllocationView(currentAllocation,warehouse,sold),verified=allocation.status==='verified-allocation';
     const current = warehouse === undefined ? model : warehouse;
     const physical = current?.physical, free = current?.free;
     const physicalMoney = physical?.value?.equivalentTHB ?? physical?.knownValueTHB ?? null;
@@ -206,22 +253,27 @@
     const cards = [
       {id:'physical', label:'สต๊อกจริง · ทั้งคลัง', data:physical, money:physicalMoney, moneyLabel:'มูลค่าสต๊อก · ราคาประเมินที่บันทึก',
         breakdown:current ? line('ฐานข้อมูล',esc(current.stockReportDate)+(current.stockRevision !== undefined ? ' · รุ่น '+esc(current.stockRevision) : '')) + line('เทียบ 4×8 ความหนาเดิม · รวมไม้แถบ',n(physical.eq4x8)+' แผ่นเทียบ') + line('เทียบ 4×8 หนา 2.5 · รวมไม้แถบ',n(physical.eq25)+' แผ่นเทียบ') : '',
-        basis:'Physical ทั้งคลัง ไม่ใช่ยอดเฉพาะเดือนขาย · ยังไม่ปรับตามคิวใหม่'},
+        basis:'Physical ทั้งคลัง ไม่ใช่ยอดเฉพาะเดือนขาย'},
       sold.status==='verified-quantities' ? {id:'sold',label:'ขายแล้วเดือนนี้',month:sold.month,data:sold,money:null,
         moneyLabel:'ราคาขาย / เงินรับจริง',breakdown:line('เดือนปัจจุบัน · เวลาไทย',esc(sold.monthLabel)) + line('โหลดแล้ว',qtyText(sold.loaded)) +
           line('รับเงิน/มัดจำ · ยังไม่โหลด',qtyText(sold.paidOrDeposit)) + line('LCมีETD · ขายแล้วรอเก็บLC',qtyText(sold.lcETD)) +
           line('หลักฐานราคา / รับเงิน','ยังไม่มีหลักฐานราคาขาย/รับเงินตรงชุดนี้',true) + line('ข้อมูลหน้า 09',esc(new Date(sold.source.capturedAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))),
         basis:'นับแต่ละรายการครั้งเดียว · รับมัดจำไม่เท่ากับรับครบ · ชุดหน้า 09 ที่ตรวจแล้ว ไม่ใช่ฟีดขายสด · ไม่เปลี่ยนสต๊อกหรือยอดจอง'}
         : {id:'sold',label:'ขายแล้วเดือนนี้',month:sold.month,pending:true,pendingMessage:sold.reason},
-      model ? {id:'reserved', label:'จองอื่น · ไม่ซ้ำขายแล้ว', data:model.reserved, money:model.reserved.value?.equivalentTHB ?? null,
-        moneyLabel:'มูลค่าความต้องการ · ราคาประเมินสต๊อก', breakdown:line('PI/มีเรือ + ETD · ไม่รวมLCที่ขายแล้ว',qtyText(model.reserved.quantity)) +
-          line('มูลค่าขายตามใบในกลุ่มนี้',model.reserved.money.complete ? money(totalTHB(model.reserved.money.sale,fx)) : 'ยังไม่ครบ') +
-          line('มีของ / ต้องผลิต', 'รอตรวจจัดสรรทั้งคิว', true) + line('รอเงื่อนไข · แยกจากจองอื่น',qtyText(model.waiting.quantity)),
-        basis:'เฉพาะเดือนที่เลือก ไม่ได้ใช้แทนจองทั้งคลัง · รอเงื่อนไขไม่เท่ากับยกเลิก', detail:receiptDetails(model.reserved,'reserved')}
-        : {id:'reserved',label:'จองอื่น · เดือนที่เลือก',pending:true},
+      verified ? {id:'reserved',label:'จองอื่นๆ · ไม่ซ้ำขายแล้ว',month:allocation.month,data:{quantity:allocation.current.other.demand},money:null,
+        moneyLabel:'มูลค่าขาย / ราคาประเมิน',breakdown:line('เฉพาะเดือนปัจจุบัน · เวลาไทย',esc(allocation.monthLabel))+
+          line('มีของรองรับ',qtyText(allocation.current.other.allocated))+line('ต้องผลิตเพิ่ม',qtyText(allocation.current.other.shortage))+
+          line('หลักฐานมูลค่า','ยังไม่มีหลักฐานมูลค่าตรงชุดนี้',true),
+        basis:'ความต้องการจองอื่น = มีของรองรับ + ต้องผลิต · ไม่ซ้ำขายแล้ว · ไม่รวมยอดค้างเดือนอื่นในหัวกล่อง'}
+        : {id:'reserved',label:'จองอื่นๆ · ไม่ซ้ำขายแล้ว',month:allocation.month,pending:true,pendingMessage:allocation.reason},
       {id:'free', label:'Free Stock · ทั้งคลัง', data:free, money:freeMoney, moneyLabel:'มูลค่า Free · ราคาประเมินที่บันทึก',
-        breakdown:current ? line('ฐานข้อมูล',esc(current.stockReportDate)+(current.stockRevision !== undefined ? ' · รุ่น '+esc(current.stockRevision) : '')) + line('เทียบ 4×8 หนา 2.5 · รวมไม้แถบ',n(free.eq25)+' แผ่นเทียบ') + line('ฐานจัดสรร', 'แผนเดิมที่บันทึก · ไม่ใช่ยอดหลังคิวใหม่', true) : '',
-        basis:'รวมทุกเดือนและทุกความหนา · ไม่เพิ่มคืนของที่เพิ่งขึ้นโหลดโดยยังไม่ตรวจ Physical'}
+        breakdown:current ? line('ฐานข้อมูล',esc(current.stockReportDate)+(current.stockRevision !== undefined ? ' · รุ่น '+esc(current.stockRevision) : '')) + line('เทียบ 4×8 หนา 2.5 · รวมไม้แถบ',n(free.eq25)+' แผ่นเทียบ') +
+          (verified?line('มีของรองรับขายแล้วเดือนนี้ · ยังไม่โหลด',qtyText(allocation.current.soldUnloaded.allocated))+line('มีของรองรับจองอื่นเดือนนี้',qtyText(allocation.current.other.allocated))+
+            line('มีของรองรับยอดค้างเดือนอื่น',qtyText(allocation.carry.allocated))+line('Free ตามสูตร · Physical ลบของที่จัดสรร',qtyText(allocation.totals.formulaFree))+
+            line('Free ที่บันทึกจริง',qtyText(allocation.totals.savedFree))+
+            (allocation.manualFreeOverrideCount?line('ปรับ Free ด้วยมือ '+n(allocation.manualFreeOverrideCount)+' สเปก · ส่วนต่างจากสูตร',qtyText(allocation.totals.manualFreeDelta),true):''):
+            line('ฐานจัดสรร',esc(allocation.reason)+' · Free นี้ยังเป็นยอดที่บันทึกไว้',true)) : '',
+        basis:verified?'รวมทุกเดือนและทุกความหนา · หักเฉพาะของจริงที่จัดสรรครั้งเดียว ไม่หักยอดขาดผลิตหรือโหลดแล้วซ้ำ · คงค่าปรับ Free ที่บันทึก':'รวมทุกเดือนและทุกความหนา · คง Free ที่บันทึก ไม่ใช้ยอดขายหรือจองเก่าคำนวณแทน'}
     ];
     return cards.map(card => {
       if(card.pending || !card.data)return `<div class="ss-kpi ss-kpi-${card.id}" data-stock-card="${card.id}"${card.month?` data-order-header-month="${esc(card.month)}"`:''}><h3>${esc(card.label)}</h3><p role="status">${esc(card.pending ? card.pendingMessage || pendingMessage : 'รอยืนยันสต๊อกส่วนกลางล่าสุด')}</p><small>ยังไม่แสดงชุดเก่าหรือเดือนอื่นแทน</small></div>`;
@@ -230,10 +282,10 @@
       const coverage = liveWarehouse ? card.data.complete ? `<small>ชุดราคาส่วนกลาง ${esc(current.catalogRevision ?? '—')} · ไม่ใช่ราคาขายจริง</small>` :
         `<small class="ss-overview-warning">${card.data.knownValueTHB === null ? 'รอยืนยันชุดราคาหรือเรทส่วนกลาง' : 'เฉพาะส่วนที่ยืนยันราคาได้'}${card.data.unpricedSpecCount ? ' · รอราคา/เรท '+n(card.data.unpricedSpecCount)+' สเปก ('+qtyText(card.data.unknownQuantity)+')' : ''} · ไม่ใช้ 0 หรือราคาชุดเก่าแทน</small>` : '';
       const stockFx = liveWarehouse && current.fx ? `<small>USD/THB ${n(current.fx.rate)} · ${esc(current.fx.date)}${current.fx.status !== 'current' ? ' · คงเรทที่ยืนยันแล้ว ไม่ใช่เรทสด' : ''}</small>` : '';
-      const content = `<div class="ss-card-overview"><h3>${esc(card.label)}</h3><div class="ss-overview-quantity"><strong>${n(card.data.quantity.sheet)}</strong><span>แผ่น</span>${card.data.quantity.strip ? `<small>ไม้แถบ ${n(card.data.quantity.strip)} ชิ้น</small>` : ''}</div><div class="ss-overview-value"><span>${esc(card.moneyLabel)}</span><b>${money(card.money)}${liveWarehouse && !card.data.complete && card.money !== null ? ' · ส่วนที่ยืนยันได้' : ''}</b>${native}${coverage}${stockFx}</div><div class="ss-overview-breakdown">${card.breakdown}</div><small class="ss-overview-basis">${esc(card.basis)}</small>${model?.stale && card.id!=='sold' ? `<small class="ss-overview-warning">${liveWarehouse ? 'ยอดคลังส่วนกลางล่าสุด · ต่างจากฐานหัวข้อ02ที่ยังเป็นชุดตรวจย้อนหลัง' : 'วัน/จำนวน/ราคา/เรทต่างหรือยังยืนยันไม่ได้ · ชุดตรวจย้อนหลัง'}</small>` : ''}</div>`;
+      const content = `<div class="ss-card-overview"><h3>${esc(card.label)}</h3><div class="ss-overview-quantity"><strong>${n(card.data.quantity.sheet)}</strong><span>แผ่น</span>${card.data.quantity.strip ? `<small>ไม้แถบ ${n(card.data.quantity.strip)} ชิ้น</small>` : ''}</div><div class="ss-overview-value"><span>${esc(card.moneyLabel)}</span><b>${money(card.money)}${liveWarehouse && !card.data.complete && card.money !== null ? ' · ส่วนที่ยืนยันได้' : ''}</b>${native}${coverage}${stockFx}</div><div class="ss-overview-breakdown">${card.breakdown}</div><small class="ss-overview-basis">${esc(card.basis)}</small>${model?.stale && !['sold','reserved'].includes(card.id) ? `<small class="ss-overview-warning">${liveWarehouse ? 'ยอดคลังส่วนกลางล่าสุด · ต่างจากฐานหัวข้อ02ที่ยังเป็นชุดตรวจย้อนหลัง' : 'วัน/จำนวน/ราคา/เรทต่างหรือยังยืนยันไม่ได้ · ชุดตรวจย้อนหลัง'}</small>` : ''}</div>`;
       const cardMonth=card.month||model?.month;
       return `<div class="ss-kpi ss-kpi-${card.id}" data-stock-card="${card.id}"${cardMonth ? ` data-order-header-month="${esc(cardMonth)}"` : ''}${liveWarehouse ? ` data-current-stock-revision="${esc(current.stockRevision)}"` : ''}><div class="ss-card-overview-wrap"${open?' hidden':''}>${content}</div><button type="button" class="ss-card-toggle" data-stock-card-toggle="${card.id}" aria-expanded="${open}" aria-controls="ss-card-details-${card.id}" data-html2canvas-ignore>${open?'ซ่อน':'ดู'}รายละเอียด · ${esc(card.label)}</button><div class="ss-card-detail-content" id="ss-card-details-${card.id}"${open?'':' hidden'}>${content}${card.detail || ''}</div></div>`;
     }).join('');
   }
-  return {build, render, sourceText, summarizeMoney, warehouseProjection,currentBangkokMonth,currentMonthSoldView};
+  return {build, render, sourceText, summarizeMoney, warehouseProjection,currentBangkokMonth,currentMonthSoldView,currentAllocationView};
 });

@@ -74,11 +74,11 @@ test('focus or draft changes during polling prevent a same-revision report retry
   let finish,refreshes=0;const {c}=runtime({Date:{now:()=>60000},refresh:async()=>{refreshes++;}});c.request=()=>new Promise(resolve=>{finish=resolve;});vm.runInContext(poll,c);
   const inflight=c.poll();c.document.activeElement={matches:()=>true};finish({revision:58});await inflight;assert.equal(refreshes,0);
 });
-test('existing same-revision authenticated poll refreshes only sold source, never whole stock or editors',async()=>{
-  const sold=[],value={version:1,status:'pending',month:'2000-10'},h=runtime();let accepts=0,refreshes=0;
-  h.c.window.AAFSalesPreview.getReportLoadStatus=()=>({state:'ready'});h.c.window.AAFStockSummary={setCurrentMonthSold:v=>sold.push(v)};
-  h.c.accept=()=>accepts++;h.c.refresh=async()=>refreshes++;h.c.fetch=async()=>({ok:true,status:200,json:async()=>({ok:true,revision:58,currentMonthSold:value})});
-  vm.runInContext(poll,h.c);await h.c.poll();assert.equal(sold.length,1);assert.equal(sold[0],value);assert.equal(accepts,0);assert.equal(refreshes,0);assert.equal(h.c.pollDelay,15000);
+test('existing same-revision authenticated poll refreshes current sold and allocation sources, never whole stock or editors',async()=>{
+  const sold=[],value={version:1,status:'pending',month:'2000-10'},allocation={version:1,status:'pending',month:'2000-10',reason:'Synthetic allocation pending'},h=runtime();let accepts=0,refreshes=0;
+  h.c.window.AAFSalesPreview.getReportLoadStatus=()=>({state:'ready'});h.c.window.AAFStockSummary={setCurrentMonthSold:(...v)=>sold.push(v)};
+  h.c.accept=()=>accepts++;h.c.refresh=async()=>refreshes++;h.c.fetch=async()=>({ok:true,status:200,json:async()=>({ok:true,revision:58,currentMonthSold:value,currentAllocation:allocation})});
+  vm.runInContext(poll,h.c);await h.c.poll();assert.equal(sold.length,1);assert.equal(sold[0][0],value);assert.equal(sold[0][1],allocation);assert.equal(accepts,0);assert.equal(refreshes,0);assert.equal(h.c.pollDelay,15000);
   h.c.fetch=async()=>({ok:false,status:401});await h.c.poll();assert.equal(sold.length,1,'denied response must not repaint');
 });
 test('same-revision sold source rejects a previously returned response after session change',async()=>{
