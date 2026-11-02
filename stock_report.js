@@ -40,7 +40,7 @@
         window.AAFSalesPreview?.setAccess?.({refreshReport:force,salesMode:data.actor?.owner!==true,revision:data.revision,reportDate:data.report?.reportDate,rows:data.rows});
         window.AAFOrderReview?.setAccess?.({refreshReport:force,notesReadOnly:true,revision:data.revision,reportDate:data.report?.reportDate});
         window.AAFStockSummary.update(data,r=>values(r,data));revision=String(data.revision);
-      }
+      }else window.AAFStockSummary.setCurrentMonthSold?.(data.currentMonthSold);
       signin.hidden=true;authRequired=false;
       const now=new Date().toLocaleString('th-TH',{timeZone:'Asia/Bangkok'});
       tell('ข้อมูลที่กดเซฟแล้วทั้งชุด · ตรวจสอบล่าสุด '+now+' · หน้านี้ดูข้อมูลอย่างเดียว');

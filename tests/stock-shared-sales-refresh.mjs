@@ -54,7 +54,7 @@ test('401 and403 immediately hide protected surfaces for both account and capabi
 });
 test('same-revision pending reports retry through refresh no more than once per minute',async()=>{
   let now=59999,refreshes=0,reads=0;const {c}=runtime({Date:{now:()=>now},request:undefined,refresh:async()=>{refreshes++;}});
-  c.request=async()=>{reads++;return {revision:58};};vm.runInContext(poll,c);
+  c.request=async()=>{reads++;const data={revision:58};c.responseScopes.set(data,{auth:'TEST-ONLY',epoch:c.accessEpoch,day:null});return data;};vm.runInContext(poll,c);
   assert.equal(c.pollDelay,15000);await c.poll();assert.equal(refreshes,0);
   now=60000;await c.poll();assert.equal(refreshes,1);now=75000;await c.poll();assert.equal(refreshes,1);
   now=120000;await c.poll();assert.equal(refreshes,2);assert.equal(reads,4);
@@ -73,6 +73,17 @@ test('automatic retry does not run while hidden, unauthorized, dirty, saving or 
 test('focus or draft changes during polling prevent a same-revision report retry',async()=>{
   let finish,refreshes=0;const {c}=runtime({Date:{now:()=>60000},refresh:async()=>{refreshes++;}});c.request=()=>new Promise(resolve=>{finish=resolve;});vm.runInContext(poll,c);
   const inflight=c.poll();c.document.activeElement={matches:()=>true};finish({revision:58});await inflight;assert.equal(refreshes,0);
+});
+test('existing same-revision authenticated poll refreshes only sold source, never whole stock or editors',async()=>{
+  const sold=[],value={version:1,status:'pending',month:'2000-10'},h=runtime();let accepts=0,refreshes=0;
+  h.c.window.AAFSalesPreview.getReportLoadStatus=()=>({state:'ready'});h.c.window.AAFStockSummary={setCurrentMonthSold:v=>sold.push(v)};
+  h.c.accept=()=>accepts++;h.c.refresh=async()=>refreshes++;h.c.fetch=async()=>({ok:true,status:200,json:async()=>({ok:true,revision:58,currentMonthSold:value})});
+  vm.runInContext(poll,h.c);await h.c.poll();assert.equal(sold.length,1);assert.equal(sold[0],value);assert.equal(accepts,0);assert.equal(refreshes,0);assert.equal(h.c.pollDelay,15000);
+  h.c.fetch=async()=>({ok:false,status:401});await h.c.poll();assert.equal(sold.length,1,'denied response must not repaint');
+});
+test('same-revision sold source rejects a previously returned response after session change',async()=>{
+  let auth='TEST-ONLY';const sold=[],h=runtime({token:()=>auth,fetch:async()=>ok(58)});h.c.window.AAFStockSummary={setCurrentMonthSold:v=>sold.push(v)};
+  const data=await h.c.request();h.c.request=async()=>{auth='DIFFERENT-TEST-ONLY';return data;};vm.runInContext(poll,h.c);await h.c.poll();assert.equal(sold.length,0);assert.equal(h.c.accessDenied,true);
 });
 test('late successful read cannot repaint protected stock after a concurrent401 or403',async()=>{
   for(const status of [401,403]){

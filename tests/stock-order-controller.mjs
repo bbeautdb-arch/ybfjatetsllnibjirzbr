@@ -70,7 +70,7 @@ test('read/retry cannot clear pending uncertainty while combined POST is in flig
   release();await writing;assert(!h.api.isUncertain());assert(!h.api.isBusy());
 });
 class Node{constructor(){this.children=[];this.style={};this.listeners={};}append(...n){this.children.push(...n);}replaceChildren(...n){this.children=n;}setAttribute(){}addEventListener(k,v){this.listeners[k]=v;}}
-function browser(){let token='synthetic-auth';const calls=[],summaries=[],mounted=[],responses=[];const win={document:{createElement:()=>new Node()},AAFStockAccess:{token:()=>token},AAFStockNotesCore:core,AAFStockSummary:{setOrderReview:(...args)=>summaries.push(args)},AAFOrderReviewUI:{mount:(host,review,services)=>{const v={dirty:false,destroyed:false,hasDirty(){return this.dirty;},update(r){this.review=r;},destroy(){this.destroyed=true;}};mounted.push({host,review,services,v});return v;}},addEventListener(){},async fetch(url,options){calls.push({url,options});const value=await responses.shift();return{status:value.status||200,ok:!value.status,json:async()=>value};}};return{api:boot(win),win,calls,summaries,mounted,responses,setToken:v=>token=v};}
+function browser(){let token='synthetic-auth';const calls=[],summaries=[],mounted=[],responses=[],soldInvalidations=[];const win={document:{createElement:()=>new Node()},AAFStockAccess:{token:()=>token},AAFStockNotesCore:core,AAFStockSummary:{setOrderReview:(...args)=>summaries.push(args),invalidateCurrentMonthSold:()=>soldInvalidations.push(true)},AAFOrderReviewUI:{mount:(host,review,services)=>{const v={dirty:false,destroyed:false,hasDirty(){return this.dirty;},update(r){this.review=r;},destroy(){this.destroyed=true;}};mounted.push({host,review,services,v});return v;}},addEventListener(){},async fetch(url,options){calls.push({url,options});const value=await responses.shift();return{status:value.status||200,ok:!value.status,json:async()=>value};}};return{api:boot(win),win,calls,summaries,mounted,responses,soldInvalidations,setToken:v=>token=v};}
 const report=()=>({ok:true,revision:1,stockReportDate:'2026-01-01',availableMonths:['2026-01'],selectedMonth:'2026-01',review:{metadata:{month:'2026-01'},rows:[]},readModel:{sourceIsLive:false,queueApplied:false,warning:'dated evidence'}});
 test('authorized overview is GET only, same month and no-store; reattach preserves drafts',async()=>{
   const h=browser();h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push(report());await h.api.attach(new Node());assert.equal(h.mounted.length,1);assert.equal(h.calls[0].options.method,'GET');assert.equal(h.calls[0].options.cache,'no-store');assert.equal(h.calls[0].options.headers.Authorization,'Bearer synthetic-auth');assert(!h.calls[0].url.includes('synthetic-auth'));h.mounted[0].v.dirty=true;await h.api.attach(new Node());assert.equal(h.mounted.length,1);assert(h.api.isDirty());assert.equal(h.api.selectMonth('2026-02'),false);
@@ -79,7 +79,15 @@ test('invalid month/revision and denied auth cannot paint private review',async(
   for(const value of [{...report(),revision:2},{...report(),selectedMonth:'2026-02'},{status:403,ok:false}]){const h=browser();h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push(value);await h.api.attach(new Node());assert.equal(h.mounted.length,0);assert(!h.summaries.some(([r])=>r));}
 });
 test('stale async reply after invalidation cannot restore private report',async()=>{
-  const h=browser();let resolve;h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push(new Promise(r=>resolve=r));const p=h.api.attach(new Node());h.api.invalidate('expired');resolve(report());await p;assert.equal(h.mounted.length,0);assert(!h.summaries.some(([r])=>r));
+  const h=browser();let resolve;h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push(new Promise(r=>resolve=r));const p=h.api.attach(new Node());h.api.invalidate('expired');resolve(report());await p;assert.equal(h.mounted.length,0);assert(!h.summaries.some(([r])=>r));assert.equal(h.soldInvalidations.length,1);
+});
+test('auth failures, account changes and logout clear the independent current sold card',async()=>{
+  for(const status of [401,403]){
+    const h=browser();h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push({status,ok:false});await h.api.attach(new Node());assert.equal(h.soldInvalidations.length,1);
+  }
+  for(const token of ['', 'different-user']){
+    const h=browser();h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push(report());await h.api.attach(new Node());h.setToken(token);h.api.setAccess({revision:1,reportDate:'2026-01-01'});assert.equal(h.soldInvalidations.length,1);
+  }
 });
 test('403 POST and same-credential 401 retain dirty UI; no automatic repeat or prior-account restoration',async()=>{
   for(const status of [403,401]){

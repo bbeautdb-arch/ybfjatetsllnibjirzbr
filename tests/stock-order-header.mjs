@@ -63,8 +63,8 @@ test('missing prices are unknown, not zero sale values; missing stock valuation 
   const html=api.render(m);assert.match(html,/ยังยืนยันไม่ได้/);assert.equal(m.physical.value,null);assert.equal(m.free.knownValueTHB,null);
 });
 test('render escapes customer text, keeps all four cards collapsed and labels dated stock',()=>{
-  const r=fixture();r.financial.orders[0].customer='<script>bad()</script>';const html=api.render(api.build(r,{stale:true}));
-  assert.equal((html.match(/data-stock-card="/g)||[]).length,4);assert.equal((html.match(/aria-expanded="false"/g)||[]).length,4);
+  const r=fixture();r.financial.orders[3].customer='<script>bad()</script>';const html=api.render(api.build(r,{stale:true}));
+  assert.equal((html.match(/data-stock-card="/g)||[]).length,4);assert.equal((html.match(/aria-expanded="false"/g)||[]).length,3,'pending current-month sold must not expand dated receipts');
   assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>bad/);assert.match(html,/ชุดตรวจย้อนหลัง/);assert.match(html,/แผนเดิม/);
 });
 test('legacy summary callbacks cannot replace new monthly header; clear never falls back to old sales',()=>{
@@ -74,7 +74,7 @@ test('legacy summary callbacks cannot replace new monthly header; clear never fa
   summary.setOrderReview(fixture(),{selectedMonth:'2026-04'});const html=summary.renderKpis({sold:{byUnit:{sheet:987654}}},null);
   assert.match(html,/data-order-header-month="2026-04"/);assert.doesNotMatch(html,/987,654/);
   summary.setSalesSummary({sold:{byUnit:{sheet:987654}}});assert.equal(summary.renderKpis({},null),html);
-  summary.setOrderReview(null,null);assert.doesNotMatch(summary.renderKpis({sold:{byUnit:{sheet:987654}}},null),/987,654|data-order-header-month/);
+  summary.setOrderReview(null,null);assert.doesNotMatch(summary.renderKpis({sold:{byUnit:{sheet:987654}}},null),/987,654|data-order-header-month="2026-04"/);
 });
 test('summary keeps hidden legacy services and the new review host alive across stock refresh',()=>{
   const source=fs.readFileSync(new URL('../stock_summary.js',import.meta.url),'utf8');
@@ -111,7 +111,7 @@ test('current warehouse cards and table use the same catalog, units and saved Fr
   assert.match(cardSection(html,'physical'),/<strong>73<\/strong>/);assert.match(cardSection(html,'physical'),/4,420/);
   assert.doesNotMatch(cardSection(html,'physical'),/<strong>100<\/strong>|4,000|999/);
   assert.match(cardSection(html,'free'),/<strong>29<\/strong>/);assert.match(cardSection(html,'free'),/1,755/);
-  assert.match(cardSection(html,'sold'),/USD 148/);assert.match(cardSection(html,'sold'),/ชุดตรวจย้อนหลัง/);
+  assert.match(cardSection(html,'sold'),/ขายแล้วเดือนนี้/);assert.match(cardSection(html,'sold'),/รอข้อมูลขายเดือน/);assert.doesNotMatch(cardSection(html,'sold'),/USD 148|ชุดตรวจย้อนหลัง/);
   assert.match(api.sourceText(monthly,current),/2026-04-04 · รุ่น 8/);assert.match(api.sourceText(monthly,current),/ไม่ใช่ฟีดขายสด/);
   assert.equal(JSON.stringify({stock,catalog}),before);
 });
@@ -120,7 +120,7 @@ test('current stock is visible before the monthly review or price catalog arrive
   const {stock}=currentStockFixture(),current=api.warehouseProjection(stock),html=api.render(null,new Set(),current,'รอตรวจเดือนใหม่');
   assert.equal(current.physical.knownValueTHB,null);assert.equal(current.free.knownValueTHB,null);
   assert.match(cardSection(html,'physical'),/<strong>73<\/strong>/);assert.match(cardSection(html,'free'),/<strong>29<\/strong>/);
-  assert.match(cardSection(html,'sold'),/รอตรวจเดือนใหม่/);assert.match(cardSection(html,'reserved'),/รอตรวจเดือนใหม่/);
+  assert.match(cardSection(html,'sold'),/รอข้อมูลขายเดือน/);assert.match(cardSection(html,'reserved'),/รอตรวจเดือนใหม่/);
   assert.match(cardSection(html,'physical'),/รอยืนยันชุดราคาหรือเรทส่วนกลาง/);assert.doesNotMatch(cardSection(html,'physical'),/฿ 0(?:[< ·]|$)/);
 });
 
@@ -184,6 +184,6 @@ test('initial hero and current warehouse use current FX, while dated sales retai
   m=summary.withSavedCatalog({...m,headerExchangeRate:fx,salesSummary:{catalog:{fxThbPerUsd:31,fxStatus:'OLD SYNTHETIC FX'}}},catalog,fx);
   const html=summary.renderHTML(m),hero=html.split('class="ss-exchange"')[1].split('</header>')[0];
   assert.match(hero,/<b>30<\/b>/);assert.doesNotMatch(hero,/OLD SYNTHETIC FX|<b>31<\/b>/);
-  assert.match(cardSection(html,'physical'),/4,420/);assert.match(cardSection(html,'sold'),/4,588/);
+  assert.match(cardSection(html,'physical'),/4,420/);assert.doesNotMatch(cardSection(html,'sold'),/4,588/);assert.match(cardSection(html,'sold'),/ขายแล้วเดือนนี้/);
   assert.match(html,/เรทประเมินสต๊อก USD\/THB 30 \(2026-04-03\)/);assert.match(html,/เรทชุดขาย USD\/THB 31 \(2026-04-02\)/);
 });

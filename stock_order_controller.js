@@ -66,6 +66,7 @@
     const invalidate=(message='กรุณาโหลดข้อมูลส่วนกลางใหม่')=>{
       const keepDraft=!!auth&&token()===auth&&view?.hasDirty?.();
       epoch++;access=null;response=null;auth='';loading=null;failed=true;
+      win.AAFStockSummary?.invalidateCurrentMonthSold?.();
       if(keepDraft){
         // Same credential expired/was denied: retain the user's draft in this
         // mounted view, but no editing/write can resume without fresh access.
@@ -110,7 +111,7 @@
     function shell(){
       host=win.document.createElement('div');host.id='stock-order-review-host';
       const toolbar=win.document.createElement('div');toolbar.className='stock-order-toolbar';toolbar.style.cssText='display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0';
-      const label=win.document.createElement('label');label.textContent='เดือนขายเดียวกันในหัวข้อ 01 และ 02 ';
+      const label=win.document.createElement('label');label.textContent='เดือนรายละเอียดการขายและกล่องจองอื่น ';
       select=win.document.createElement('select');select.setAttribute('aria-label','เดือนภาพรวมการขาย');select.addEventListener('change',()=>selectMonth(select.value));label.append(select);
       const refresh=win.document.createElement('button');refresh.type='button';refresh.textContent='โหลดภาพรวมล่าสุด';refresh.addEventListener('click',()=>load(true));
       status=win.document.createElement('p');status.setAttribute('role','status');status.style.cssText='white-space:pre-wrap;font-size:13px;margin:8px 0';
