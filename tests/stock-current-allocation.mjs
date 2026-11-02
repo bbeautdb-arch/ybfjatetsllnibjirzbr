@@ -31,6 +31,9 @@ test('allocation is bound to current month, sold source, saved revision/date/pla
   const changedSold=clone(f.sold);changedSold.loaded.sheet=9;changedSold.lcETD.sheet=9;
   assert.equal(api.currentAllocationView(f.allocation,f.warehouse,changedSold).status,'pending','sold unloaded membership must match exactly');
   assert.equal(api.currentAllocationView(f.allocation,{...f.warehouse,manualFreeOverrideCount:0},f.sold).status,'pending');
+  const priorCapture='2000-10-01T00:00:00Z';
+  assert.equal(api.currentAllocationView({...f.allocation,stock:{...f.allocation.stock,planCapturedAt:priorCapture}},
+    {...f.warehouse,planCapturedAt:priorCapture},f.sold).status,'pending','matching plan capture cannot belong to an earlier Bangkok month');
 });
 test('current other demand is separate from backed stock, shortage and carry; Free is saved not formula or sales subtraction',()=>{
   const f=fixture(),html=api.render(null,new Set(),f.warehouse,'',f.sold,f.allocation),other=card(html,'reserved'),free=card(html,'free');

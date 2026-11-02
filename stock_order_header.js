@@ -65,7 +65,7 @@
       source?.page!==9||source.sourceIsLive!==false||source.checksum!==sold.source.checksum||source.capturedAt!==sold.source.capturedAt||
       !Number.isSafeInteger(stock?.revision)||stock.revision<0||String(stock.revision)!==String(warehouse.stockRevision)||stock.reportDate!==warehouse.stockReportDate||
       !/^sha256:[a-f0-9]{64}$/.test(stock.planChecksum||'')||stock.planChecksum!==warehouse.planChecksum||stock.planCapturedAt!==warehouse.planCapturedAt||
-      !Number.isFinite(Date.parse(stock.planCapturedAt))||Date.parse(stock.planCapturedAt)>Number(now)||
+      !Number.isFinite(Date.parse(stock.planCapturedAt))||Date.parse(stock.planCapturedAt)>Number(now)||currentBangkokMonth(Date.parse(stock.planCapturedAt))!==month||
       !group(value.current?.soldUnloaded)||!group(value.current?.other)||!group(value.carry)||
       !t||!['demand','allocated','shortage','physical','formulaFree','savedFree'].every(k=>bucket(t[k]))||!bucket(t.manualFreeDelta,true)||
       !Number.isSafeInteger(value.manualFreeOverrideCount)||value.manualFreeOverrideCount<0||value.manualFreeOverrideCount!==warehouse.manualFreeOverrideCount)return pending();
