@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Synthetic premium stock preview</title>
+  <link rel="stylesheet" href="../stock_premium.css?v=20261104-premium-r1">
+  <style>
+    .fixture-notice{max-width:1460px;margin:0 auto 22px;padding:16px 20px;border:1px solid #d9c397;border-radius:16px;background:#fff5db;color:#4c482c;font:14px/1.6 system-ui,sans-serif}.fixture-notice h1{font-size:18px;margin:0 0 4px}.fixture-notice p{margin:5px 0}.fixture-notice button{font:inherit;border:1px solid #baa679;border-radius:8px;background:#fffdf5;padding:8px 12px;margin:5px 6px 0 0;color:#463e25}.fixture-notice [data-failed="true"]{color:#9a2820}
+  </style>
+</head>
+<body data-aaf-premium="ivory">
+  <header class="fixture-notice">
+    <h1>SYNTHETIC — ตัวอย่างธีม ไม่ใช่ข้อมูลบริษัท</h1>
+    <p>summary, controller และ renderer ใช้โค้ดจริง · GET ทุกครั้งตอบข้อมูลจำลองในหน่วยความจำ · ทุก write ถูกปิด · ไม่เชื่อมบัญชีหรือ backend</p>
+    <p>ลองขยาย 1.6 / 3.2 → ดูที่ต้องผลิต, เปลี่ยนเดือนขาย, เปิดทะเบียนทุกสเปก และ Tab / Enter / Space · แผ่นกับไม้แถบแยกกัน · ยอดจัดสรรที่ไม่ทราบยังเป็นขีด ไม่ใช่ศูนย์</p>
+    <button type="button" id="fixture-draft">เติมร่างหมายเหตุจำลอง</button>
+    <button type="button" id="fixture-error">จำลองอ่านข้อมูลไม่สำเร็จ</button>
+    <button type="button" id="fixture-recover">อ่านข้อมูลจำลองอีกครั้ง</button>
+    <p id="fixture-checks" role="status">กำลังเตรียม…</p>
+  </header>
+  <main class="report-shell"><div id="stock-summary" data-aaf-stock-summary></div></main>
+  <script src="../stock_order_header.js"></script>
+  <script src="../stock_readiness.js"></script>
+  <script src="../stock_review_notes_bridge.js"></script>
+  <script src="../stock_order_review.js?v=20261104-premium-r1"></script>
+  <script src="../stock_order_controller.js"></script>
+  <script src="../stock_summary.js"></script>
+  <script type="module">
+    import {salesOnlyFixture} from './stock-sales-only-fixture.mjs';
+
+    // BEGIN PURE SYNTHETIC DATA — exercised independently by stock-premium.mjs.
+    function createSyntheticData(month, soldFixture) {
+      const reportDate=month+'-01', at=reportDate+'T01:00:00Z';
+      const make=(w,l,t,grade,qty,committedQty,unit='sheet',savedFree=null)=>({
+        key:'w'+w+'_l'+l+'_t'+t+'_g'+grade,sku:'SYNTH-'+w+'-'+l+'-'+t+'-'+grade,
+        desc:'สินค้าสมมติสำหรับทดสอบธีมเท่านั้น',size:unit==='strip'?'Strip':'Sheet',w,l,t,grade,unit,
+        qty,baseQty:qty,committedQty,freeQty:savedFree??Math.max(0,qty-committedQty),
+        d90:qty*.5,d180:qty*.25,d270:qty*.125,d360:0,dOver:qty*.125,
+        note:'หมายเหตุเดิมตัวอย่าง · ทดสอบข้อความยาวโดยไม่เปลี่ยนจำนวนสินค้า',followup:'ติดตามจำลอง · ไม่ใช่คำสั่งผลิต',
+        ...(savedFree===null?{}:{freeOverride:{at,by:'ผู้ทดสอบจำลอง'}})
+      });
+      const rows=[
+        make(1220,2440,2.5,'AAA',400,150),
+        make(2440,1220,1.6,'B',90,40,'sheet',75),
+        make(1220,2440,1.6,'B',0,0),
+        make(610,1220,1.6,'F',8,15.25),
+        make(1200,2400,2.5,'A',12,7),
+        make(1260,2440,3.2,'B',40,54.5),
+        make(1220,3050,4.5,'F',20,6),
+        make(25,2000,3.2,'B',1200,500,'strip'),
+        make(1220,2440,4.5,'AV',5,0),
+        make(1220,2440,2.5,'B',0,8)
+      ];
+      const keyOf=r=>[r.t,r.grade,Math.min(r.w,r.l),Math.max(r.w,r.l),r.unit].join('|');
+      const stock={ok:true,revision:7,report:{reportDate,sourceRowCount:rows.length},updatedAt:at,exchangeRate:33,permissions:{followup:true},rows,currentMonthSold:soldFixture.currentMonthSold,currentAllocation:soldFixture.currentAllocation};
+      const catalog={ok:true,revision:7,catalogRevision:2,stockReportDate:reportDate,permissions:{pricesAndNotes:true},widgetState:{privateContent:{prices:{},currencies:{},notesByThickness:{'1.6':'บันทึกเก่ารวมตามความหนา · ข้อมูลสมมติ อ่านอย่างเดียว'},notesBySpec:{[keyOf(rows[0])]:'ร่างและหมายเหตุทดสอบเท่านั้น · ตรวจว่าเปลี่ยนสีแล้วข้อความยังอ่านได้',[keyOf(rows[1])]:'หมายเหตุร่วมของสเปกกลับด้าน · เก็บแถวศูนย์แยกไว้ในทะเบียน'}}}};
+      const savedCatalog={revision:7,reportDate,catalogRevision:2,savedAt:at,rows:rows.map((r,i)=>({...r,price:i===3?null:12+i,currency:'THB'}))};
+      return {stock,catalog,savedCatalog};
+    }
+    function calculateSyntheticRow(r) {
+      return {eq:r.qty*r.w*r.l/(1220*2440)*r.t/2.5,value:r.qty*12,freeValue:r.freeQty*12,price:12,curr:'THB'};
+    }
+    // END PURE SYNTHETIC DATA
+
+    const current=window.AAFOrderHeader.currentBangkokMonth(),[year,month]=current.split('-').map(Number);
+    const prior=new Date(Date.UTC(year,month-2,15)).toISOString().slice(0,7);
+    const f=salesOnlyFixture(current),a=salesOnlyFixture(prior,'b');
+    // A current capture timestamp keeps this preview valid even before 08:00 on day 1.
+    const capturedAt=new Date().toISOString();
+    f.currentMonthSold.source.capturedAt=capturedAt;
+    f.readModel.source.capturedAt=capturedAt;
+    f.review.metadata.sourceSalesCapturedAt=capturedAt;
+    f.envelope.availableMonths=[current,prior];
+    for(const row of a.review.rows)delete row.soldGroup;
+    a.review.metadata.title='ชุดย้อนหลังสังเคราะห์';a.review.metadata.sourceSalesCapturedAt=prior+'-22T01:00:00Z';
+    const {stock,catalog,savedCatalog}=createSyntheticData(current,f),sourceBefore=JSON.stringify(stock);
+    const archive={ok:true,readOnly:true,revision:7,stockReportDate:stock.report.reportDate,selectedMonth:prior,availableMonths:[current,prior],reviewRevision:'sha256:'+'c'.repeat(64),review:a.review,readModel:{kind:'dated-order-review',selectedMonth:prior,historical:true,sourceCapturedAt:a.review.metadata.sourceSalesCapturedAt,sourceIsLive:false,queueApplied:false,stale:true,warning:'ชุดตรวจย้อนหลังสมมติ ณ วันที่ 22 · ไม่ใช่ยอดปิดเดือน'}};
+    let getCount=0,writeAttempts=0,simulateReadFailure=false;
+    const shadow=()=>[...document.querySelectorAll('#stock-order-review-host *')].find(node=>node.shadowRoot)?.shadowRoot;
+    const checks=()=>{const node=document.getElementById('fixture-checks'),unchanged=sourceBefore===JSON.stringify(stock);node.textContent='GET จำลอง '+getCount+' ครั้ง · ปิด write '+writeAttempts+' ครั้ง · '+(unchanged?'ข้อมูลตั้งต้นคงเดิม':'ผิดพลาด: ข้อมูลตั้งต้นเปลี่ยน')+' · ทะเบียน '+stock.rows.length+' แถว';node.dataset.failed=String(!unchanged);};
+    window.AAFStockAccess={token:()=> 'synthetic-memory-session'};
+    // Never delegate to native fetch, persist credentials, or call a business API.
+    window.fetch=async(url,options={})=>{
+      if(options.method&&options.method!=='GET'){writeAttempts++;checks();throw Error('Synthetic preview blocks every write');}
+      getCount++;checks();if(simulateReadFailure)throw Error('จำลองการอ่านไม่สำเร็จ · คงร่างไว้และไม่ใช้ข้อมูลเก่าแทน');
+      const query=new URL(url,location.href).searchParams;
+      const payload=query.get('view')==='orderReview'?(query.get('month')===current?f.envelope:query.get('month')===prior?archive:null):query.has('catalogOnly')?catalog:stock;
+      return {ok:!!payload,status:payload?200:422,json:async()=>structuredClone(payload||{ok:false})};
+    };
+    // Export is deliberately local-disabled: don't load the external canvas CDN.
+    window.html2canvas=async()=>{throw Error('ตัวอย่างธีมเท่านั้น · ปิดการดาวน์โหลดภาพใน fixture');};
+    window.AAFSalesPreview={getReportSummary:()=>null,attach:()=>{}};
+    window.AAFOrderReview.setAccess(f.binding);
+    window.AAFOrderReview.setRefreshHandler(()=>window.AAFOrderReview.syncCurrentSource({...f.binding,refreshReport:true}));
+    window.AAFStockSummary.update(stock,calculateSyntheticRow);
+    window.AAFStockSummary.setSavedStockCatalog(savedCatalog);
+    await window.AAFOrderReview.attach(document.getElementById('stock-order-review-slot'));
+    document.getElementById('fixture-draft').addEventListener('click',()=>{
+      const root=shadow(),details=root?.getElementById('stock-basis'),input=root?.querySelector('[data-stock-note]');
+      if(!details||!input){document.getElementById('fixture-checks').textContent='รอทะเบียนจำลองโหลดครบก่อน';return;}
+      details.open=true;input.value='ร่างตัวอย่างที่ต้องคงอยู่ · ธีมไม่ควรรีเซ็ตข้อความหรือ caret';input.focus();input.setSelectionRange(8,12);input.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    const refresh=()=>window.AAFOrderReview.syncCurrentSource({...f.binding,refreshReport:true});
+    document.getElementById('fixture-error').addEventListener('click',()=>{simulateReadFailure=true;refresh();});
+    document.getElementById('fixture-recover').addEventListener('click',()=>{simulateReadFailure=false;refresh();});
+    window.PremiumFixture=Object.freeze({status:()=>({getCount,writeAttempts,unchanged:sourceBefore===JSON.stringify(stock),registryRows:stock.rows.length}),shadow});
+    document.body.dataset.fixtureReady='true';checks();
+  </script>
+</body>
+</html>

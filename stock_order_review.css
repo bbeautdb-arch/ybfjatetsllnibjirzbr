@@ -38,3 +38,167 @@ main{background:var(--bg);color:var(--text)}
 .overview.queue-metrics .metric:first-child .metric-equivalent{grid-column:auto;grid-row:auto;border-left:0;border-top:1px solid var(--line);padding:7px 0 0}
 .month-dashboard{padding:12px 14px;margin:0 0 15px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}.month-dashboard-heading{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}.month-dashboard-heading h2{font-size:15px}.month-dashboard-heading>span,.month-dashboard-source{font-size:11px;color:var(--muted)}.month-dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:11px 0 8px}.month-dashboard-grid>div{min-width:0;border-left:2px solid var(--line);padding-left:10px}.month-dashboard-grid>div:first-child{border-color:var(--blue)}.month-dashboard-grid>div>span{font-size:12px;color:var(--muted)}.month-dashboard-grid strong{display:block;font-size:20px;font-weight:650;line-height:1.35;font-variant-numeric:tabular-nums}.month-dashboard-grid small{font-size:11px;font-weight:400;color:var(--muted)}.month-dashboard-quantity{display:block}.month-dashboard-unknown{font-size:14px;color:var(--orange)}.month-dashboard-source{line-height:1.5}@media(max-width:650px){.month-dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.month-dashboard-grid strong{font-size:18px}}@media print{.month-dashboard{break-inside:avoid}}
 
+/* AAF calm premium screen theme. Semantic states and print rules stay intact. */
+@media screen {
+  :host {
+    color-scheme: light;
+    --bg: #f1f4ee;
+    --surface: #fdfcf7;
+    --text: #1d2925;
+    --muted: #58685e;
+    --line: #d2ddd1;
+    --blue: #225e61;
+    --blue-bg: #e8f1ee;
+    --green: #286746;
+    --green-bg: #e8f2e7;
+    --orange: #8d4b1d;
+    --orange-bg: #fff1dc;
+    --accent: #edf1e8;
+    background: transparent;
+    max-width: 100%;
+    min-width: 0;
+    font-family: "Prompt", "Thonburi", "Noto Sans Thai", -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, sans-serif;
+    line-height: 1.6;
+  }
+  main { background: transparent; min-width: 0; max-width: 100%; }
+  h1, h2, h3 { color: var(--text); letter-spacing: -.015em; }
+  .controls { gap: 10px; margin-bottom: 18px; }
+  .controls label { color: #34483c; }
+  .controls select, .stock-notes-actions select {
+    min-height: 42px; border-color: #bdcdbc; border-radius: 12px;
+    background: #fdfef9; color: var(--text); box-shadow: 0 2px 5px #183a2510;
+  }
+  .plainbutton, .expand {
+    border-color: #c3d1c0; border-radius: 11px; padding: 7px 12px;
+    background: #fdfef9; color: #294b3c; font-weight: 600;
+    box-shadow: 0 2px 5px #173e2510;
+    transition: background-color .15s ease, border-color .15s ease;
+  }
+  .plainbutton:hover:not(:disabled), .expand:hover:not(:disabled) {
+    background: #e6eee0; border-color: #92ad96;
+  }
+  button:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible {
+    outline: 3px solid #276f69; outline-offset: 3px;
+  }
+  .overview.queue-metrics { gap: 14px; margin-bottom: 24px; }
+  .queue-metrics .metric {
+    min-width: 0; border: 1px solid #e0e6d9; border-radius: 22px; padding: 18px 19px;
+    background: linear-gradient(145deg, #fffefbef, #f7f8efed);
+    box-shadow: 0 9px 28px #233e2b0b, inset 0 1px 0 #ffffff;
+  }
+  .queue-metrics .metric.loaded { background: linear-gradient(145deg, #f9fdf8, #eaf2ec); border-color: #cbdcd0; }
+  .queue-metrics .metric.ready { background: linear-gradient(145deg, #fcfdf7, #edf3e7); border-color: #d1dec5; }
+  .queue-metrics .metric.need { background: linear-gradient(145deg, #fffdf7, #faf0df); border-color: #e5d8bb; }
+  .queue-metrics .metric .label { font-size: 13px; font-weight: 600; line-height: 1.6; }
+  .queue-metrics .metric strong {
+    color: var(--text); font-size: clamp(27px, 2.6vw, 35px); font-weight: 650;
+    letter-spacing: -.035em; line-height: 1.2; margin: 9px 0 6px;
+  }
+  .queue-metrics .metric strong .subqty { margin-top: 3px; letter-spacing: 0; }
+  .queue-metrics .metric .money-value { font-size: 21px; letter-spacing: -.02em; }
+  .queue-metrics .metric-equivalent { border-color: #dae2d4; padding-top: 10px; margin-top: 11px; }
+  .queue-metrics .metric-equivalent .equiv-value { font-size: 17px; }
+  .metric-money { border-color: #dae2d4; padding-top: 11px; margin-top: 12px; }
+  .free-card { border-color: #b5cdb4 !important; box-shadow: 0 9px 28px #27502e0e, inset 0 1px 0 #fff; }
+  .free-card .label, .ready-val { color: var(--green); }
+  .loaded-val { color: var(--blue); }
+  .need-val, .money-unverified, .month-dashboard-unknown { color: var(--orange); }
+  .month-dashboard {
+    padding: 20px 22px; margin-bottom: 20px; border: 1px solid #d3dfcc; border-radius: 24px;
+    background: linear-gradient(120deg, #fdfdf6f2, #e9f0e3f2);
+    box-shadow: 0 10px 34px #2941320c, inset 0 1px 0 #ffffff;
+  }
+  .month-dashboard-heading { gap: 8px 18px; }
+  .month-dashboard-heading h2 { font-size: 17px; font-weight: 650; }
+  .month-dashboard-heading > span, .month-dashboard-source { font-size: 12px; }
+  .month-dashboard-grid { gap: 16px; margin: 17px 0 13px; }
+  .month-dashboard-grid > div { padding-left: 14px; border-left: 1px solid #c7d6c2; }
+  .month-dashboard-grid > div:first-child { border-left: 3px solid #648d73; padding-left: 12px; }
+  .month-dashboard-grid > div > span { font-size: 12px; color: #4b6153; }
+  .month-dashboard-grid strong { color: var(--text); font-size: clamp(25px, 2.9vw, 37px); font-weight: 650; letter-spacing: -.035em; }
+  .month-dashboard-grid small { font-size: 12px; letter-spacing: 0; }
+  .month-dashboard-grid .month-dashboard-unknown { font-size: 16px; letter-spacing: 0; }
+  .month-dashboard-source { border-top: 1px solid #d6dfcd; padding-top: 10px; }
+  .sectionbar { margin: 21px 0 12px; }
+  .sectionbar h2 { font-size: 18px; font-weight: 650; }
+  .table-shell, .free-detail-panel {
+    max-width: 100%; min-width: 0; border-radius: 18px; border-color: #d2dccf;
+    background: #fdfcf8; box-shadow: 0 5px 18px #253e2a08;
+  }
+  .table-scroll { min-width: 0; max-width: 100%; overscroll-behavior-x: contain; }
+  table { color: var(--text); line-height: 1.65; }
+  thead th { background: #e9efe4; color: #354a3d; font-weight: 650; font-size: 12px; }
+  th, td { border-bottom-color: #e2e8dc; }
+  .queue-overview th, .queue-overview td { padding: 12px 13px; }
+  .queue-overview tbody td, .orders tbody td { background: #fffefb; }
+  .thickness-table tbody tr:hover td, .orders tr.selected td { background: #eaf2e5; }
+  .thickness-cell { font-size: 17px; font-weight: 650; color: #244338; }
+  tfoot th, tfoot td { background: #edf2e6; color: #294335; }
+  .queue-group th { padding: 13px 14px; border-top-color: #ccd9c6; }
+  .queue-group[data-group="1"] th { background: #e6efeb; color: var(--blue); }
+  .queue-group[data-group="2"] th { background: #e7f0e2; color: var(--green); }
+  .queue-group[data-group="3"] th { background: #fbefda; color: var(--orange); }
+  .sum-note { padding: 13px 15px; background: #f5f7ef; border-color: #dce4d3; }
+  .detail-inner { padding: 17px 18px; background: #f0f4e9; }
+  .commercial-detail, .money-order-detail { border-color: #d1ddca; border-radius: 13px; background: #fffef9; }
+  .payment-badge, .pool-pending, .queue-status { border-radius: 8px; line-height: 1.6; }
+  .queue-status { padding: 7px 9px; }
+  .callout, #source-warning, .notes-confirmation, .note-conflict {
+    border-color: #d9b77d; background: #fff3df; color: #71401d; border-radius: 13px;
+  }
+  .queue-provisional { background: #fff8ec; border-left-color: #b58446; border-radius: 0 10px 10px 0; color: #71401d; }
+  .notes-status.error, .note-row-status.conflict, .stock-basis-warning, .tracking-conflict, .stock-external-label { color: #81431b; }
+  .notes-status.ready { color: #286746; }
+  .basis { border-top-color: #cbd8c6; margin-top: 19px; }
+  .basis > summary { padding: 14px 3px; color: #2e4838; }
+  .basis-content { min-width: 0; max-width: 100%; background: #fafbf4; border: 1px solid #d9e2d2; border-radius: 17px; padding: 15px; }
+  .stock-notes-tools { background: #edf3e6; border-color: #ceddc5; border-radius: 13px; padding: 15px; }
+  .with-tracking th:first-child, .with-tracking td:first-child { background: #fffef9; }
+  .with-tracking thead th:first-child, .with-tracking tfoot th:first-child { background: #e9efe4; }
+  .stock-note-cell textarea, .tracking-cell textarea, .free-note textarea {
+    color: var(--text); background: #fffefa; border-color: #bdcdb7; border-radius: 10px;
+    padding: 10px; font-family: inherit; font-size: 13px; line-height: 1.7;
+    box-shadow: inset 0 1px 3px #273c2410;
+  }
+  .stock-note-cell textarea:focus-visible, .tracking-cell textarea:focus-visible, .free-note textarea:focus-visible {
+    outline: 3px solid #276f69; outline-offset: 2px; background: #fff;
+  }
+  .stock-note-cell textarea:disabled, .tracking-cell textarea:disabled, .free-note textarea:disabled {
+    color: #59675b; background: #eef1e9; opacity: 1; cursor: not-allowed;
+  }
+  .changes-toolbar { border-color: #bbcfb9; border-radius: 14px; background: #f9fcf3f5; box-shadow: 0 5px 18px #193e2312; }
+  .changes-save { border-color: #a2bea0; background: #e2edda; color: #264d34; }
+  .no-orders-stock, .no-data { border-radius: 14px; background: #f9faf3; }
+  @supports (backdrop-filter: blur(12px)) {
+    .month-dashboard, .queue-metrics .metric, .changes-toolbar { backdrop-filter: blur(12px); }
+  }
+  @media (max-width: 900px) {
+    .queue-metrics .metric { padding: 16px; }
+    .month-dashboard { padding: 17px 18px; }
+  }
+  @media (max-width: 650px) {
+    .month-dashboard { padding: 16px; border-radius: 19px; }
+    .month-dashboard-grid { gap: 15px 10px; }
+    .month-dashboard-grid strong { font-size: 27px; }
+    .month-dashboard-heading h2 { font-size: 16px; }
+    .basis-content { padding: 10px; border-radius: 13px; }
+    .stock-notes-tools { padding: 12px; }
+    .sectionbar h2 { font-size: 16px; }
+    .table-shell { border-radius: 14px; }
+    .controls select { max-width: 100%; }
+  }
+  @media (max-width: 520px) {
+    .overview.queue-metrics { gap: 12px; }
+    .queue-metrics .metric { border-radius: 18px; padding: 16px; }
+    .queue-metrics .metric strong { font-size: 30px; }
+    .queue-metrics .metric .money-value { font-size: 20px; }
+    .plainbutton, .expand { min-height: 42px; }
+  }
+  @media (forced-colors: active) {
+    .month-dashboard, .queue-metrics .metric, .table-shell, .changes-toolbar { box-shadow: none; border-color: CanvasText; }
+    button:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible { outline-color: Highlight; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .plainbutton, .expand { transition: none; }
+  }
+}
