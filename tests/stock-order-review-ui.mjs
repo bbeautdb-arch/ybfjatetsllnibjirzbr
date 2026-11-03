@@ -90,6 +90,18 @@ test('source-only renderer separates sold headline from complete plan and never 
   assert.match(h.nodes.get('stock-title').textContent,/ทะเบียนคลังยังรอตรวจ/);assert.doesNotMatch(h.nodes.get('stock-title').textContent,/0 สเปก/);assert.match(h.nodes.get('announcement').textContent,/รายการขาย/);
   assert.match(h.nodes.get('reconciliation').innerHTML,/ยังไม่ยืนยันการจัดสรรกับฐานสต๊อก/);h.api.destroy();
 });
+test('every thickness quantity and group cell labels its units, including mixed sheet and strip groups',()=>{
+  const h=harness(),f=salesOnlyFixture();f.review.rows[1].t=3.2;
+  const before=JSON.stringify(f.review);h.api.update({...f.review,readModel:f.readModel});
+  const body=h.nodes.get('table-area').innerHTML.split('<tbody>')[1].split('</tbody>')[0];
+  const mixed=body.match(/<tr data-summary-thickness="3\.2">([\s\S]*?)<\/tr>/)[1];
+  assert.match(mixed,/12 <span class="subqty">แผ่น<\/span>/);assert.match(mixed,/20 <span class="subqty">ชิ้นไม้แถบ<\/span>/);
+  const paid=mixed.match(/data-summary-group="2">([\s\S]*?)<\/td>/)[1];
+  assert.match(paid,/12 <span class="subqty">แผ่น<\/span>/);assert.match(paid,/5 <span class="subqty">ชิ้นไม้แถบ<\/span>/);
+  for(const match of body.matchAll(/<span class="units-block">([\s\S]*?)<\/span><\/span>/g))assert.match(match[1],/<span class="subqty">(?:แผ่น|ชิ้นไม้แถบ)$/);
+  assert.match(body.match(/<tr data-summary-thickness="2\.5">([\s\S]*?)<\/tr>/)[1],/38 <span class="subqty">แผ่น<\/span>/);
+  assert.equal(JSON.stringify(f.review),before);h.api.destroy();
+});
 test('source-only rendering refuses injected old pools, parts and Free even if mounted without controller',()=>{
   const h=harness(),f=salesOnlyFixture(),legacy=fixture();f.review.freeStock=legacy.freeStock;f.review.stockPools=legacy.stockPools;f.review.rows[1].queue.allocated=777;f.review.rows[1].queue.shortage=888;f.review.rows[1].queue.parts=[{allocated:777,shortage:888}];
   f.review.queueReview.poolQueues=[{grade:'A',rows:[{rowId:f.review.rows[1].id,requested:12,allocated:777,shortage:888}]}];h.api.update({...f.review,readModel:f.readModel});

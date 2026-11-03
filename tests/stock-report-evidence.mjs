@@ -29,7 +29,7 @@ test('both report entry points cache-bust the current sold renderer and auth con
     assert.ok(html.indexOf('stock_order_header.js?')<html.indexOf('stock_summary.js?'),'current warehouse adapter must load before summary');
     assert.ok(html.includes('stock_readiness.js?v=20261103-stock-readiness-r1'));assert.ok(html.indexOf('stock_readiness.js?')<html.indexOf('stock_summary.js?'));
     assert.ok(html.includes('stock_review_notes_bridge.js?v=20261020-annotation-save'));
-    assert.ok(html.includes('stock_order_review.js?v=20261103-sales-only-r1'));
+    assert.ok(html.includes('stock_order_review.js?v=20261103-sales-only-r2'));
   }
   assert.match(fs.readFileSync(new URL('../stock_report.html',import.meta.url),'utf8'),/stock_report.js\?v=20261103-current-month-review-r1/);
   assert.match(fs.readFileSync(new URL('../stock_manager.html',import.meta.url),'utf8'),/stock_shared.js\?v=20261103-current-month-review-r1/);
