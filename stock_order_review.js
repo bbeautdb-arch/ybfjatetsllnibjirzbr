@@ -2,7 +2,7 @@
 (function (global) {
 'use strict';
 const assetBase = global.document.currentScript && global.document.currentScript.src;
-const stylesheetURL = assetBase ? new URL('stock_order_review.css?v=20261103-compact-chrome-r1', assetBase).href : 'stock_order_review.css?v=20261103-compact-chrome-r1';
+const stylesheetURL = assetBase ? new URL('stock_order_review.css?v=20261104-selected-month-dashboard-r1', assetBase).href : 'stock_order_review.css?v=20261104-selected-month-dashboard-r1';
 const STATIC_HTML = "<main>\n<header class=\"top\"><div><h1 id=\"review-title\">ภาพรวมรายการขาย</h1><p class=\"muted\">เรียงกลุ่มและวัน ETD · รายการต้นทางครบ · ตรวจคิวก่อนยืนยันของที่ขาด</p><p class=\"small muted\" id=\"visible-source-date\"></p><span class=\"queue-method-label\" id=\"queue-method\" hidden>คิวตามกติกาในชุดข้อมูล</span></div><span class=\"readonly\">ยอดอ่านอย่างเดียว · หมายเหตุ / ติดตามตามสิทธิ์</span></header>\n<section class=\"changes-toolbar\" aria-label=\"บันทึกการเปลี่ยนแปลง\"><button type=\"button\" class=\"plainbutton changes-save\" id=\"changes-stage\" disabled>บันทึกการเปลี่ยนแปลง</button><span id=\"changes-count\" class=\"small\" role=\"status\" aria-live=\"polite\">ไม่มีการเปลี่ยนแปลง</span><span id=\"changes-permission\" class=\"small muted\"></span></section><section id=\"notes-confirmation\" class=\"notes-confirmation\" hidden></section><section class=\"controls\" aria-label=\"เลือกความหนา\"><label for=\"thickness\">ความหนา</label><select id=\"thickness\"></select><button type=\"button\" class=\"plainbutton\" id=\"back\" hidden>← ภาพรวมทุกความหนา</button><div class=\"facts small muted\" id=\"scope-label\"></div></section>\n<p class=\"callout\" id=\"source-warning\" role=\"note\" hidden></p><section class=\"overview\" id=\"metrics\" aria-label=\"ภาพรวมสินค้าและมูลค่า\"></section>\n<p class=\"money-source-note\" id=\"money-source-note\" hidden></p><section class=\"free-detail-panel\" id=\"free-detail-panel\" aria-label=\"รายละเอียด Free Stock\" hidden></section>\n<details class=\"basis reconciliation\"><summary>ตรวจเทียบกับภาพรวมสต๊อก</summary><div id=\"reconciliation\"></div></details>\n<div class=\"sectionbar\"><h2 id=\"table-title\"></h2><button type=\"button\" id=\"collapse\" class=\"plainbutton\" hidden>ย่อรายละเอียดทั้งหมด</button><span class=\"small muted\" id=\"table-help\"></span></div><div id=\"table-area\"></div>\n<div class=\"help-row\" id=\"allocation-legend\"></div><p class=\"callout\" id=\"unreserved-note\" hidden></p><p class=\"callout\" id=\"pending-note\" hidden></p>\n<details class=\"basis\" id=\"stock-basis\"><summary id=\"stock-title\">ทะเบียนสต๊อกทุกเกรดและขนาด · ติดตามและหมายเหตุ</summary><div class=\"basis-content\">\n<section class=\"stock-notes-tools\" aria-label=\"หมายเหตุร่วมกับ Free Stock\"><strong>หมายเหตุรายสินค้า · ใช้รายการเดียวกับ Free Stock</strong><p class=\"small muted\">จับคู่ความหนา เกรด ขนาดจริง และหน่วย · กรอกได้แม้ Free เป็น 0 · ไม่เปลี่ยนยอดหรือราคา</p>\n<div class=\"stock-notes-actions\"><button type=\"button\" id=\"notes-connect\" hidden></button><button type=\"button\" class=\"plainbutton\" id=\"notes-refresh\">โหลดหมายเหตุล่าสุด</button><button type=\"button\" class=\"plainbutton\" id=\"notes-stage\" disabled>ตรวจและบันทึกการเปลี่ยนแปลง</button></div><details class=\"notes-import\" id=\"notes-import\"><summary>นำเข้าหมายเหตุจาก Excel</summary><p class=\"small muted\">อ่านเฉพาะหมายเหตุ จับคู่สินค้า ไม่เปลี่ยนยอดหรือราคา · ต้องตรวจรายการก่อนบันทึก</p><div class=\"stock-notes-actions\"><label>คอลัมน์ <select id=\"notes-file-column\"><option value=\"AD\">AD · หมายเหตุ</option><option value=\"AE\">AE · เลือกเองหลังตรวจหัวตาราง</option></select></label><label>วิธีเติม <select id=\"notes-file-mode\"><option value=\"append\">ต่อท้ายของเดิม</option><option value=\"replace\">แทนข้อความเดิม · ต้องตรวจทุกแถว</option></select></label><label class=\"plainbutton\">เลือก Excel <input id=\"notes-file\" type=\"file\" accept=\".xlsx,.xls\" aria-label=\"เลือกไฟล์ Excel หมายเหตุ\"></label></div><p class=\"small muted\">AE อาจเป็นคอลัมน์ผู้บันทึกหรือข้อมูลอื่น ต้องตรวจชื่อหัวคอลัมน์ก่อนใช้ · ช่องว่างข้าม ไม่ลบหมายเหตุเดิม</p><div id=\"notes-import-preview\" role=\"status\" aria-live=\"polite\"></div></details><p id=\"notes-status\" class=\"notes-status\" role=\"status\" aria-live=\"polite\"></p><p class=\"notes-draft-warning\">ร่างอยู่ในแท็บนี้จนกว่าจะบันทึกและอ่านกลับ · ช่องว่างไม่ลบหมายเหตุเดิม · การรีโหลดหน้าจะทำให้ร่างที่ยังไม่เซฟหาย</p></section>\n<div id=\"stock-table\"></div><div id=\"stock-legacy\"></div><p class=\"small muted\">ข้อมูลคลังตามวันที่ระบุ แยกจากผลจัดสรรคิวใหม่ · หมายเหตุใช้ขนาดจริง กลับด้านได้ แต่ไม่รวมขนาดใกล้เคียงหรือต่างเกรด/หน่วย</p></div></details>\n<details class=\"basis\" hidden><summary>วันที่ข้อมูล ขอบเขต และวิธีอ่าน</summary><div class=\"basis-content small\"><p id=\"source-sales\"></p><p id=\"source-stock\"></p><p id=\"source-allocation\"></p><p id=\"queue-order-description\"></p><p>โหลดแล้วไม่หักสต๊อกซ้ำ · รายการยังไม่ยืนยันจำนวนไม่ใช่ศูนย์ · คงต้นทางที่ยกเลิกหรือรอเงื่อนไขไว้ตรวจสอบ</p><p>ยอดเงินสินค้าใช้ราคาขายจริงในใบขาย ส่วน Free ใช้ราคาประเมินสต๊อก ไม่สลับกัน · วันที่ ETD ไม่ใช่วันรับเงิน</p><p>หน่วยแผ่นและชิ้นแยกกัน เทียบ 4×8 หนา 2.5 มม. ใช้ปริมาตรตามขนาดจริง ไม่เปลี่ยนจำนวนสต๊อก</p></div></details><footer hidden>ข้อมูลบริษัทจากชุดที่บัญชีนี้มีสิทธิ์อ่าน · หน้านี้ไม่เปลี่ยนยอดสต๊อก ยอดจอง ราคา หรือสถานะต้นทาง</footer><div id=\"announcement\" hidden role=\"status\" aria-live=\"polite\" class=\"small muted\"></div></main>";
 function mount(host, review, services = {}) {
   if (!host || typeof host.attachShadow !== 'function') throw new TypeError('A host element is required');
@@ -27,9 +27,9 @@ function mount(host, review, services = {}) {
     // quantity columns with a shadow-scoped rule that survives note repaint.
     if(!document.getElementById('current-sales-suspension')){
       const style=document.createElement('style');style.id='current-sales-suspension';
-      style.textContent='.controls,.sectionbar,.reconciliation,#metrics,#money-source-note,#table-area,#free-detail-panel,#allocation-legend,#unreserved-note,#pending-note,#queue-method,#source-sales,#source-stock,#source-allocation,#queue-order-description,.stock-basis-warning:not([data-saved-stock-basis]),.basis-table.with-notes:not([data-saved-stock-registry]) tr>*:nth-child(n+2):nth-child(-n+5){display:none!important}';shadow.append(style);
+      style.textContent='.controls,.sectionbar,.reconciliation,#month-dashboard,#metrics,#money-source-note,#table-area,#free-detail-panel,#allocation-legend,#unreserved-note,#pending-note,#queue-method,#source-sales,#source-stock,#source-allocation,#queue-order-description,.stock-basis-warning:not([data-saved-stock-basis]),.basis-table.with-notes:not([data-saved-stock-registry]) tr>*:nth-child(n+2):nth-child(-n+5){display:none!important}';shadow.append(style);
     }
-    const title=document.getElementById('review-title');if(title)title.textContent='ภาพรวมขายเดือนนี้ · รอชุดข้อมูลที่ตรงกัน';
+    const title=document.getElementById('review-title');if(title)title.textContent='ภาพรวมขายเดือนที่เลือก · รอชุดข้อมูลที่ตรงกัน';
     const date=document.getElementById('visible-source-date');if(date)date.textContent='ยังไม่แสดงยอดขายชุดเก่าหรือเดือนอื่นแทน';
     const warning=document.getElementById('source-warning');if(warning){warning.hidden=false;warning.textContent=salesSuspended;}
     const basis=document.getElementById('stock-basis');if(basis)basis.open=true;
@@ -43,7 +43,7 @@ function mount(host, review, services = {}) {
     currentReview=data;
     shadow.replaceChildren();
     const link=ownerDocument.createElement('link');link.rel='stylesheet';link.href=stylesheetURL;shadow.append(link);
-    const frame=ownerDocument.createElement('div');frame.className=compactChrome?'compact-chrome':'';frame.innerHTML=STATIC_HTML;shadow.append(frame);
+    const frame=ownerDocument.createElement('div');frame.className=compactChrome?'compact-chrome':'';frame.innerHTML=STATIC_HTML.replace('<section class="overview" id="metrics"','<section class="month-dashboard" id="month-dashboard" aria-label="สรุปยอดขายเดือนที่เลือก"></section><section class="overview" id="metrics"');shadow.append(frame);
     let importReviewPending=false;
     const isCurrent=()=>!destroyed&&version===generation;
   const rows = Array.isArray(data.rows) ? data.rows : [];
@@ -51,6 +51,9 @@ function mount(host, review, services = {}) {
   const pools = !currentSalesOnly&&Array.isArray(data.stockPools) ? data.stockPools : [];
   const currentSavedLedger=data.readModel?.kind==='current-month-order-review'&&data.readModel?.status==='verified'&&data.metadata?.allocationBasis==='same-saved-central-allocation-ledger';
   const currentSource=currentSavedLedger||currentSalesOnly;
+  const selectedMonth=typeof data.metadata?.month==='string'?data.metadata.month:'';
+  const validSelectedMonth=/^\d{4}-(0[1-9]|1[0-2])$/.test(selectedMonth);
+  const selectedMonthLabel=validSelectedMonth?new Intl.DateTimeFormat('th-TH',{timeZone:'Asia/Bangkok',month:'long',year:'numeric'}).format(new Date(selectedMonth+'-15T05:00:00Z'))+' ('+selectedMonth+')':'เดือนยังไม่ยืนยัน';
   const allocationContextText=currentSalesOnly?'แสดงรายการขายจากต้นทางที่ตรวจครบเท่านั้น · ยังไม่ยืนยันจำนวนมีของ ต้องผลิต หรือ Free · ไม่เปลี่ยนแผนจองเดิมและไม่หักสต๊อกซ้ำ':currentSavedLedger?'ผลจัดสรรจากแผนส่วนกลางที่บันทึกแล้ว · โหลดแล้วไม่หักซ้ำ · เจรจา/Forecast ที่ไม่ได้รับเงินไม่จองและไม่รวมต้องผลิต · แยกหน่วยแผ่นกับไม้แถบ ไม่บวกรวม':'* ตัวอย่างจัดสรร ยังรอตรวจว่าฐาน Physical หัก รายการที่โหลดแล้ว แล้วหรือยัง · กลุ่มรอเงื่อนไขยังไม่หักสต๊อก ยกเว้นส่วนที่ได้รับอนุมัติ ที่อนุมัติให้จัดท้ายคิว · ไม่ใช้ยอดขาดจากแผนเก่ามาแทนคิวใหม่';
   const keys = ['ordered','loaded','allocated','shortage','unreserved','pendingQty'];
   const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -323,7 +326,7 @@ function mount(host, review, services = {}) {
     thicknesses=[...new Set([...rows,...pools,...notesState.liveRows.values()].map(r=>num(r.t)).filter(t=>t>0))].sort((a,b)=>a-b);
     select.replaceChildren();
     const option=document.createElement('option');option.value='all';option.textContent=`ทุกความหนา · ${thicknesses.length} ความหนา`;select.append(option);
-    thicknesses.forEach(t=>{const item=document.createElement('option');const group=selectedRows(t);item.value=String(t);item.textContent=`${thick(t)} มม. · ${group.length?group.length+' บรรทัดขาย':'ทะเบียนสต๊อก · ไม่มีขายเดือนนี้'}`;select.append(item);});
+    thicknesses.forEach(t=>{const item=document.createElement('option');const group=selectedRows(t);item.value=String(t);item.textContent=`${thick(t)} มม. · ${group.length?group.length+' บรรทัดขาย':'ทะเบียนสต๊อก · ไม่มีขายเดือนที่เลือก'}`;select.append(item);});
     select.value=[...select.options].some(item=>item.value===previous)?previous:'all';
   };
   syncThicknessOptions();
@@ -649,11 +652,30 @@ function mount(host, review, services = {}) {
     const units=[...new Set(values.map(r=>unitKey(r.unit)))];
     return `<div class="checks">${units.map(u=>{const subset=values.filter(r=>unitKey(r.unit)===u);const total=subset.reduce((n,r)=>n+num(r.qty),0);return `<span>${fmt(total)} = ${queueGroups.map(g=>`${fmt(queueGroupRows(subset,g.id).reduce((n,r)=>n+num(r.qty),0))} กลุ่ม ${esc(g.id)}`).join(' + ')} ${esc(unitLabel(u))}</span>`;}).join('')}</div>`;
   };
+  const renderMonthDashboard = () => {
+    const model=data.readModel||{},historical=model.kind==='dated-order-review',source=model.source||{};
+    const supported=currentSource||historical;
+    const periodMatches=validSelectedMonth&&(!model.selectedMonth||model.selectedMonth===selectedMonth)&&(!source.month||source.month===selectedMonth);
+    const validRows=queueRows.every(r=>r&&typeof r.qty==='number'&&Number.isFinite(r.qty)&&r.qty>=0&&r.qty<=Number.MAX_SAFE_INTEGER&&['sheet','strip'].includes(r.unit)&&[1,2,3,4].includes(Number(r.queue?.group))&&(!r.cancelled||r.qty===0));
+    const known=supported&&periodMatches&&validRows,active=queueRows.filter(r=>!r.cancelled);
+    const partitionKnown=known&&active.every(r=>['loaded','paidOrDeposit','lcETD','notSold'].includes(r.soldGroup)&&((r.soldGroup==='loaded')===(Number(r.queue?.group)===1)));
+    const loadedKnown=known&&(partitionKnown||historical)&&active.every(r=>Number(r.queue?.group)!==1||r.loaded===undefined||r.loaded===r.qty);
+    const sold=active.filter(r=>['loaded','paidOrDeposit','lcETD'].includes(r.soldGroup)),loaded=active.filter(r=>Number(r.queue?.group)===1),waiting=sold.filter(r=>r.soldGroup!=='loaded');
+    const quantity=(subset,verified)=>{
+      if(!verified)return '<span class="month-dashboard-unknown">ยังไม่ยืนยัน</span>';
+      const units={sheet:0,strip:0};for(const r of subset){units[r.unit]+=r.qty;if(!Number.isFinite(units[r.unit])||units[r.unit]>Number.MAX_SAFE_INTEGER)return '<span class="month-dashboard-unknown">ยังไม่ยืนยัน</span>';}
+      return ['sheet','strip'].filter(u=>u==='sheet'||queueRows.some(r=>r.unit==='strip')).map(u=>`<span class="month-dashboard-quantity">${fmt(units[u])} <small>${esc(unitLabel(u))}</small></span>`).join('');
+    };
+    const captured=source.capturedAt||model.sourceCapturedAt||metadata.sourceSalesCapturedAt||data.reconciliation?.sourcePeriods?.section02?.capturedAt;
+    const asOf=captured&&Number.isFinite(Date.parse(captured))?'ข้อมูล ณ '+trackingDate(captured):'วันที่อ่านต้นทางยังไม่ยืนยัน';
+    const warning=!periodMatches?'เดือนของข้อมูลไม่ตรงกับเดือนที่เลือก · ยังไม่แสดงยอด':historical?'ชุดตรวจย้อนหลัง · ไม่ใช่ยอดปิดเดือน'+(model.stale?' · ฐานสต๊อก/ราคาปัจจุบันอาจต่างจากชุดนี้':''):model.stale?'ชุดข้อมูลยังต้องตรวจเทียบก่อนใช้':'ข้อมูลต้นทางที่ตรวจแล้ว · ไม่ใช่ฟีดสด';
+    document.getElementById('month-dashboard').innerHTML=`<div class="month-dashboard-heading"><h2>ยอดขาย · ${esc(selectedMonthLabel)}</h2><span>ทุกความหนา · ไม่ตามตัวกรองรายการด้านล่าง</span></div><div class="month-dashboard-grid"><div data-month-metric="sold"><span>ขายแล้วตามเกณฑ์</span><strong>${quantity(sold,partitionKnown)}</strong></div><div data-month-metric="loaded"><span>โหลดแล้วตามต้นทาง</span><strong>${quantity(loaded,loadedKnown)}</strong></div><div data-month-metric="waiting"><span>ขายแล้ว · ยังไม่โหลด</span><strong>${quantity(waiting,partitionKnown)}</strong></div><div data-month-metric="records"><span>รายการทั้งหมดในชุดข้อมูล</span><strong>${known?fmt(uniqueOrders(queueRows))+' <small>ใบขาย</small><span class="month-dashboard-quantity">'+fmt(queueRows.length)+' <small>บรรทัด</small></span>':'<span class="month-dashboard-unknown">ยังไม่ยืนยัน</span>'}</strong></div></div><p class="month-dashboard-source">${esc(asOf)} · ${esc(warning)}${!partitionKnown?' · ยังไม่มีหลักฐานแยกขายแล้ว/ยังไม่โหลดครบ ไม่ใช้กลุ่มจองทั้งหมดแทน':''}</p>`;
+  };
   const renderQueueMetrics = values => {
     const root=document.getElementById('metrics');root.className='overview queue-metrics';
     const groups=[{id:0,label:currentSalesOnly?'รายการหน้า 09 ทั้งหมด · แผนรวม':'สั่งทั้งหมด',description:counts(values)+(currentSalesOnly?' · รวมรายการยังไม่ขายและรอเงื่อนไข ไม่ใช่ยอดขายแล้วทั้งหมด':'')},...queueGroups];
     const soldRows=values.filter(r=>!r.cancelled&&['loaded','paidOrDeposit','lcETD'].includes(r.soldGroup)),loadedRows=soldRows.filter(r=>r.soldGroup==='loaded'),waitingRows=soldRows.filter(r=>r.soldGroup!=='loaded');
-    const soldHeadline=currentSalesOnly?`<div class="metric loaded" data-current-sold-total><div class="label">ขายแล้วเดือนนี้${select.value==='all'?'':' · ความหนาที่เลือก'}</div><strong class="num">${queueZeroQty(soldRows,true)}</strong><p class="small">โหลดแล้ว ${queueZeroQty(loadedRows,true)} · ยังไม่โหลด ${queueZeroQty(waitingRows,true)}</p><div class="small muted">จำนวนตามเกณฑ์ขายแล้ว · ไม่รวม Forecast/เจรจาที่ยังไม่รับเงิน · ไม่ใช่ยอดรับเงินหรือยอดสต๊อกพร้อมส่ง</div></div>`:'';
+    const soldHeadline=currentSalesOnly?`<div class="metric loaded" data-current-sold-total><div class="label">ขายแล้ว · ${esc(selectedMonthLabel)}${select.value==='all'?'':' · ความหนาที่เลือก'}</div><strong class="num">${queueZeroQty(soldRows,true)}</strong><p class="small">โหลดแล้ว ${queueZeroQty(loadedRows,true)} · ยังไม่โหลด ${queueZeroQty(waitingRows,true)}</p><div class="small muted">จำนวนตามเกณฑ์ขายแล้ว · ไม่รวม Forecast/เจรจาที่ยังไม่รับเงิน · ไม่ใช่ยอดรับเงินหรือยอดสต๊อกพร้อมส่ง</div></div>`:'';
     root.innerHTML=soldHeadline+groups.map(g=>{const subset=num(g.id)===0?values:queueGroupRows(values,g.id);const cls=({1:'loaded',2:'ready',3:'need'})[num(g.id)]||'';return `<div class="metric ${cls}" data-queue-group="${esc(g.id)}"><div class="label">${num(g.id)?`${esc(g.id)} · `:''}${esc(g.label)}</div><strong class="num">${queueZeroQty(subset,true)}</strong>${num(g.id)===0?areaEquivalentMarkup(subset):''}${queueEquivalent(subset)}<div class="small muted">${num(g.id)?`${fmt(subset.length)} บรรทัด · `:''}${esc(g.description||'')}</div>${num(g.id)>0&&subset.some(r=>queueKnown(r)||poolRowFor(r))?`<p class="small">${esc(queueKnownSummary(subset))}</p>`:''}${financeCardMarkup(g.id)}</div>`;}).join('')+freeCardMarkup();
     renderMoneySourceNote();refreshFreeStockPanel();
     const freeToggle=document.getElementById('free-detail-toggle');if(freeToggle)freeToggle.addEventListener('click',()=>{freePanelOpen=!freePanelOpen;uiState.freePanelOpen=freePanelOpen;freeToggle.setAttribute('aria-expanded',String(freePanelOpen));freeToggle.textContent=(freePanelOpen?'ย่อ':'ดู')+'รายการ Free · ราคาและหมายเหตุ';refreshFreeStockPanel();if(freePanelOpen)document.getElementById('free-detail-panel').scrollIntoView({block:'nearest'});});
@@ -695,7 +717,7 @@ function mount(host, review, services = {}) {
     const value=select.value;const values=queueSelected(value);const all=value==='all';const basis=queueReview.stockBasis||{};
     document.getElementById('queue-method').hidden=false;
     document.getElementById('scope-label').textContent=counts(values);
-    document.getElementById('table-title').textContent=all?`${thicknesses.length} ความหนา · ${currentSalesOnly?'รายการขายเดือนนี้':'รายการขายและทะเบียนสต๊อก'}`:`${thick(value)} มม. · ${values.length?'รายการ 1–'+values.length:'ไม่มีรายการขายเดือนนี้'}`;
+    document.getElementById('table-title').textContent=all?`${thicknesses.length} ความหนา · รายการขาย ${selectedMonthLabel}`:`${thick(value)} มม. · ${values.length?'รายการ 1–'+values.length:'ไม่มีรายการขายเดือนที่เลือก'}`;
     document.getElementById('table-help').textContent='เรียงกลุ่ม 1 → 4 · ภายในกลุ่มเรียง ETD ก่อน–หลัง · ไม่มีวันไว้ท้าย';
     document.getElementById('back').hidden=all;document.getElementById('collapse').hidden=all||!values.length;
     const warning=document.getElementById('source-warning');warning.hidden=compactChrome&&currentSalesOnly&&data.readModel?.stale!==true&&!salesSuspended;warning.textContent=[data.readModel?.stale?'ต้องตรวจเทียบ: ฐานย้อนหลังต่างจากส่วนกลางหรือยังยืนยันไม่ได้':'',data.readModel?.warning,metadata.warning,basis.otherMonthWarning,basis.readbackLabel,'หน้านี้ไม่เปลี่ยนยอดสต๊อกหรือสถานะเงินส่วนกลาง · รายการโหลดแล้วไม่หักซ้ำ'].filter(Boolean).join(' · ');
@@ -707,6 +729,7 @@ function mount(host, review, services = {}) {
     document.getElementById('announcement').textContent=all?`แสดง${currentSalesOnly?'รายการขาย':'คิวใหม่'} ${thicknesses.length} ความหนา`:`แสดง${currentSalesOnly?'รายการขาย':'คิว'}หนา ${thick(value)} มิลลิเมตร ${values.length} บรรทัดสินค้า`;
   };
   const render = () => {
+    renderMonthDashboard();
     renderQueue();
     renderReconciliation();
     const viewChanged=uiState.thickness!==select.value||uiState.month!==data.metadata?.month;
@@ -842,7 +865,7 @@ function mount(host, review, services = {}) {
   if(typeof services.readNotes==='function')instance.refreshNotes();
   return {
     update(value){if(destroyed)return;if(notesBusy){queuedReview=value;return;}salesSuspended='';rebuild(value||{});},
-    suspendSales(message){if(destroyed)return;salesSuspended=message||'รอข้อมูลขายเดือนปัจจุบัน · เก็บร่างหมายเหตุไว้ ไม่ใช้เดือนก่อนแทน';queuedReview=null;applySalesSuspension();},
+    suspendSales(message){if(destroyed)return;salesSuspended=message||'รอข้อมูลขายเดือนที่เลือก · เก็บร่างหมายเหตุไว้ ไม่ใช้เดือนอื่นแทน';queuedReview=null;applySalesSuspension();},
     destroy(){if(destroyed)return;destroyed=true;generation++;if(typeof global.removeEventListener==='function')global.removeEventListener('beforeunload',unloadGuard);shadow.replaceChildren();notesState.drafts.clear();notesState.followupDrafts.clear();notesState.notes.clear();notesState.liveRows.clear();notesState.rawRecords.clear();notesState.legacy.clear();notesState.conflicts.clear();notesState.followupConflicts.clear();notesState.pending=null;queuedReview=null;currentReview=null;instance=null;},
     hasDirty,
     refreshNotes(){return !destroyed?instance.refreshNotes():Promise.resolve();},

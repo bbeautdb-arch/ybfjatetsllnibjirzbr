@@ -131,10 +131,10 @@ test('read-only standalone snapshot suppresses both notes and followup editing',
   const snapshot=await h.mounted[0].services.readNotes();assert.equal(snapshot.canSave,false);assert.equal(snapshot.canEditFollowup,false);
 });
 
-test('current Bangkok month is explicit; no historic selector or backend default can select an old month',async()=>{
+test('current Bangkok month is the default; only explicitly offered historical months can be selected',async()=>{
   const h=browser();h.api.setAccess(binding());h.responses.push(report());await h.api.attach(new Node());
   assert.match(h.calls[0].url,/\?view=orderReview&month=2026-01$/);assert.equal(h.api.selectMonth('2025-12'),false);
-  assert(h.created.some(n=>n.textContent==='ภาพรวมขายเดือนนี้ · 2026-01 · เวลาไทย'));
+  assert(h.created.some(n=>n.textContent==='สรุปยอดขาย · มกราคม 2569'));
   for(const mutate of [d=>d.selectedMonth='2025-12',d=>d.review.metadata.month='2025-12',d=>d.review.financial={metadata:{month:'2025-12'}},d=>d.readModel.source.month='2025-12',d=>d.readModel.source.checksum='sha256:'+'c'.repeat(64),d=>d.readModel.stock.planChecksum='sha256:'+'c'.repeat(64)]){
     const b=browser(),value=report();mutate(value);b.api.setAccess(binding());b.responses.push(value);await b.api.attach(new Node());assert.equal(b.mounted.length,0);assert(!b.summaries.some(([r])=>r));
   }
@@ -166,11 +166,11 @@ test('pending current data stays unknown; dirty edits started during a source re
 });
 test('lower refresh delegates to the existing central refresh handler, without a separate review-only request',async()=>{
   const h=browser();h.api.setAccess(binding());h.responses.push(report());await h.api.attach(new Node());let central=0;
-  h.api.setRefreshHandler(()=>{central++;});const count=h.calls.length;h.created.find(n=>n.textContent==='โหลดข้อมูลเดือนนี้ล่าสุด').listeners.click();assert.equal(central,1);assert.equal(h.calls.length,count);
+  h.api.setRefreshHandler(()=>{central++;});const count=h.calls.length;h.created.find(n=>n.textContent==='โหลดข้อมูลเดือนที่เลือก').listeners.click();assert.equal(central,1);assert.equal(h.calls.length,count);
 });
 test('older backend422 for current lower review is a Thai pending state, not an October fallback or top allocation invalidation',async()=>{
   const h=browser();h.api.setAccess(binding());h.responses.push({status:422,ok:false});await h.api.attach(new Node());
-  assert.equal(h.mounted.length,0);assert.equal(h.soldInvalidations.length,0);assert(h.created.some(n=>/เดือนนี้ยังไม่มีชุดข้อมูลที่ตรวจครบ ไม่ใช้เดือนอื่นแทน/.test(n.textContent||'')));
+  assert.equal(h.mounted.length,0);assert.equal(h.soldInvalidations.length,0);assert(h.created.some(n=>/เดือนที่เลือกยังไม่มีชุดข้อมูลที่ตรวจครบ ไม่ใช้เดือนอื่นแทน/.test(n.textContent||'')));
   assert.equal(h.calls.length,1);assert.match(h.calls[0].url,/month=2026-01$/);assert.equal(h.calls[0].options.method,'GET');assert(!h.summaries.some(([review])=>review));
 });
 
@@ -183,7 +183,7 @@ test('embedded successful review requests compact chrome and moves normal source
   const h=browser(),f=salesOnlyFixture('2026-01');h.win.AAFOrderHeader=header;h.api.setAccess(f.binding);h.responses.push(f.envelope);const slot=new Node();await h.api.attach(slot);
   const status=slot.children[0].children[1];assert.equal(status.hidden,true);assert.equal(status.textContent,'');assert.equal(h.mounted[0].services.compactChrome,true);
   assert.match(h.mounted[0].review.displaySourceNote,/เดือน 2026-01/);assert.match(h.mounted[0].review.displaySourceNote,/อ่านส่วนกลาง/);assert.equal(f.review.displaySourceNote,undefined,'do not mutate source evidence');
-  assert(h.created.some(n=>n.textContent==='โหลดข้อมูลเดือนนี้ล่าสุด'));assert(h.created.some(n=>n.textContent==='ภาพรวมขายเดือนนี้ · 2026-01 · เวลาไทย'));
+  assert(h.created.some(n=>n.textContent==='โหลดข้อมูลเดือนที่เลือก'));assert(h.created.some(n=>n.textContent==='สรุปยอดขาย · มกราคม 2569'));
 });
 test('compact controller status remains visible for source mismatch, unavailable month, network and authorization failures',async()=>{
   for(const mode of ['mismatch','pending','401','403','network']){
@@ -207,4 +207,41 @@ test('sales-only source refresh at unchanged revision rejects old reply and pres
 });
 test('sales-only session expiry clears private source data and cannot accept a late response',async()=>{
   const h=browser(),f=salesOnlyFixture('2026-01');h.win.AAFOrderHeader=header;h.api.setAccess(f.binding);let resolve;h.responses.push(new Promise(r=>resolve=r));const pending=h.api.attach(new Node());h.api.invalidate('expired');resolve(f.envelope);await pending;assert.equal(h.mounted.length,0);assert(!h.summaries.some(([r])=>r));
+});
+
+// Synthetic previous-month package; not a company month-end snapshot.
+const archived=()=>({ok:true,readOnly:true,revision:1,stockReportDate:'2026-01-01',availableMonths:['2026-01','2025-12'],selectedMonth:'2025-12',reviewRevision:'sha256:'+'d'.repeat(64),
+  review:{metadata:{month:'2025-12',sourceSalesCapturedAt:'2025-12-20T00:00:00Z'},rows:[],queueReview:{rows:[]}},
+  readModel:{kind:'dated-order-review',historical:true,selectedMonth:'2025-12',sourceCapturedAt:'2025-12-20T00:00:00Z',sourceIsLive:false,queueApplied:false,warning:'Synthetic dated snapshot, not a month-end close'}});
+const monthReport=()=>({...report(),availableMonths:['2026-01','2025-12']});
+const finishRead=()=>new Promise(resolve=>setImmediate(resolve));
+test('explicit month selection is GET-only, uses the exact archive and leaves current cards unchanged',async()=>{
+  const h=browser();h.api.setAccess(binding());h.responses.push(monthReport());await h.api.attach(new Node());
+  const select=h.created.find(n=>n.id==='stock-review-month');assert.equal(select.value,'2026-01');assert.deepEqual(select.children.map(n=>n.value),['2026-01','2025-12']);
+  const before=copy(h.summaries),invalidations=h.soldInvalidations.length;
+  h.responses.push(archived());assert.equal(h.api.selectMonth('2025-12'),true);await finishRead();
+  assert.equal(select.value,'2025-12');assert.equal(h.mounted[0].v.review.metadata.month,'2025-12');assert.equal(h.mounted[0].v.review.readModel.historical,true);
+  assert.deepEqual(h.summaries,before);assert.equal(h.soldInvalidations.length,invalidations);assert.match(h.calls.at(-1).url,/month=2025-12$/);assert(h.calls.every(c=>c.options.method==='GET'));
+  h.responses.push(monthReport());assert(h.api.selectMonth('2026-01'));await finishRead();assert.equal(h.summaries.at(-1)[0].metadata.month,'2026-01');
+});
+test('unavailable, wrong-month and malformed archive replies never repaint current cards or relabel old data',async()=>{
+  for(const mutate of [d=>d.selectedMonth='2026-01',d=>d.review.metadata.month='2026-01',d=>d.review.financial={metadata:{month:'2026-01'}},d=>d.readModel.historical=false,d=>d.readModel.queueApplied=true,d=>d.reviewRevision='bad',d=>d.readModel.sourceCapturedAt='2027-01-01T00:00:00Z',d=>d.revision=9,d=>d.status=422]){
+    const h=browser();h.api.setAccess(binding());h.responses.push(monthReport());await h.api.attach(new Node());const before=copy(h.summaries),value=archived();mutate(value);h.responses.push(value);h.api.selectMonth('2025-12');await finishRead();
+    assert.deepEqual(h.summaries,before);assert.equal(h.mounted[0].v.review,undefined);assert(h.created.some(n=>n.textContent&&/ไม่ตรง|ยังไม่มี|เปลี่ยนระหว่างอ่าน/.test(n.textContent)));
+  }
+});
+test('month switching protects drafts and rejects late previous-month responses',async()=>{
+  const h=browser();h.api.setAccess(binding());h.responses.push(monthReport());await h.api.attach(new Node());
+  const select=h.created.find(n=>n.id==='stock-review-month');h.mounted[0].v.dirty=true;select.value='2025-12';assert.equal(h.api.selectMonth(select.value),false);assert.equal(select.value,'2026-01');assert.equal(h.calls.length,1);assert(h.api.isDirty());
+  h.mounted[0].v.dirty=false;let release;h.responses.push(new Promise(r=>release=r));h.api.selectMonth('2025-12');
+  h.responses.push(monthReport());h.api.selectMonth('2026-01');await finishRead();release(archived());await finishRead();assert.equal(h.mounted[0].v.review.metadata.month,'2026-01');assert.equal(h.summaries.at(-1)[0].metadata.month,'2026-01');
+});
+test('pending current source can advertise an archive without fabricating current quantities',async()=>{
+  const h=browser();h.api.setAccess({...binding(),currentMonthSold:null,currentAllocation:null});h.responses.push({...monthReport(),review:null,readModel:{kind:'current-month-order-review',status:'pending',sourceIsLive:false,queueApplied:false,warning:'Synthetic evidence missing'}});await h.api.attach(new Node());
+  assert.equal(h.mounted.length,0);h.responses.push(archived());assert(h.api.selectMonth('2025-12'));await finishRead();assert.equal(h.mounted[0].review.metadata.month,'2025-12');assert(!h.summaries.some(([r])=>r));
+});
+test('explicit archive stays selected across Bangkok rollover without becoming current-month data',async()=>{
+  const h=browser();h.api.setAccess(binding());h.responses.push(monthReport());await h.api.attach(new Node());h.responses.push(archived());h.api.selectMonth('2025-12');await finishRead();
+  h.setClock('2026-01-31T17:00:00Z');assert(h.api.checkCurrentMonth());assert.equal(h.created.find(n=>n.id==='stock-review-month').value,'2025-12');assert.equal(h.mounted[0].v.review.metadata.month,'2025-12');assert.equal(h.soldInvalidations.length,1);
+  h.setToken('');h.api.invalidate('logout');assert.equal(h.mounted[0].v.destroyed,true);assert.equal(h.created.find(n=>n.id==='stock-review-month').value,'2026-02');
 });
