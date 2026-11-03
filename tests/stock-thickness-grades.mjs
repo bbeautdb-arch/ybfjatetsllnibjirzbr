@@ -48,6 +48,20 @@ function runtime(){
     download:()=>downloads.click()};
 }
 
+test('compact summary removes duplicated chrome without removing quantity meaning or source bindings',()=>{
+  const h=runtime(),input=data(),before=JSON.stringify(input),m=h.api.buildModel(input,calculate),html=h.api.renderHTML(m);
+  assert.match(html,/<p class="ss-overview-source" hidden>/);
+  assert.match(html,/<p class="ss-sales-summary-source" role="status" hidden>/);
+  assert.doesNotMatch(html,/เทียบ 4×8 ใช้ขนาด 1,220 × 2,440/);
+  assert.doesNotMatch(html,/ใช้เดือนปัจจุบันตามเวลาไทย และชุดหน้า 09 เดียวกับกล่อง/);
+  assert.match(html,/จองรวม = จองมีของ \+ จองต้องผลิตเพิ่ม/);
+  assert.match(html,/Physical − จองมีของ = Free/);
+  assert.match(html,/ภาพรวมรายการขาย · เดือนนี้/);
+  assert.match(source,/dailySource\.textContent=overviewSourceText\(latest\)/);
+  assert.equal(JSON.stringify(input),before);
+  assert.equal(m.total.count,input.rows.length);
+});
+
 test('grade details reuse exact-spec aggregation, retain zero grades and raw Aging, and never merge raw sheet/strip quantities',()=>{
   const h=runtime(),input=data(),before=JSON.stringify(input),m=h.api.buildModel(input,calculate),groups=new Map(m.thicknessGrades),grades=groups.get('1.6');
   assert.deepEqual(Array.from(grades,([g])=>g),['AV','AAA','A','B','F','REJ','C','UN','CTS','ALPHA','ZETA']);

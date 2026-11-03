@@ -69,7 +69,7 @@
     const token=()=>{if(win.AAFStockAccess)return win.AAFStockAccess.token();if(win.AAFStockAccessRequired)return '';try{const user=JSON.parse(win.sessionStorage.getItem('aaf_user'));return user?.stockSessionToken||user?.gradeBridgeSessionToken||user?.bridgeSessionToken||'';}catch{return '';}};
     const scope=()=>epoch+'|'+token();
     const reportScope=()=>scope()+'|'+reportEpoch+'|'+selectedMonth;
-    const tell=text=>{if(status)status.textContent=text;};
+    const tell=text=>{if(status){status.textContent=text;status.hidden=!text;}};
     const paintMonth=()=>{if(monthLabel)monthLabel.textContent='ภาพรวมขายเดือนนี้ · '+selectedMonth+' · เวลาไทย';};
     function suspendSales(message){
       response=null;failed=true;win.AAFStockSummary?.setOrderReview?.(null,null);
@@ -144,7 +144,7 @@
       const toolbar=win.document.createElement('div');toolbar.className='stock-order-toolbar';toolbar.style.cssText='display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0';
       monthLabel=win.document.createElement('strong');paintMonth();
       const refresh=win.document.createElement('button');refresh.type='button';refresh.textContent='โหลดข้อมูลเดือนนี้ล่าสุด';refresh.addEventListener('click',()=>refreshHandler?refreshHandler():load(true));
-      status=win.document.createElement('p');status.setAttribute('role','status');status.style.cssText='white-space:pre-wrap;font-size:13px;margin:8px 0';
+      status=win.document.createElement('p');status.setAttribute('role','status');status.style.cssText='white-space:pre-wrap;font-size:13px;margin:8px 0';status.hidden=true;
       body=win.document.createElement('div');toolbar.append(monthLabel,refresh);host.append(toolbar,status,body);
     }
     async function load(force=false){
@@ -169,9 +169,9 @@
           if(data.revision!==access.revision||data.stockReportDate!==access.reportDate)fail('snapshot-changed','สต๊อกเปลี่ยนระหว่างอ่าน กรุณากดโหลดข้อมูลส่วนกลางล่าสุดด้านบนก่อน');
           if(view?.hasDirty?.()||notes.isBusy()||notes.isUncertain()){needsLoad=true;suspendSales('มีร่างระหว่างโหลด · เก็บร่างไว้ กรุณาตรวจ/เซฟก่อนโหลดภาพรวมล่าสุด');return;}
           response=data;failed=false;if(body){body.hidden=false;body.inert=false;}
-          const review={...data.review,readModel:data.readModel};
-          if(view)view.update(review);else view=win.AAFOrderReviewUI.mount(body,review,{readNotes:async()=>{const snapshot=await notes.readNotes();if(snapshot.saveUnresolved)fail('save-uncertain','ข้อมูลหลังบันทึกยังไม่ตรงครบทุกช่องที่ต้องคงเดิม · เก็บร่างและสถานะรอตรวจไว้ ห้ามส่งซ้ำ ยังไม่ถือว่าเซฟสำเร็จ');return access?.notesReadOnly?{...snapshot,canSave:false,canEditFollowup:false}:snapshot;},saveNotes:notes.saveNotes,saveChanges:notes.saveChanges,prepareNotesFile:async(file,settings)=>{if(access?.notesReadOnly)fail('read-only','รายงานหน้านี้อ่านอย่างเดียว');return notes.prepareNotesFile(file,settings);}});
-          publish();tell((rm.warning||'ชุดยอดขายที่ตรวจไว้ ไม่ใช่การอ่านหน้า 09 สด')+' · เดือน '+month+' · อ่านส่วนกลาง '+new Date(now()).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})+' · ไม่เปลี่ยนยอดสต๊อก/จอง/ราคา');
+          const review={...data.review,readModel:data.readModel,displaySourceNote:(rm.warning||'ชุดยอดขายที่ตรวจไว้ ไม่ใช่การอ่านหน้า 09 สด')+' · เดือน '+month+' · อ่านส่วนกลาง '+new Date(now()).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})+' · ไม่เปลี่ยนยอดสต๊อก/จอง/ราคา'};
+          if(view)view.update(review);else view=win.AAFOrderReviewUI.mount(body,review,{compactChrome:true,readNotes:async()=>{const snapshot=await notes.readNotes();if(snapshot.saveUnresolved)fail('save-uncertain','ข้อมูลหลังบันทึกยังไม่ตรงครบทุกช่องที่ต้องคงเดิม · เก็บร่างและสถานะรอตรวจไว้ ห้ามส่งซ้ำ ยังไม่ถือว่าเซฟสำเร็จ');return access?.notesReadOnly?{...snapshot,canSave:false,canEditFollowup:false}:snapshot;},saveNotes:notes.saveNotes,saveChanges:notes.saveChanges,prepareNotesFile:async(file,settings)=>{if(access?.notesReadOnly)fail('read-only','รายงานหน้านี้อ่านอย่างเดียว');return notes.prepareNotesFile(file,settings);}});
+          publish();tell('');
         }catch(e){
           checkCurrentMonth();if(stamp!==reportScope())return;
           suspendSales(e.message||'ยังแสดงภาพรวมเดือนนี้ไม่ได้ กรุณาโหลดล่าสุด');

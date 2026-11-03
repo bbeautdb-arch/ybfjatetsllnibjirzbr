@@ -90,6 +90,35 @@ test('source-only renderer separates sold headline from complete plan and never 
   assert.match(h.nodes.get('stock-title').textContent,/ทะเบียนคลังยังรอตรวจ/);assert.doesNotMatch(h.nodes.get('stock-title').textContent,/0 สเปก/);assert.match(h.nodes.get('announcement').textContent,/รายการขาย/);
   assert.match(h.nodes.get('reconciliation').innerHTML,/ยังไม่ยืนยันการจัดสรรกับฐานสต๊อก/);h.api.destroy();
 });
+test('compact embedded chrome hides duplicate hero, normal source-only callout and idle bar without changing sales content',()=>{
+  const a=harness(),b=harness({compactChrome:true}),f=salesOnlyFixture();const review={...f.review,readModel:f.readModel,displaySourceNote:'Synthetic loaded at current source capture'};
+  a.api.update(review);b.api.update(review);assert.equal(a.shadow.children[1].className,'');assert.equal(b.shadow.children[1].className,'compact-chrome');
+  assert.equal(a.nodes.get('source-warning').hidden,false);assert.equal(b.nodes.get('source-warning').hidden,true);assert.equal(b.shadow.children[1]['data-changes-active'],'false');
+  assert.equal(b.nodes.get('metrics').innerHTML,a.nodes.get('metrics').innerHTML);assert.equal(b.nodes.get('table-area').innerHTML,a.nodes.get('table-area').innerHTML);
+  assert.match(b.nodes.get('metrics').innerHTML,/ยังไม่ทราบ Free/);assert.match(b.nodes.get('table-area').innerHTML,/ยังไม่ทราบ · รอตรวจฐานสต๊อก/);
+  assert.match(b.nodes.get('source-sales').textContent,/Synthetic loaded/);assert.match(b.nodes.get('source-sales').textContent,new RegExp(f.readModel.source.capturedAt));
+  assert.match(css,/\.compact-chrome \.top\{display:none\}/);assert.match(css,/\.compact-chrome:not\(\[data-changes-active="true"\]\) \.changes-toolbar\{display:none\}/);
+  assert.match(b.shadow.children[1].innerHTML,/วันที่ข้อมูล ขอบเขต และวิธีอ่าน/);a.api.destroy();b.api.destroy();
+});
+test('compact stale and suspended warnings remain visible and suspension preserves active draft nodes',async()=>{
+  const h=harness({compactChrome:true}),f=salesOnlyFixture();h.api.update({...f.review,readModel:{...f.readModel,stale:true}});assert.equal(h.nodes.get('source-warning').hidden,false);assert.match(h.nodes.get('source-warning').textContent,/ต้องตรวจเทียบ/);
+  h.api.update({...f.review,readModel:f.readModel});h.api.applyNotesSnapshot(snapshot());const input=h.input();input.focus();input.setSelectionRange(2,4,'forward');input.value='synthetic pending draft';await input.dispatch('input');
+  h.api.suspendSales('synthetic mismatched current source');assert.equal(h.nodes.get('source-warning').hidden,false);assert.match(h.nodes.get('source-warning').textContent,/synthetic mismatched/);assert.equal(h.input(),input);assert.equal(h.shadow.activeElement,input);assert.equal(input.selectionStart,2);assert.equal(h.shadow.children[1]['data-changes-active'],'true');h.api.destroy();
+});
+test('compact save bar appears for note edits and empty tracking clears without replacing focus, then hides after verified save',async()=>{
+  let remote=trackingSnapshot(),release;const writes=[];const h=harness({compactChrome:true,readNotes:async()=>copy(remote),saveChanges:async payload=>{writes.push(copy(payload));await new Promise(resolve=>release=resolve);remote=trackingSnapshot(payload.followupChanges[0].after);return copy(remote);}});
+  assert.equal(h.shadow.children[1]['data-changes-active'],'true','pending initial read remains visible');await new Promise(resolve=>setImmediate(resolve));assert.equal(h.shadow.children[1]['data-changes-active'],'false');
+  const note=h.input();note.focus();note.setSelectionRange(3,5,'forward');note.value='synthetic draft';await note.dispatch('input');assert.equal(h.shadow.children[1]['data-changes-active'],'true');assert.equal(h.input(),note);assert.equal(h.shadow.activeElement,note);assert.equal(note.selectionStart,3);
+  note.value='before synthetic';await note.dispatch('input');assert.equal(h.shadow.children[1]['data-changes-active'],'false');
+  const followup=h.followups()[0];followup.value='';await followup.dispatch('input');assert.equal(h.shadow.children[1]['data-changes-active'],'true','an explicit empty-string clear still requires save');
+  await h.nodes.get('changes-stage').click();assert.equal(h.nodes.get('notes-confirmation').hidden,false);const saving=h.nodes.get('notes-confirm').click();await new Promise(resolve=>setImmediate(resolve));assert.equal(h.shadow.children[1]['data-changes-active'],'true');assert.equal(h.nodes.get('changes-stage').disabled,true);release();await saving;
+  assert.equal(writes.length,1);assert.equal(writes[0].followupChanges[0].after,'');assert.equal(h.api.hasDirty(),false);assert.equal(h.shadow.children[1]['data-changes-active'],'false');h.api.destroy();
+});
+test('compact save bar keeps errors, conflicts, uncertain saves and import previews actionable',async()=>{
+  const denied=harness({compactChrome:true,readNotes:async()=>{throw Error('synthetic permission failure');}});await new Promise(resolve=>setImmediate(resolve));assert.equal(denied.shadow.children[1]['data-changes-active'],'true');assert.match(denied.nodes.get('changes-count').textContent,/synthetic permission failure/);denied.api.destroy();
+  let remote=snapshot();const h=harness({compactChrome:true,readNotes:async()=>copy(remote),saveNotes:async()=>{throw Error('synthetic uncertain');}});await new Promise(resolve=>setImmediate(resolve));h.input().value='keep draft';await h.input().dispatch('input');await h.nodes.get('changes-stage').click();await h.nodes.get('notes-confirm').click();assert.equal(h.shadow.children[1]['data-changes-active'],'true');assert.match(h.nodes.get('changes-count').textContent,/synthetic uncertain/);remote=snapshot('remote changed');await h.api.refreshNotes();assert.equal(h.shadow.children[1]['data-changes-active'],'true');assert.equal(h.nodes.get('changes-stage').disabled,true);h.api.destroy();
+  const file=harness({compactChrome:true,readNotes:async()=>snapshot(),prepareNotesFile:async()=>({canApply:true,changes:[{key,before:'before synthetic',after:'synthetic imported'}],issues:[]}),saveNotes:async changes=>snapshot(changes[0].after)});await new Promise(resolve=>setImmediate(resolve));file.nodes.get('notes-file-column').value='AD';file.nodes.get('notes-file-mode').value='append';file.nodes.get('notes-file').files=[{name:'synthetic.xlsx'}];await file.nodes.get('notes-file').dispatch('change');assert.equal(file.api.hasDirty(),false);assert.equal(file.shadow.children[1]['data-changes-active'],'true');assert.match(file.nodes.get('changes-count').textContent,/มีร่างนำเข้ารอตรวจ/);await file.nodes.get('notes-file-stage').click();await file.nodes.get('notes-confirm').click();assert.equal(file.shadow.children[1]['data-changes-active'],'false');file.api.destroy();
+});
 test('every thickness quantity and group cell labels its units, including mixed sheet and strip groups',()=>{
   const h=harness(),f=salesOnlyFixture();f.review.rows[1].t=3.2;
   const before=JSON.stringify(f.review);h.api.update({...f.review,readModel:f.readModel});

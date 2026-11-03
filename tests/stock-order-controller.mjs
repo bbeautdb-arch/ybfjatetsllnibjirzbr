@@ -166,6 +166,21 @@ test('verified source-only sales mounts with allocation pending and does not inv
   assert.equal(h.mounted.length,1);assert.equal(h.mounted[0].review.readModel.status,'verified-sales-only');assert.equal(h.mounted[0].review.rows.length,7);assert.equal(h.soldInvalidations.length,0);assert(h.calls.every(c=>c.options.method==='GET'));assert(h.summaries.some(([r])=>r?.rows?.length===7));
   h.mounted[0].v.dirty=true;await h.api.attach(new Node());assert.equal(h.mounted.length,1);assert(h.api.isDirty());
 });
+test('embedded successful review requests compact chrome and moves normal source text into collapsed-view data',async()=>{
+  const h=browser(),f=salesOnlyFixture('2026-01');h.win.AAFOrderHeader=header;h.api.setAccess(f.binding);h.responses.push(f.envelope);const slot=new Node();await h.api.attach(slot);
+  const status=slot.children[0].children[1];assert.equal(status.hidden,true);assert.equal(status.textContent,'');assert.equal(h.mounted[0].services.compactChrome,true);
+  assert.match(h.mounted[0].review.displaySourceNote,/เดือน 2026-01/);assert.match(h.mounted[0].review.displaySourceNote,/อ่านส่วนกลาง/);assert.equal(f.review.displaySourceNote,undefined,'do not mutate source evidence');
+  assert(h.created.some(n=>n.textContent==='โหลดข้อมูลเดือนนี้ล่าสุด'));assert(h.created.some(n=>n.textContent==='ภาพรวมขายเดือนนี้ · 2026-01 · เวลาไทย'));
+});
+test('compact controller status remains visible for source mismatch, unavailable month, network and authorization failures',async()=>{
+  for(const mode of ['mismatch','pending','401','403','network']){
+    const h=browser(),f=salesOnlyFixture('2026-01'),slot=new Node();h.win.AAFOrderHeader=header;h.api.setAccess(f.binding);
+    if(mode==='mismatch'){f.envelope.readModel.source.checksum='sha256:'+'c'.repeat(64);h.responses.push(f.envelope);}
+    else if(mode==='pending')h.responses.push({...f.envelope,review:null,readModel:{...f.readModel,status:'pending',warning:'synthetic current source pending'}});
+    else if(mode==='network')h.win.fetch=async()=>{throw Error('synthetic network error');};else h.responses.push({status:Number(mode),ok:false});
+    await h.api.attach(slot);const status=slot.children[0].children[1];assert.equal(status.hidden,false,mode);assert(status.textContent.length>0);assert.equal(h.mounted.length,0);
+  }
+});
 test('sales-only response still requires exact current source, current stock revision and null allocation',async()=>{
   for(const mutate of [f=>f.envelope.selectedMonth='2025-12',f=>f.envelope.readModel.source.checksum='sha256:'+'c'.repeat(64),f=>f.envelope.revision++,f=>f.review.rows[1].shortage=0,f=>f.readModel.stock={},f=>f.review.metadata.month='2025-12',f=>f.review.summary.allocated=0]){
     const h=browser(),f=salesOnlyFixture('2026-01');h.win.AAFOrderHeader=header;mutate(f);h.api.setAccess(f.binding);h.responses.push(f.envelope);await h.api.attach(new Node());assert.equal(h.mounted.length,0);assert(!h.summaries.some(([r])=>r));
