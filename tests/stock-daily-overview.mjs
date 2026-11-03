@@ -55,6 +55,18 @@ const card=(html,id)=>element(html,`data-stock-card="${id}"`);
 const overview=(html,id)=>element(card(html,id),'class="ss-card-overview"');
 const details=(html,id)=>element(card(html,id),`id="ss-card-details-${id}"`);
 
+test('overview hides only the central timestamp/spec subtitle, preserving source data and all cards',()=>{
+  const m=model();m.salesSummary=summary();
+  const before=JSON.stringify(m),html=api.renderDailyOverview(m);
+  const header=element(html,'class="ss-overview-header"');
+  assert.match(header,/<small hidden>ข้อมูลส่วนกลาง [^<]+ · 2 สเปก<\/small>/);
+  assert.match(header,/<h3>ภาพรวมสต๊อกและยอดขาย<\/h3>/);
+  assert.equal((header.match(/\bhidden\b/g)||[]).length,1);
+  assert.equal(element(html,'class="ss-kpis"'),`<div class="ss-kpis">${api.renderKpis(m.salesSummary,m)}</div>`);
+  assert.match(html,/class="ss-overview-footer">สต๊อก \/ จอง \/ Free/);
+  assert.equal(JSON.stringify(m),before);
+});
+
 test('all four daily-report cards initially show an overview with accessible, individually collapsed detail controls',()=>{
   const report=summary(),m=model(),before=JSON.stringify({report,m});
   const html=api.renderKpis(report,m);
