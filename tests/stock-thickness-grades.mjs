@@ -22,24 +22,29 @@ const childBody=(html,key)=>html.match(new RegExp('<tbody class="ss-thickness-gr
 const near=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-8,`${actual} != ${expected}`);
 function runtime(){
   let html='',writes=0,exported='',resolveFonts;
-  const events={},buttons=new Map(),bodies=new Map(),downloads={},status={textContent:''};
+  const events={},buttons=new Map(),bodies=new Map(),productionButtons=new Map(),productionPanels=new Map(),downloads={},status={textContent:''};
   const root={classList:{remove(){}},addEventListener(type,fn){(events[type]??=[]).push(fn);},querySelectorAll:()=>[],
-    get innerHTML(){return html;},set innerHTML(value){html=value;writes++;buttons.clear();bodies.clear();
+    get innerHTML(){return html;},set innerHTML(value){html=value;writes++;buttons.clear();bodies.clear();productionButtons.clear();productionPanels.clear();
       for(const match of value.matchAll(/<button type="button" class="ss-thickness-toggle"[^>]*data-thickness-toggle="([^"]+)"[^>]*aria-expanded="([^"]+)"[^>]*aria-controls="([^"]+)"[^>]*aria-label="([^"]+)"/g)){
         const attrs={'aria-expanded':match[2],'aria-controls':match[3],'aria-label':match[4]},marker={textContent:match[2]==='true'?'▾':'▸'};
         const button={dataset:{thicknessToggle:match[1]},getAttribute:k=>attrs[k],setAttribute(k,v){attrs[k]=v;},querySelector:s=>s==='.ss-thickness-marker'?marker:null,closest:s=>s==='[data-thickness-toggle]'?button:null};
         buttons.set(match[1],button);
       }
       for(const match of value.matchAll(/<tbody class="ss-thickness-grades" id="([^"]+)"([^>]*)>/g))bodies.set(match[1],{hidden:match[2].includes('hidden')});
-    },querySelector(selector){if(selector==='.ss-download')return{addEventListener(type,fn){downloads[type]=fn;}};if(selector==='.ss-status')return status;if(selector.startsWith('#ss-thickness-grades-'))return bodies.get(selector.slice(1));return null;}};
+      for(const match of value.matchAll(/<button type="button" class="ss-production-toggle"[^>]*data-thickness-production-toggle="([^"]+)"[^>]*aria-expanded="([^"]+)"[^>]*aria-controls="([^"]+)"[^>]*aria-label="([^"]+)"/g)){
+        const attrs={'aria-expanded':match[2],'aria-controls':match[3],'aria-label':match[4]},button={dataset:{thicknessProductionToggle:match[1]},getAttribute:k=>attrs[k],setAttribute(k,v){attrs[k]=v;},closest:s=>s==='[data-thickness-production-toggle]'?button:null};productionButtons.set(match[1],button);
+      }
+      for(const match of value.matchAll(/<div class="ss-thickness-production" id="([^"]+)"([^>]*)>/g))productionPanels.set(match[1],{hidden:match[2].includes('hidden')});
+    },querySelector(selector){if(selector==='.ss-download')return{addEventListener(type,fn){downloads[type]=fn;}};if(selector==='.ss-status')return status;if(selector.startsWith('#ss-thickness-grades-'))return bodies.get(selector.slice(1));if(selector.startsWith('#ss-thickness-production-'))return productionPanels.get(selector.slice(1));return null;}};
   const window={html2canvas:async sheet=>({toBlob:fn=>fn({type:'image/png'})})};
   const document={getElementById:()=>root,head:{append(){}},fonts:{ready:new Promise(resolve=>{resolveFonts=resolve;})},body:{append(node){exported=node.innerHTML;}},createElement(tag){
     if(tag==='div')return {dataset:{},style:{},innerHTML:'',querySelectorAll:()=>[],querySelector:()=>({getBoundingClientRect:()=>({width:1440,height:2000})}),remove(){}};
     if(tag==='a')return{click(){}};return{};
   }};
   vm.runInNewContext(source,{window,document,location:{hash:''},URL:{createObjectURL:()=> 'synthetic-blob',revokeObjectURL(){}},setTimeout(){}});
-  return {api:window.AAFStockSummary,buttons,bodies,get html(){return html;},get writes(){return writes;},get exported(){return exported;},resolveFonts,
+  return {api:window.AAFStockSummary,buttons,bodies,productionButtons,productionPanels,get html(){return html;},get writes(){return writes;},get exported(){return exported;},resolveFonts,
     click(key,nested=false){const button=buttons.get(key);assert.ok(button,'visible thickness button '+key);const target=nested?{closest:s=>button.closest(s)}:button;for(const fn of events.click||[])fn({target});},
+    clickProduction(key){const button=productionButtons.get(key);assert.ok(button,'production button '+key);for(const fn of events.click||[])fn({target:button});},
     download:()=>downloads.click()};
 }
 
@@ -66,7 +71,10 @@ test('native accessible buttons control immediately following grade rows; parent
   assert.match(childBody(html,'1.6')[2],/data-grade="A"><th scope="row">1\.6 A<\/th>/);
   assert.equal((html.match(/data-thickness-parent=/g)||[]).length,2);assert.doesNotMatch(html,/data-thickness-parent="6"/,'all-zero thickness top-row filter stays unchanged');
   assert.equal(m.thickness.some(([t])=>t==='6'),true,'filtered thickness is still retained in catalog');
-  for(const match of html.matchAll(/<tbody[^>]*>([\s\S]*?)<\/tbody>/g))for(const row of match[1].matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g))assert.equal((row[1].match(/<(?:th|td)\b/g)||[]).length,12);
+  for(const match of html.matchAll(/<tbody[^>]*>([\s\S]*?)<\/tbody>/g))for(const row of match[1].matchAll(/<tr\b([^>]*)>([\s\S]*?)<\/tr>/g)){
+    if(row[1].includes('data-thickness-production-control')){assert.match(row[2],/^<td colspan="12">/);continue;}
+    assert.equal((row[2].match(/<(?:th|td)\b/g)||[]).length,12);
+  }
   assert.equal((html.match(/<tfoot>/g)||[]).length,1);assert.equal((html.match(/<th scope="row">รวม<\/th>/g)||[]).length,1);
   assert.match(html,/แถวเกรดเป็นส่วนย่อย ไม่บวกซ้ำกับยอดรวม/);assert.match(html,/พิมพ์\/ดาวน์โหลดตามแถวที่เปิดไว้/);
   assert.doesNotMatch(html,/>130(?: แผ่น)?</,'no raw sheet+strip sum is displayed');
@@ -101,4 +109,65 @@ test('unknown grade order is deterministic and untrusted labels cannot add marku
   assert.match(html,/&quot;&gt;&lt;img src=x onerror=bad\(\)&gt;/);assert.doesNotMatch(html,/<img src=x/);
   const reversed=h.api.buildModel({...input,rows:[...input.rows].reverse()},calculate);
   assert.deepEqual(Array.from(m.thicknessGrades.find(([t])=>t==='1.6')[1],([g])=>g),Array.from(reversed.thicknessGrades.find(([t])=>t==='1.6')[1],([g])=>g));
+});
+
+test('saved production detail uses positive exact-spec shortages, zero Physical rows, fractions and separate units without another allocation',()=>{
+  const h=runtime(),input=data();input.rows.push(
+    row('synthetic-F-short-large',{grade:'F',w:1200,l:2400,committedQty:8.25}),
+    row('synthetic-F-short-small',{grade:'F',w:610,l:1220,committedQty:12}),
+    row('synthetic-B-strip-short',{grade:'B',unit:'strip',w:25,l:800,committedQty:7.5}),
+    row('synthetic-reversed-alias',{grade:'F',w:2400,l:1200,retained:true})
+  );
+  const before=JSON.stringify(input),m=h.api.buildModel(input,calculate),result=h.api.buildThicknessProduction(m,'1.6');
+  assert.equal(result.status,'saved-plan');assert.deepEqual(Array.from(result.grades,g=>g.grade),['AAA','B','F']);
+  assert.equal(result.byUnit.sheet,25.25);assert.equal(result.byUnit.strip,7.5);assert.equal(result.fractional,true);
+  const f=result.grades.find(g=>g.grade==='F');assert.equal(f.byUnit.sheet,20.25);assert.deepEqual(Array.from(f.specs,r=>[r.w,r.l,r.qty]),[[610,1220,12],[1200,2400,8.25]]);
+  assert.equal(result.grades.find(g=>g.grade==='AAA').byUnit.sheet,5,'different-size spare is not netted against shortage');
+  const html=childBody(table(h.api.renderHTML(m,new Set(['1.6']),new Set(['1.6']))),'1.6')[2];
+  assert.match(html,/25\.25 แผ่น · 7\.5 ชิ้นไม้แถบ/);assert.match(html,/1,200 × 2,400 มม./);assert.match(html,/8\.25 แผ่น/);assert.match(html,/ยังไม่ปัดเป็นคำสั่งผลิต/);assert.doesNotMatch(html,/data-production-grade="A"/);
+  assert.equal(JSON.stringify(input),before);assert.equal(m.total.count,input.rows.length);
+});
+
+test('production detail fails visibly pending for unknown or mismatched inputs rather than fabricating zero',()=>{
+  const h=runtime(),base=h.api.buildModel(data(),calculate);
+  for(const mutate of [m=>m.rows[0].unit='unknown',m=>m.rows[0].reservedProductionQty=null,m=>m.rows[0].reservedProductionQty=NaN,m=>m.rows[0].qty=-1,m=>delete m.rows[0].committedQty,m=>m.rows[0].w=null,m=>m.rows.push({...m.rows[0]}),m=>m.thickness[0][1].byUnit.sheet.reservedProductionQty++,m=>m.thicknessGrades[0][1][1][1].byUnit.sheet.reservedProductionQty++,m=>m.thicknessGrades[0][1][0]=m.thicknessGrades[0][1][1],m=>m.reportDate='unknown']){
+    const m=clone(base);mutate(m);const result=h.api.buildThicknessProduction(m,'1.6');assert.equal(result.status,'pending');assert.equal(result.byUnit,null);assert.equal(result.grades.length,0);
+    const html=childBody(table(h.api.renderHTML(m,new Set(['1.6']),new Set(['1.6']))),'1.6')[2];assert.match(html,/ยังยืนยันรายการต้องผลิตเพิ่มไม่ได้/);assert.doesNotMatch(html,/data-production-grade=/);
+  }
+  for(const qty of [0.125,0.004,0.000000001]){
+    const input=data();input.rows.push(row('synthetic-finer-than-cent',{grade:'F',committedQty:qty}));const m=h.api.buildModel(input,calculate);
+    assert.equal(h.api.buildThicknessProduction(m,'1.6').status,'pending','do not round a finer positive shortage or show it as zero');
+    assert.match(childBody(table(h.api.renderHTML(m)),'1.6')[2],/ไม่ปัดยอดหรือใช้ศูนย์แทน/);
+  }
+});
+
+test('production detail labels saved date/revision/scope and cutoff uncertainty, and distinguishes a verified empty saved plan',()=>{
+  const h=runtime(),input=data();input.sellablePlan={checksum:'sha256:'+'a'.repeat(64),source:{capturedAt:'2026-11-01T01:00:00Z'}};
+  const m=h.api.buildModel(input,calculate),html=childBody(table(h.api.renderHTML(m,new Set(['1.6','2.5']),new Set(['1.6','2.5']))),'1.6')[2];
+  assert.match(html,/รุ่น 8/);assert.match(html,/อ่านต้นทางแผน/);assert.match(html,/รวมภาระทุกเดือนในแผนที่บันทึก/);assert.match(html,/ยังรอยืนยันสต๊อกล่าสุด\/จุดตัดรายงาน/);assert.match(html,/ไม่ใช่ยอดผลิตล่าสุดที่ยืนยันแล้ว/);
+  assert.equal(h.api.buildThicknessProduction(m,'2.5').status,'saved-plan');assert.equal(h.api.buildThicknessProduction(m,'2.5').grades.length,0);
+  const empty=childBody(table(h.api.renderHTML(m,new Set(['2.5']),new Set(['2.5']))),'2.5')[2];assert.match(empty,/ไม่มีรายการต้องผลิตเพิ่มสำหรับความหนา 2\.5 มม. ตามแผนที่บันทึก/);
+  m.reservationPlan={capturedAt:'invalid',checksum:null};assert.match(childBody(table(h.api.renderHTML(m)),'1.6')[2],/หลักฐานระบุชุดแผนยังไม่ครบ/);
+});
+
+test('second native production button is inside grade detail, independently toggles without DOM/editor replacement and survives canonical refresh',()=>{
+  const h=runtime(),input=data();h.api.update(input,calculate);const writes=h.writes,button=h.productionButtons.get('1.6');
+  assert.match(childBody(table(h.html),'1.6')[2],/data-thickness-production-control="1\.6"><td colspan="12">/);
+  assert.equal(button.getAttribute('aria-expanded'),'false');assert.equal(button.getAttribute('aria-controls'),'ss-thickness-production-1_6');
+  h.clickProduction('1.6');assert.equal(h.productionPanels.get('ss-thickness-production-1_6').hidden,true,'cannot open before grade view');
+  h.click('1.6');h.clickProduction('1.6');assert.equal(h.productionButtons.get('1.6'),button);assert.equal(button.getAttribute('aria-expanded'),'true');assert.equal(h.productionPanels.get('ss-thickness-production-1_6').hidden,false);
+  h.click('2.5');h.clickProduction('2.5');assert.equal(h.productionPanels.get('ss-thickness-production-2_5').hidden,false);
+  h.click('1.6');assert.equal(h.bodies.get('ss-thickness-grades-1_6').hidden,true);h.click('1.6');assert.equal(button.getAttribute('aria-expanded'),'true');assert.equal(h.productionPanels.get('ss-thickness-production-1_6').hidden,false);assert.equal(h.writes,writes);
+  const refresh=clone(input);refresh.revision++;refresh.rows.forEach(r=>{if(Number(r.t)===1.6)r.t='1.600';});h.api.update(refresh,calculate);
+  assert.equal(h.productionButtons.get('1.6').getAttribute('aria-expanded'),'true');assert.equal(h.productionButtons.get('2.5').getAttribute('aria-expanded'),'true');
+  h.clickProduction('1.6');assert.equal(h.productionPanels.get('ss-thickness-production-1_6').hidden,true);assert.equal(h.productionButtons.get('2.5').getAttribute('aria-expanded'),'true');
+  assert.doesNotMatch(source,/addEventListener\(['"]keydown/,'native button Enter/Space must not double-toggle');
+});
+
+test('print and PNG respect both frozen expansion sets and never add shortage detail into parent totals',async()=>{
+  const h=runtime();h.api.update(data(),calculate);h.click('1.6');h.clickProduction('1.6');const before=table(h.html).match(/<tfoot>[\s\S]*?<\/tfoot>/)[0];
+  const pending=h.download();h.clickProduction('1.6');h.click('2.5');h.clickProduction('2.5');h.resolveFonts();await pending;
+  const html=table(h.exported);assert.match(html,/<div class="ss-thickness-production" id="ss-thickness-production-1_6">/);assert.match(html,/<div class="ss-thickness-production" id="ss-thickness-production-2_5" hidden>/);assert.match(childBody(html,'2.5')[1],/hidden/);
+  assert.equal(html.match(/<tfoot>[\s\S]*?<\/tfoot>/)[0],before);assert.match(source,/\.ss-thickness-production\[hidden\]\{display:none!important\}/);assert.match(source,/@media print\{[^}]*\.ss-thickness-production-tools\{display:none\}/);
+  assert.match(source,/width:min\(100%,calc\(100cqw - 24px\)\)/,'panel fits viewport of table scroller, not the wide 12-column table');
 });

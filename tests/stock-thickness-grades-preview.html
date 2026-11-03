@@ -12,21 +12,22 @@
   </style>
 </head>
 <body>
-  <div class="fixture-banner"><b>SYNTHETIC FIXTURE ONLY — ไม่ใช่ข้อมูลบริษัท</b><br>คลิกความหนา 1.6 / 3.2 เพื่อทดสอบเกรดยอดศูนย์และหน่วยแยกแผ่น/ไม้แถบ · ไม่มีการเชื่อม API หรือบันทึกข้อมูล</div>
+  <div class="fixture-banner"><b>SYNTHETIC FIXTURE ONLY — ไม่ใช่ข้อมูลบริษัท</b><br>คลิกความหนา 1.6 / 3.2 แล้วกด “ดูที่ต้องผลิตเพิ่ม” เพื่อดูเกรดและขนาด · 2.5 ไม่มีรายการต้องผลิต · หน่วยแยกแผ่น/ไม้แถบ · ไม่มีการเชื่อม API หรือบันทึกข้อมูล</div>
   <main id="stock-summary" data-aaf-stock-summary></main>
-  <script src="../stock_summary.js?v=20261103-thickness-grades-r1"></script>
+  <script src="../stock_summary.js?v=20261103-thickness-production-r1"></script>
   <script>
     // Entirely invented catalog, quantities, source dates and prices.
     const row=(key,extra={})=>({key,sku:key,desc:'Synthetic catalog',size:'Normal',w:1220,l:2440,t:1.6,grade:'AAA',unit:'sheet',qty:0,baseQty:0,committedQty:0,freeQty:0,d90:0,d180:0,d270:0,d360:0,dOver:0,...extra});
     const rows=[
       row('SYNTH-16-AAA',{qty:20,baseQty:20,d90:20,committedQty:12,freeQty:8}),
       row('SYNTH-16-A-ZERO',{grade:'A',retained:true,baseQty:9,d90:6,d180:3}),
+      row('SYNTH-16-F-SHORT',{grade:'F',w:610,l:1220,committedQty:12.25}),
       ...['AV','B','F','REJ','C','UN','CTS','ZETA'].map(grade=>row('SYNTH-16-'+grade,{grade,retained:true})),
       row('SYNTH-25-B',{t:2.5,grade:'B',qty:17,baseQty:17,d90:17,freeQty:17}),
       row('SYNTH-32-A-SPARE',{t:3.2,grade:'A',qty:15,baseQty:15,d90:15,freeQty:15}),
       row('SYNTH-32-A-SHORT',{t:3.2,grade:'A',w:610,l:1220,committedQty:25}),
       row('SYNTH-32-B-SHEET',{t:3.2,grade:'B',qty:10,baseQty:10,d90:10,committedQty:4,freeQty:6}),
-      row('SYNTH-32-B-STRIP',{t:3.2,grade:'B',w:25,l:1000,unit:'strip',qty:100,baseQty:100,d90:100,committedQty:25,freeQty:75}),
+      row('SYNTH-32-B-STRIP',{t:3.2,grade:'B',w:25,l:1000,unit:'strip',qty:100,baseQty:100,d90:100,committedQty:125,freeQty:0}),
       row('SYNTH-45-AAA',{t:4.5,qty:7,baseQty:7,d90:7,freeQty:7}),
       row('SYNTH-60-B',{t:6,grade:'B',qty:5,baseQty:5,d90:5,freeQty:5})
     ];

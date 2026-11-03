@@ -19,6 +19,7 @@
   let orderHeader=null,orderHeaderError='กำลังรอชุดรายงานเดือนที่ตรวจครบ';
   const expandedCards=new Set();
   const expandedThickness=new Set();
+  const expandedThicknessProduction=new Set();
 
   // Saved stock prices are independent of the sales-allocation package. Exact
   // identity is required; never apply yesterday's prices/quantities as today's
@@ -192,18 +193,67 @@
     const v=m.total;
     return `<dl class="ss-physical-equivalents ss-physical-with-strips">${[['เทียบ 4×8 · ความหนาเดิม','eq4x8','stripEq4x8'],['เทียบ 4×8 · หนา 2.5 มม.','eq','stripEq']].map(([label,sheet,strip])=>`<div><dt>${label} · เฉพาะแผ่น</dt><dd>${number(v[sheet],2)} <small>แผ่น</small>${stripEquivalent(v,strip)}<span class="ss-combined-equivalent">รวมไม้แถบแล้ว <b>${number(v[sheet]+v[strip],2)}</b> แผ่นเทียบ</span></dd></div>`).join('')}</dl>`;
   }
+  // Read-only saved-plan detail. Never run another allocation or net a shortage
+  // against spare stock in a different exact specification or unit.
+  function thicknessProduction(m,key){
+    const pending=reason=>({status:'pending',reason,grades:[],byUnit:null});
+    // Saved allocation quantities use hundredths. Do not silently render a
+    // finer positive quantity as zero or round it into a production order.
+    const finite=v=>typeof v==='number'&&Number.isFinite(v)&&v>=0&&Number.isSafeInteger(Math.round(v*100))&&Math.abs(v*100-Math.round(v*100))<0.000001&&(v===0||Math.round(v*100)>0);
+    const same=(a,b)=>finite(a)&&finite(b)&&Math.abs(a-b)<0.000001;
+    if(!m||!Array.isArray(m.rows)||!/^\d{4}-\d{2}-\d{2}$/.test(m.reportDate||'')||!Number.isFinite(Date.parse(m.reportDate+'T00:00:00Z'))||new Date(m.reportDate+'T00:00:00Z').toISOString().slice(0,10)!==m.reportDate||!/^\d+$/.test(m.revision||''))return pending('ยังไม่ยืนยันวันที่รายงานหรือรุ่นข้อมูลที่บันทึก');
+    const keys=new Set();
+    for(const row of m.rows){if(!row||typeof row.key!=='string'||!row.key||keys.has(row.key))return pending('พบรหัสสเปกซ้ำหรือไม่ครบ · ไม่รวมยอดซ้ำ');keys.add(row.key);}
+    const rows=m.rows.filter(r=>String(Number(r.t))===key),parent=m.thickness?.find(([t])=>t===key)?.[1],expected=m.thicknessGrades?.find(([t])=>t===key)?.[1];
+    if(!rows.length||!parent||!Array.isArray(expected))return pending('ยังไม่มีรายละเอียดสเปกที่ตรวจครบสำหรับความหนานี้');
+    if(expected.some(entry=>!Array.isArray(entry)||entry.length!==2||typeof entry[0]!=='string'||!entry[1])||new Set(expected.map(([grade])=>grade)).size!==expected.length)return pending('ชุดยอดสรุปเกรดซ้ำหรือไม่ครบ · รอตรวจ');
+    const grouped=new Map(),byUnit={sheet:0,strip:0};
+    for(const r of rows){
+      if(!['sheet','strip'].includes(r.unit)||typeof r.grade!=='string'||!r.grade.trim()||!['w','l','t'].every(k=>Number.isFinite(Number(r[k]))&&Number(r[k])>0)||!['qty','committedQty','reservedInStockQty','reservedProductionQty'].every(k=>finite(r[k]))||!same(r.reservedInStockQty,Math.min(r.qty,r.committedQty))||!same(r.reservedInStockQty+r.reservedProductionQty,r.committedQty))return pending('จำนวน ขนาด เกรด หรือหน่วยไม่ครบ/ไม่ตรงกัน หรือจำนวนละเอียดเกินสองตำแหน่ง · ไม่ปัดยอดหรือใช้ศูนย์แทน');
+      if(!grouped.has(r.grade))grouped.set(r.grade,{grade:r.grade,byUnit:{sheet:0,strip:0},specs:[]});
+      const group=grouped.get(r.grade);group.byUnit[r.unit]+=r.reservedProductionQty;byUnit[r.unit]+=r.reservedProductionQty;
+      if(r.reservedProductionQty>0)group.specs.push({w:Number(r.w),l:Number(r.l),unit:r.unit,qty:r.reservedProductionQty});
+    }
+    if(expected.length!==grouped.size||expected.some(([grade,v])=>!grouped.has(grade)||['sheet','strip'].some(unit=>!same(grouped.get(grade).byUnit[unit],v.byUnit?.[unit]?.reservedProductionQty)))||['sheet','strip'].some(unit=>!same(byUnit[unit],parent.byUnit?.[unit]?.reservedProductionQty)))return pending('ยอดรายขนาดไม่ตรงกับยอดเกรด/ความหนาที่บันทึก · รอตรวจ ไม่แสดงยอดประมาณ');
+    return {status:'saved-plan',grades:expected.map(([grade])=>grouped.get(grade)).filter(g=>g.specs.length),byUnit,fractional:rows.some(r=>!Number.isInteger(r.reservedProductionQty))};
+  }
+  const productionQuantity=totals=>['sheet','strip'].filter(unit=>totals[unit]>0).map(unit=>number(totals[unit])+' '+(unit==='sheet'?'แผ่น':'ชิ้นไม้แถบ')).join(' · ');
+  function thicknessProductionWarning(m){
+    const api=window.AAFOrderHeader;
+    const allocation=api?.currentAllocationView?.(m?.currentAllocation,currentWarehouse(m),m?.currentMonthSold);
+    return allocation?.status==='verified-allocation'
+      ? 'เป็นยอดขาดตามแผนที่บันทึก ไม่ใช่คำสั่งผลิตใหม่ · ฐานรายงานตามวันที่ระบุ ไม่ใช่ตรวจนับคลัง ณ ขณะนี้'
+      : 'ยังรอยืนยันสต๊อกล่าสุด/จุดตัดรายงานกับการโหลดสินค้า · ตัวเลขนี้เป็นยอดขาดจากแผนที่บันทึก ไม่ใช่ยอดผลิตล่าสุดที่ยืนยันแล้ว';
+  }
+  function thicknessProductionHTML(m,key){
+    const result=thicknessProduction(m,key),shown=thicknessLabel(key),basis=`รายงานเมล ${reportDay(m.reportDate)} · รุ่น ${m.revision||'ยังไม่ระบุ'}`;
+    const scope='รวมภาระทุกเดือนในแผนที่บันทึก ไม่ใช่เฉพาะเดือนนี้ และไม่ยืนยันว่าครอบคลุมออเดอร์ใหม่ทุกเดือน';
+    const plan=m.reservationPlan,planIdentified=/^sha256:[a-f0-9]{64}$/.test(plan?.checksum||'')&&Number.isFinite(Date.parse(plan?.capturedAt));
+    const source=planIdentified?' · อ่านต้นทางแผน '+when(plan.capturedAt):' · หลักฐานระบุชุดแผนยังไม่ครบ ยอดนี้อ่านจากค่าจองที่บันทึก';
+    return `<h4>ต้องผลิตเพิ่ม · ${esc(shown)} มม. · ตามแผนที่บันทึก</h4><p class="ss-production-basis">${esc(basis+source)}<br>${esc(scope)}</p><p class="ss-production-warning" data-thickness-production-warning="${esc(key)}" role="status">${esc(thicknessProductionWarning(m))}</p>${result.status==='pending'?`<p class="ss-production-pending" role="status">ยังยืนยันรายการต้องผลิตเพิ่มไม่ได้: ${esc(result.reason)}</p>`:!result.grades.length?`<p class="ss-production-empty">ไม่มีรายการต้องผลิตเพิ่มสำหรับความหนา ${esc(shown)} มม. ตามแผนที่บันทึก</p>`:`<div class="ss-production-grade-list">${result.grades.map(g=>`<div class="ss-production-grade" data-production-grade="${esc(g.grade)}"><h5><span>${esc(shown+' '+g.grade)}</span><b>${productionQuantity(g.byUnit)}</b></h5><ul>${g.specs.map(r=>`<li data-production-spec><span>${number(r.w,3)} × ${number(r.l,3)} มม.</span><b>${number(r.qty)} ${r.unit==='sheet'?'แผ่น':'ชิ้นไม้แถบ'}</b></li>`).join('')}</ul></div>`).join('')}</div><p class="ss-production-total"><strong>รวมต้องผลิตเพิ่ม · ${esc(shown)} มม.</strong><b>${productionQuantity(result.byUnit)}</b></p>${result.fractional?'<p class="ss-production-fraction">มียอดทศนิยมตามแผนจัดสรร เช่น ส่วนแบ่งเกรด MIX · ยังไม่ปัดเป็นคำสั่งผลิต</p>':''}`}<p class="ss-production-note">เป็นรายละเอียดของคอลัมน์ “จองต้องผลิตเพิ่ม” ไม่บวกซ้ำ · ไม่เอาของต่างขนาด/เกรด/ความหนามาหักกัน ไม่หัก Physical ซ้ำ</p>`;
+  }
+  function repaintThicknessProductionWarnings(){
+    for(const node of root?.querySelectorAll('[data-thickness-production-warning]')||[])node.textContent=thicknessProductionWarning(latest);
+  }
   function groupTable(title,groups,label,total,detail=null){
     const agingCells=v=>stockQuantityCell(v,'aging90',false,'ss-aging-mail')+stockQuantityCell(v,'aging180',false,'ss-aging-mail')+stockQuantityCell(v,'agingOver180',false,'ss-aging-mail ss-aging-over');
     const quantities=v=>stockQuantityCell(v,'qty')+stockQuantityCell(v,'committedQty')+stockQuantityCell(v,'reservedInStockQty',false,'ss-reserved-stock')+stockQuantityCell(v,'reservedProductionQty',false,'ss-reserved-production')+stockQuantityCell(v,'freeQty',true);
     const values=v=>cell(v.count)+quantities(v)+agingCells(v)+equivalents(v);
     const children=new Map(detail?.grades||[]);
     const body=detail?groups.map(([k,v])=>{
-      const id='ss-thickness-grades-'+k.replaceAll('.','_'),open=detail.expanded.has(k),shown=thicknessLabel(k);
-      return `<tbody><tr data-thickness-parent="${esc(k)}"><th scope="row"><button type="button" class="ss-thickness-toggle" data-thickness-toggle="${esc(k)}" aria-expanded="${open}" aria-controls="${esc(id)}" aria-label="${open?'ซ่อน':'แสดง'}เกรดความหนา ${esc(shown)} มม."><span class="ss-thickness-marker" aria-hidden="true">${open?'▾':'▸'}</span><span>${esc(shown)}</span></button></th>${values(v)}</tr></tbody><tbody class="ss-thickness-grades" id="${esc(id)}"${open?'':' hidden'}>${(children.get(k)||[]).map(([grade,totals])=>`<tr data-thickness-grade="${esc(k)}" data-grade="${esc(grade)}"><th scope="row">${esc(shown+' '+grade)}</th>${values(totals)}</tr>`).join('')}</tbody>`;
+      const id='ss-thickness-grades-'+k.replaceAll('.','_'),open=detail.expanded.has(k),shown=thicknessLabel(k),productionId='ss-thickness-production-'+k.replaceAll('.','_'),productionOpen=detail.productionExpanded.has(k);
+      return `<tbody><tr data-thickness-parent="${esc(k)}"><th scope="row"><button type="button" class="ss-thickness-toggle" data-thickness-toggle="${esc(k)}" aria-expanded="${open}" aria-controls="${esc(id)}" aria-label="${open?'ซ่อน':'แสดง'}เกรดความหนา ${esc(shown)} มม."><span class="ss-thickness-marker" aria-hidden="true">${open?'▾':'▸'}</span><span>${esc(shown)}</span></button></th>${values(v)}</tr></tbody><tbody class="ss-thickness-grades" id="${esc(id)}"${open?'':' hidden'}>${(children.get(k)||[]).map(([grade,totals])=>`<tr data-thickness-grade="${esc(k)}" data-grade="${esc(grade)}"><th scope="row">${esc(shown+' '+grade)}</th>${values(totals)}</tr>`).join('')}<tr data-thickness-production-control="${esc(k)}"><td colspan="12"><div class="ss-thickness-production-tools"><button type="button" class="ss-production-toggle" data-thickness-production-toggle="${esc(k)}" aria-expanded="${productionOpen}" aria-controls="${esc(productionId)}" aria-label="${productionOpen?'ซ่อน':'ดู'}ที่ต้องผลิตเพิ่ม ความหนา ${esc(shown)} มม." data-html2canvas-ignore>${productionOpen?'ซ่อน':'ดู'}ที่ต้องผลิตเพิ่ม</button></div><div class="ss-thickness-production" id="${esc(productionId)}"${productionOpen?'':' hidden'}>${thicknessProductionHTML(detail.model,k)}</div></td></tr></tbody>`;
     }).join(''):`<tbody>${groups.map(([k,v])=>`<tr><th scope="row">${esc(k)}</th>${values(v)}</tr>`).join('')}</tbody>`;
     return `<section class="ss-group"><div class="ss-group-heading"><h3>${title}</h3><small>Aging เมล = ยอดต้นฉบับก่อนโยก</small></div>${detail?'<p class="ss-thickness-help">คลิกความหนาเพื่อดูเกรดในทะเบียน · รวมเกรดที่ยอดเป็นศูนย์ · แถวเกรดเป็นส่วนย่อย ไม่บวกซ้ำกับยอดรวม · พิมพ์/ดาวน์โหลดตามแถวที่เปิดไว้</p>':''}<div class="ss-group-scroll" role="region" tabindex="0" aria-label="${esc(title)} 12 คอลัมน์ เลื่อนแนวนอนได้"><table><caption class="ss-sr">${title} · Aging เมลจากต้นฉบับ · ยอดเทียบขนาดคำนวณจาก Physical</caption><thead><tr><th scope="col" rowspan="2">${label}</th><th scope="col" rowspan="2" class="ss-num">สเปก</th><th scope="col" rowspan="2" class="ss-num">Physical</th><th scope="col" rowspan="2" class="ss-num">จองรวม</th><th scope="col" rowspan="2" class="ss-num ss-reserved-stock">จองมีของ</th><th scope="col" rowspan="2" class="ss-num ss-reserved-production">จองต้องผลิตเพิ่ม</th><th scope="col" rowspan="2" class="ss-num">Free</th><th scope="colgroup" colspan="3" class="ss-num ss-aging-mail-group">Aging เมล</th><th scope="col" rowspan="2" class="ss-num ss-equivalent">เทียบ 4×8<br><small>หนาเดิม · เฉพาะแผ่น</small></th><th scope="col" rowspan="2" class="ss-num ss-equivalent">เทียบ 4×8<br><small>หนา 2.5 mm · เฉพาะแผ่น</small></th></tr><tr><th scope="col" class="ss-num ss-aging-mail">0–90</th><th scope="col" class="ss-num ss-aging-mail">91–180</th><th scope="col" class="ss-num ss-aging-mail ss-aging-over">&gt;180 วัน</th></tr></thead>${body}<tfoot><tr><th scope="row">รวม</th>${values(total)}</tr><tr class="ss-combined-total"><th scope="row" colspan="10">รวมเทียบแผ่น · รวมไม้แถบแล้ว<small>รวมเฉพาะหน่วยเทียบเดียวกัน ไม่บวกชิ้นกับแผ่นจริง</small></th><td class="ss-num ss-equivalent">${number(total.eq4x8+total.stripEq4x8,2)}<small>แผ่นเทียบ 4×8</small></td><td class="ss-num ss-equivalent">${number(total.eq+total.stripEq,2)}<small>แผ่นเทียบ 4×8 @ 2.5</small></td></tr></tfoot></table></div></section>`;
   }
   function thicknessClick(event){
+    const production=event.target.closest?.('[data-thickness-production-toggle]');
+    if(production){
+      const key=production.dataset.thicknessProductionToggle,panel=root.querySelector('#'+production.getAttribute('aria-controls'));
+      if(!panel||!expandedThickness.has(key)||!latest?.thickness.some(([t])=>t===key))return;
+      const open=!expandedThicknessProduction.has(key);open?expandedThicknessProduction.add(key):expandedThicknessProduction.delete(key);
+      panel.hidden=!open;production.setAttribute('aria-expanded',String(open));production.setAttribute('aria-label',(open?'ซ่อน':'ดู')+'ที่ต้องผลิตเพิ่ม ความหนา '+thicknessLabel(key)+' มม.');production.textContent=(open?'ซ่อน':'ดู')+'ที่ต้องผลิตเพิ่ม';return;
+    }
     const button=event.target.closest?.('[data-thickness-toggle]');if(!button)return;
     const key=button.dataset.thicknessToggle,body=root.querySelector('#'+button.getAttribute('aria-controls'));
     if(!body||!latest?.thickness.some(([t])=>t===key))return;
@@ -548,6 +598,7 @@
     const source=window.AAFOrderHeader.sourceText(orderHeader,warehouse,undefined,undefined,currentMonthSold,currentAllocation);
     for(const selector of ['.ss-sales-summary-source','.ss-overview-source']){const node=root?.querySelector(selector);if(node)node.textContent=source;}
     repaintReadiness();
+    repaintThicknessProductionWarnings();
   }
   function invalidateCurrentMonthSold(){
     setCurrentMonthSold(null);
@@ -609,7 +660,7 @@
   function dailyOverviewHTML(m){
     return `<section class="ss-daily-overview" aria-label="ภาพรวมรายวัน 4 กล่อง"><header class="ss-overview-header"><div><span>AAF · DAILY OVERVIEW</span><h3>ภาพรวมสต๊อกและยอดขาย</h3><small>ข้อมูลส่วนกลาง ${esc(when(m.updatedAt))} · ${number(m.rows.length)} สเปก</small></div><div class="ss-overview-actions" data-html2canvas-ignore><button type="button" data-stock-overview-action="collapse">ย่อทั้ง 4 กล่อง</button><button type="button" data-stock-overview-action="expand">ดูรายละเอียดทั้งหมด</button><button type="button" class="ss-overview-download" ${exporting?'disabled':''}>ดาวน์โหลดภาพ 4 กล่อง</button></div></header><p class="ss-overview-source">${esc(overviewSourceText(m))}</p><div class="ss-kpis">${kpiHTML(m.salesSummary,m)}</div><p class="ss-overview-footer">สต๊อก / จอง / Free ใช้ราคาประเมิน · ยอดขายใช้ราคาขายจริง · ห้ามบวกทั้ง 4 กล่องเข้าด้วยกันเพราะมีส่วนซ้อนกัน</p></section>`;
   }
-  function html(m,thicknessOpen=expandedThickness){
+  function html(m,thicknessOpen=expandedThickness,productionOpen=expandedThicknessProduction){
     const t=m.total,overrides=m.rows.filter(r=>r.physicalAt||r.freeAt).length,followed=m.rows.filter(r=>String(r.followup).trim()).length;
     const displayedFx=exchangeRateDisplay(window.AAFOrderHeader?null:m.salesSummary,m.headerExchangeRate);
     let index=0;
@@ -621,7 +672,7 @@
       <div data-stock-readiness-slot>${readinessHTML(m)}</div>
       <div class="ss-section-title"><span>01</span><h3>ภาพรวมแยกเกรดและความหนา · ทั้งคลัง</h3></div>
       <p class="ss-help ss-reservation-help"><strong>จำนวนจองตามแผนทั้งคลังเดิม ไม่ใช่จองเฉพาะเดือนหรือคิวใหม่หัวข้อ02</strong><br>จองรวม = จองมีของ + จองต้องผลิตเพิ่ม · Physical − จองมีของ = Free · แยกคำนวณรายสเปกก่อนรวม ไม่เอาของคนละสเปกหักกัน${m.rows.some(r=>r.freeReconciliationException)?'<br><strong class="ss-manual">มีค่า Free ที่บันทึกไว้ต่างจากสูตรในบางสเปก · คงค่าที่บันทึกไว้ ไม่ล้างค่าปรับเอง</strong>':''}<br>เทียบ 4×8 ใช้ขนาด 1,220 × 2,440 มม. · เทียบหนา 2.5 เพิ่มสัดส่วนความหนา ÷ 2.5 · ไม้แถบเป็นยอดเทียบเพื่อแสดงผล ไม่ใช่การเพิ่มแผ่นจริง</p>
-      <div class="ss-groups">${groupTable('แยกตามเกรด',m.grades,'เกรด',t)}${groupTable('แยกตามความหนา',m.thickness.filter(([,totals])=>totals.qty>0||totals.committedQty>0||totals.freeQty>0),'หนา (mm)',t,{grades:m.thicknessGrades,expanded:thicknessOpen})}</div>
+      <div class="ss-groups">${groupTable('แยกตามเกรด',m.grades,'เกรด',t)}${groupTable('แยกตามความหนา',m.thickness.filter(([,totals])=>totals.qty>0||totals.committedQty>0||totals.freeQty>0),'หนา (mm)',t,{grades:m.thicknessGrades,expanded:thicknessOpen,productionExpanded:productionOpen,model:m})}</div>
       ${agingPanel(m)}
       <section class="ss-sales-block" data-html2canvas-ignore><div class="ss-section-title"><span>02</span><h3>ภาพรวมรายการขาย · เดือนนี้</h3></div><p class="ss-help">ใช้เดือนปัจจุบันตามเวลาไทย และชุดหน้า 09 เดียวกับกล่องขายแล้ว/จองอื่น · หากข้อมูลยังไม่ครบจะแสดงรอตรวจ ไม่ใช้เดือนก่อนแทน · Free รวมการจัดสรรทุกเดือนในแผนที่บันทึก · ตัวกรองความหนาไม่เปลี่ยนขอบเขตกล่องด้านบน</p><div id="stock-order-review-slot"></div></section>
       <section class="ss-legacy-sales-services" hidden aria-hidden="true"><div id="stock-sales-preview-slot"></div></section>
@@ -788,7 +839,7 @@
     [data-aaf-stock-summary] .ss-group-heading{padding:9px 10px;background:#edf3f7;display:flex;justify-content:space-between;align-items:baseline;gap:6px;flex-wrap:wrap}
     [data-aaf-stock-summary] .ss-group h3{margin:0;font-weight:700;font-size:13px}
     [data-aaf-stock-summary] .ss-group-heading small{font-size:9px;color:#64748b}
-    [data-aaf-stock-summary] .ss-group-scroll{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+    [data-aaf-stock-summary] .ss-group-scroll{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;container-type:inline-size}
     [data-aaf-stock-summary] .ss-group-scroll:focus-visible{outline:2px solid #2563eb;outline-offset:-2px}
     [data-aaf-stock-summary] table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}
     [data-aaf-stock-summary] th,[data-aaf-stock-summary] td{padding:9px 10px;text-align:left;vertical-align:top;border-bottom:1px solid #dde5ec;overflow-wrap:anywhere;white-space:normal}
@@ -813,7 +864,23 @@
     [data-aaf-stock-summary] .ss-thickness-grades[hidden]{display:none!important}
     [data-aaf-stock-summary] .ss-thickness-grades th{padding-left:8px;border-left:3px solid #a7c5df;background:#f2f7fb;color:#34556e;font-size:10px}
     [data-aaf-stock-summary] .ss-thickness-grades td{border-bottom-style:dashed}
+    [data-aaf-stock-summary] .ss-thickness-grades [data-thickness-production-control]>td{padding:10px;background:#f7fafc;text-align:left;white-space:normal}
+    [data-aaf-stock-summary] .ss-thickness-production-tools{display:flex;justify-content:flex-start}
+    [data-aaf-stock-summary] button.ss-production-toggle{min-height:40px;padding:8px 12px;border:1px solid #c57d30;border-radius:7px;background:#fff6e9;color:#74420b;font-size:12px;white-space:normal}
+    [data-aaf-stock-summary] .ss-production-toggle:focus-visible{outline:3px solid #268fcb;outline-offset:2px}
+    [data-aaf-stock-summary] .ss-thickness-production[hidden]{display:none!important}
+    [data-aaf-stock-summary] .ss-thickness-production{box-sizing:border-box;margin-top:10px;padding:12px;border:1px solid #e2c9a8;border-radius:8px;background:white;color:#253c50;font-size:11px;line-height:1.6;width:min(760px,calc(100vw - 96px));width:min(100%,calc(100cqw - 24px));max-width:780px;overflow-wrap:anywhere}
+    [data-aaf-stock-summary] .ss-thickness-production h4{margin:0 0 7px;font-size:14px;color:#74420b}
+    [data-aaf-stock-summary] .ss-production-basis,[data-aaf-stock-summary] .ss-production-note{font-size:10px;color:#52657a;margin:6px 0}
+    [data-aaf-stock-summary] .ss-production-warning,[data-aaf-stock-summary] .ss-production-pending,[data-aaf-stock-summary] .ss-production-fraction{padding:7px 9px;background:#fff3d8;border-left:3px solid #d59b3e;white-space:normal}
+    [data-aaf-stock-summary] .ss-production-grade{margin:10px 0;border:1px solid #dce5ec;border-radius:6px;overflow:hidden;break-inside:avoid}
+    [data-aaf-stock-summary] .ss-production-grade h5,[data-aaf-stock-summary] .ss-production-total{display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px 12px;margin:0;padding:7px 9px;background:#edf4f8;font-size:12px}
+    [data-aaf-stock-summary] .ss-production-grade ul{list-style:none;margin:0;padding:0}
+    [data-aaf-stock-summary] .ss-production-grade li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px 12px;padding:6px 9px;border-top:1px dashed #dce5ec}
+    [data-aaf-stock-summary] .ss-production-grade b,[data-aaf-stock-summary] .ss-production-total b{font-variant-numeric:tabular-nums;color:#8b4a0a}
     [data-aaf-stock-summary].ss-export .ss-thickness-marker{display:none}
+    [data-aaf-stock-summary].ss-export .ss-thickness-production-tools{display:none}
+    @media print{[data-aaf-stock-summary] .ss-thickness-production-tools{display:none}}
     @media print{[data-aaf-stock-summary] .ss-thickness-marker{display:none}[data-aaf-stock-summary] .ss-thickness-toggle{color:inherit!important}}
     [data-aaf-stock-summary] .ss-group td.ss-num{white-space:nowrap}
     [data-aaf-stock-summary] .ss-group .ss-equivalent{background:#eff5ff;color:#234c7b}
@@ -941,12 +1008,12 @@
     return canvasLoader;
   }
   async function download(which='stock'){
-    if(!latest||exporting)return;exporting=true;const captured=latest,capturedThickness=new Set(expandedThickness);let box=null;
+    if(!latest||exporting)return;exporting=true;const captured=latest,capturedThickness=new Set(expandedThickness),capturedProduction=new Set(expandedThicknessProduction);let box=null;
     const status=text=>{const p=root.querySelector('.ss-status');if(p)p.textContent=text;};
     root.querySelectorAll('.ss-download,.cash-download,.ss-overview-download').forEach(b=>b.disabled=true);status(which==='overview'?'กำลังสร้างภาพรวม 4 กล่อง…':'กำลังสร้างภาพยาวครบทุกแถว กรุณารอสักครู่…');
     try{
       const canvasFn=await loadCanvas();await document.fonts?.ready;
-      box=document.createElement('div');box.dataset.aafStockSummary='';box.className='ss-export'+(which==='overview'?' ss-overview-export':'');box.style.cssText='position:absolute;left:-20000px;top:0;width:1440px;box-sizing:border-box;padding:0;background:white;';box.innerHTML=which==='cash'?window.AAFStockCash.render(captured.cash):which==='overview'?dailyOverviewHTML(captured):html(captured,capturedThickness);document.body.append(box);
+      box=document.createElement('div');box.dataset.aafStockSummary='';box.className='ss-export'+(which==='overview'?' ss-overview-export':'');box.style.cssText='position:absolute;left:-20000px;top:0;width:1440px;box-sizing:border-box;padding:0;background:white;';box.innerHTML=which==='cash'?window.AAFStockCash.render(captured.cash):which==='overview'?dailyOverviewHTML(captured):html(captured,capturedThickness,capturedProduction);document.body.append(box);
       for(const card of box.querySelectorAll('[data-stock-card]'))setCardView(card,which!=='overview');
       const sheet=which==='overview'?box:box.querySelector(which==='cash'?'.cash-sheet':'.ss-sheet'),width=Math.ceil(sheet.getBoundingClientRect().width),height=Math.ceil(sheet.getBoundingClientRect().height),scale=Math.min(1.5,30000/height,Math.sqrt(48000000/(width*height)));
       if(scale<0.65)throw new Error('ข้อความยาวเกินขนาดภาพที่อ่านได้ในรูปเดียว กรุณาถ่ายภาพเต็มหน้าผ่านเบราว์เซอร์แทน');
@@ -959,6 +1026,7 @@
   window.AAFStockSummary={update,showError,setSalesSummary,setOrderReview,setCurrentMonthSold,invalidateCurrentMonthSold,setExchangeRate,setSavedStockCatalog,syncPriceDrafts};
   // Pure read-only builders exposed for regression tests and isolated previews.
   window.AAFStockSummary.buildModel=model;window.AAFStockSummary.renderHTML=html;window.AAFStockSummary.renderKpis=kpiHTML;
+  window.AAFStockSummary.buildThicknessProduction=thicknessProduction;
   window.AAFStockSummary.soldLoadingBreakdown=soldLoadingBreakdown;
   window.AAFStockSummary.soldSettlementState=soldSettlementState;
   window.AAFStockSummary.exchangeRateDisplay=exchangeRateDisplay;

@@ -280,8 +280,9 @@ test('independent catalog and FX repaint refresh the basic compact Physical valu
 test('overview export fits the fixed canvas and only collapses the detached capture, leaving normal full-report export complete',()=>{
   const download=source.slice(source.indexOf("async function download(which='stock')"),source.indexOf('window.AAFStockSummary={update'));
   assert.match(download,/width:1440px;box-sizing:border-box/,'export padding must not widen the capture beyond the canvas and crop the right edge');
-  assert.match(download,/which==='overview'\?dailyOverviewHTML\(captured\):html\(captured,capturedThickness\)/);
+  assert.match(download,/which==='overview'\?dailyOverviewHTML\(captured\):html\(captured,capturedThickness,capturedProduction\)/);
   assert.match(download,/capturedThickness=new Set\(expandedThickness\)/,'full-report export freezes the opened thickness rows at capture start');
+  assert.match(download,/capturedProduction=new Set\(expandedThicknessProduction\)/,'full-report export also freezes nested shortage detail at capture start');
   assert.match(download,/box\.querySelectorAll\('\[data-stock-card\]'\)\)setCardView\(card,which!=='overview'\)/,'collapse only the detached overview; full-report capture expands details');
   assert.doesNotMatch(download,/expandedCards\.(?:add|delete|clear)/,'export must not change on-screen expansion choices');
   assert.match(download,/AAF_Daily_Overview_/);assert.match(download,/AAF_Stock_Summary_/);
