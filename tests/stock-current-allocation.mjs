@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {salesOnlyFixture} from './stock-sales-only-fixture.mjs';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),api=require('../stock_order_header.js');
 const clone=v=>JSON.parse(JSON.stringify(v)),u=(sheet,strip=0)=>({sheet,strip});
@@ -79,6 +80,11 @@ function runtime(){
   return {summary:window.AAFStockSummary,replacements,source,get cards(){return cardsHTML;},get rootWrites(){return rootWrites;},get html(){return html;}};
 }
 const calc=r=>({eq:r.qty,price:1,curr:'THB',value:r.qty,freeValue:r.freeQty});
+test('source-only lower provenance cannot promote pending allocation and leaves dated saved Physical/Free distinct',()=>{
+  const f=fixture(),h=runtime(),sales=salesOnlyFixture(f.sold.month);f.stock.currentMonthSold=sales.currentMonthSold;f.stock.currentAllocation=sales.currentAllocation;h.summary.update(f.stock,calc);h.summary.setOrderReview(null);const physical=card(h.cards,'physical');
+  h.summary.setOrderReview(sales.review,sales.readModel);assert.match(h.source.textContent,/ตรวจต้นทางขายแล้ว · การจัดสรร\/Free\/ต้องผลิตยังรอยืนยัน/);assert.equal(card(h.cards,'physical').replace(/ data-order-header-month="[^"]+"/,''),physical);assert.match(card(h.cards,'sold'),/<strong>30<\/strong>/);assert.doesNotMatch(card(h.cards,'reserved'),/<strong>/);assert.match(card(h.cards,'free'),/Free นี้ยังเป็นยอดที่บันทึกไว้/);
+  sales.review.byThickness['2.5'].shortage=0;h.summary.setOrderReview(sales.review,sales.readModel);assert.match(h.source.textContent,/รายละเอียดหัวข้อ02 เดือนนี้: รอ/);assert.doesNotMatch(card(h.cards,'reserved'),/<strong>/);
+});
 test('current lower provenance publishes with unknown exact prices and no FX without invoking legacy financial header build',()=>{
   const f=fixture(),h=runtime(),review={metadata:{month:f.sold.month},financial:{metadata:{month:f.sold.month,fx:null},views:{},byRowId:{}}};
   const readModel={kind:'current-month-order-review',status:'verified',source:{...f.sold.source,month:f.sold.month},stock:{...f.allocation.stock}};

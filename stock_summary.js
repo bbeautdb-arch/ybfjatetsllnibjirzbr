@@ -524,6 +524,10 @@
       // Header provenance does not depend on complete financial evidence. The
       // independent current quantity cards never inherit review prices/cash.
       orderHeader={month,monthLabel:sold.monthLabel,sourceCapturedAt:sold.source.capturedAt,sourceChecksum:sold.source.checksum,stockReportDate:readModel.stock.reportDate,stockRevision:readModel.stock.revision,stale:false,fx:null};orderHeaderError='';
+    }else if(review&&readModel?.sourceIsLive===false&&review.metadata?.month===month&&(!review.financial||review.financial.metadata?.month===month)&&
+      sold?.status==='verified-quantities'&&api?.salesOnlyReviewValid(review,readModel,sold)){
+      // Source-only provenance never grants allocation/readiness or reuses cash.
+      orderHeader={month,monthLabel:sold.monthLabel,sourceCapturedAt:sold.source.capturedAt,sourceChecksum:sold.source.checksum,salesOnly:true,stale:false,fx:null};orderHeaderError='';
     }
     if(latest)latest={...latest,orderHeader};
     setSalesSummary(latest?.salesSummary||null);

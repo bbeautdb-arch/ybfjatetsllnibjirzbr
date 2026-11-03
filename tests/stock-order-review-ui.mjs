@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {salesOnlyFixture} from './stock-sales-only-fixture.mjs';
 
 const source = fs.readFileSync(new URL('../stock_order_review.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../stock_order_review.css', import.meta.url), 'utf8');
@@ -78,6 +79,27 @@ function harness(services = {}) {
   const api = context.window.AAFOrderReviewUI.mount(host, data, services);
   return { api, data, before, nodes, shadow,globalEvents,input: () => nodes.get('stock-table').querySelectorAll('[data-stock-note]')[0],freeInput:()=>nodes.get('free-detail-panel').querySelectorAll('[data-stock-note]')[0],followups:()=>nodes.get('stock-table').querySelectorAll('[data-followup-edit]'),stockButtons:attribute=>nodes.get('stock-table').querySelectorAll('['+attribute+']') };
 }
+
+test('source-only renderer separates sold headline from complete plan and never makes unknown allocation/Free zero',()=>{
+  const h=harness(),f=salesOnlyFixture();h.api.update({...f.review,readModel:f.readModel});
+  const metrics=h.nodes.get('metrics').innerHTML,headline=metrics.split('data-current-sold-total')[1].split('data-queue-group="0"')[0];
+  assert.match(headline,/ขายแล้วเดือนนี้/);assert.match(headline,/>30\s*</);assert.match(headline,/>5\s*</);assert.doesNotMatch(headline,/>50\s*</);
+  assert.match(metrics,/รายการหน้า 09 ทั้งหมด · แผนรวม/);assert.match(metrics,/ออเดอร์ยืนยันอื่น · รอตรวจจอง/);assert.match(metrics,/ยังไม่ทราบ Free/);
+  const free=metrics.split('data-queue-group="5"')[1];assert.doesNotMatch(free,/<strong|>0</);
+  assert.match(h.nodes.get('table-area').innerHTML,/ยังไม่ทราบ · รอตรวจฐานสต๊อก/);assert.doesNotMatch(h.nodes.get('table-area').innerHTML,/data-known-shortage|ตัวอย่างจัดสรร/);
+  assert.match(h.nodes.get('stock-title').textContent,/ทะเบียนคลังยังรอตรวจ/);assert.doesNotMatch(h.nodes.get('stock-title').textContent,/0 สเปก/);assert.match(h.nodes.get('announcement').textContent,/รายการขาย/);
+  assert.match(h.nodes.get('reconciliation').innerHTML,/ยังไม่ยืนยันการจัดสรรกับฐานสต๊อก/);h.api.destroy();
+});
+test('source-only rendering refuses injected old pools, parts and Free even if mounted without controller',()=>{
+  const h=harness(),f=salesOnlyFixture(),legacy=fixture();f.review.freeStock=legacy.freeStock;f.review.stockPools=legacy.stockPools;f.review.rows[1].queue.allocated=777;f.review.rows[1].queue.shortage=888;f.review.rows[1].queue.parts=[{allocated:777,shortage:888}];
+  f.review.queueReview.poolQueues=[{grade:'A',rows:[{rowId:f.review.rows[1].id,requested:12,allocated:777,shortage:888}]}];h.api.update({...f.review,readModel:f.readModel});
+  assert.doesNotMatch(h.nodes.get('metrics').innerHTML,/777|888|Free Stock · ฐานเดิม/);assert.doesNotMatch(h.nodes.get('table-area').innerHTML,/777|888/);assert.match(h.nodes.get('stock-table').innerHTML,/ยังรอยืนยันฐานสต๊อก/);h.api.destroy();
+});
+test('source-only can keep normal note drafts while sales suspension preserves their mounted nodes',async()=>{
+  const h=harness(),f=salesOnlyFixture();h.api.update({...f.review,readModel:f.readModel});h.api.applyNotesSnapshot(snapshot());
+  const input=h.input();input.value='source-only synthetic draft';input.focus();input.setSelectionRange(2,5,'forward');await input.dispatch('input');assert(h.api.hasDirty());
+  h.api.suspendSales('เดือนเปลี่ยน · เก็บร่างไว้');assert.equal(h.input(),input);assert.equal(h.shadow.activeElement,input);assert.equal(input.selectionStart,2);assert.equal(input.value,'source-only synthetic draft');h.api.destroy();
+});
 
 test('public renderer is runtime-only and isolated; no data acquisition or auth/persistence', () => {
   new vm.Script(source);
@@ -195,7 +217,7 @@ test('unit prices preserve precision, unconfirmed money is not fake unpaid zero,
   const data = fixture(), nodes = {}, select = { value: 'all' }, notesState = { loaded: true, canSave:true,liveRows:new Map([[key,{}]]),notes: new Map([[key, '<note>']]), readAt: 'synthetic', drafts: new Map(),conflicts:new Map() };
   const document = { getElementById: id => nodes[id] ||= { innerHTML: '', addEventListener() {}, setAttribute() {}, focus() {} } };
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-  const context = { data, rows: data.rows, select, document, notesState, notesBusy:false,workbookBySpec:new Map(),noteKey:r=>[r.t,r.grade,...[r.w,r.l].sort((a,b)=>a-b),r.unit].join('|'),uiState: {}, esc, num: Number, fmt: String, fmtEquivalent: String, thick: String, unitLabel: String, dimensions: r => r.w + '×' + r.l };
+  const context = { data, rows: data.rows, select, document, notesState, notesBusy:false,currentSalesOnly:false,workbookBySpec:new Map(),noteKey:r=>[r.t,r.grade,...[r.w,r.l].sort((a,b)=>a-b),r.unit].join('|'),uiState: {}, esc, num: Number, fmt: String, fmtEquivalent: String, thick: String, unitLabel: String, dimensions: r => r.w + '×' + r.l };
   const start = source.indexOf('  const finance ='), end = source.indexOf('  const commercialTag =', start);
   const noteHelper=source.slice(source.indexOf('  const notesField ='),source.indexOf('  function noteEditorContainers'));
   const ui = vm.runInNewContext(source.slice(start, end)+noteHelper + '\n({nativeUnitPrice,moneyPartitions,receiptEventMarkup,orderMoneyMarkup,freeCardMarkup,freeNoteMarkup})', context);

@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {salesOnlyFixture} from './stock-sales-only-fixture.mjs';
 const require=createRequire(import.meta.url);
 const core=require('../stock_review_notes_bridge.js');
+const header=require('../stock_order_header.js');
 const {createNotesService,boot}=require('../stock_order_controller.js');
 const copy=v=>JSON.parse(JSON.stringify(v));
 const key='2|A|100|200|sheet';
@@ -157,4 +159,24 @@ test('older backend422 for current lower review is a Thai pending state, not an 
   const h=browser();h.api.setAccess(binding());h.responses.push({status:422,ok:false});await h.api.attach(new Node());
   assert.equal(h.mounted.length,0);assert.equal(h.soldInvalidations.length,0);assert(h.created.some(n=>/เดือนนี้ยังไม่มีชุดข้อมูลที่ตรวจครบ ไม่ใช้เดือนอื่นแทน/.test(n.textContent||'')));
   assert.equal(h.calls.length,1);assert.match(h.calls[0].url,/month=2026-01$/);assert.equal(h.calls[0].options.method,'GET');assert(!h.summaries.some(([review])=>review));
+});
+
+test('verified source-only sales mounts with allocation pending and does not invalidate saved stock or POST',async()=>{
+  const h=browser(),f=salesOnlyFixture('2026-01');h.win.AAFOrderHeader=header;h.api.setAccess(f.binding);h.responses.push(f.envelope);await h.api.attach(new Node());
+  assert.equal(h.mounted.length,1);assert.equal(h.mounted[0].review.readModel.status,'verified-sales-only');assert.equal(h.mounted[0].review.rows.length,7);assert.equal(h.soldInvalidations.length,0);assert(h.calls.every(c=>c.options.method==='GET'));assert(h.summaries.some(([r])=>r?.rows?.length===7));
+  h.mounted[0].v.dirty=true;await h.api.attach(new Node());assert.equal(h.mounted.length,1);assert(h.api.isDirty());
+});
+test('sales-only response still requires exact current source, current stock revision and null allocation',async()=>{
+  for(const mutate of [f=>f.envelope.selectedMonth='2025-12',f=>f.envelope.readModel.source.checksum='sha256:'+'c'.repeat(64),f=>f.envelope.revision++,f=>f.review.rows[1].shortage=0,f=>f.readModel.stock={},f=>f.review.metadata.month='2025-12',f=>f.review.summary.allocated=0]){
+    const h=browser(),f=salesOnlyFixture('2026-01');h.win.AAFOrderHeader=header;mutate(f);h.api.setAccess(f.binding);h.responses.push(f.envelope);await h.api.attach(new Node());assert.equal(h.mounted.length,0);assert(!h.summaries.some(([r])=>r));
+  }
+});
+test('sales-only source refresh at unchanged revision rejects old reply and preserves dirty drafts across Bangkok rollover',async()=>{
+  const h=browser(),a=salesOnlyFixture('2026-11','a'),b=salesOnlyFixture('2026-11','c');h.win.AAFOrderHeader=header;h.setClock('2026-11-30T16:59:59Z');h.api.setAccess(a.binding);
+  let resolve;h.responses.push(new Promise(r=>resolve=r));const first=h.api.attach(new Node());h.responses.push(b.envelope);await h.api.syncCurrentSource(b.binding);resolve(a.envelope);await first;
+  assert.equal(h.mounted.length,1);assert.equal(h.mounted[0].review.readModel.source.checksum,b.readModel.source.checksum);h.mounted[0].v.dirty=true;
+  h.setClock('2026-11-30T17:00:00Z');assert.equal(h.api.checkCurrentMonth(),true);assert(h.api.isDirty());assert.equal(h.mounted[0].v.destroyed,false);assert.match(h.mounted[0].v.suspensions.at(-1),/เปลี่ยนเดือน/);
+});
+test('sales-only session expiry clears private source data and cannot accept a late response',async()=>{
+  const h=browser(),f=salesOnlyFixture('2026-01');h.win.AAFOrderHeader=header;h.api.setAccess(f.binding);let resolve;h.responses.push(new Promise(r=>resolve=r));const pending=h.api.attach(new Node());h.api.invalidate('expired');resolve(f.envelope);await pending;assert.equal(h.mounted.length,0);assert(!h.summaries.some(([r])=>r));
 });

@@ -85,8 +85,10 @@
     function sourceBinding(next){
       const sold=next.currentMonthSold,allocation=next.currentAllocation,source=sold?.source,stock=allocation?.stock,captured=Date.parse(source?.capturedAt||'');
       if(sold?.status!=='verified-quantities'||sold.month!==selectedMonth||source?.page!==9||source.sourceIsLive!==false||
-        !/^sha256:[a-f0-9]{64}$/.test(source.checksum||'')||!Number.isFinite(captured)||captured>now()||currentBangkokMonth(captured)!==selectedMonth||
-        allocation?.status!=='verified-allocation'||allocation.month!==selectedMonth||allocation.source?.checksum!==source.checksum||allocation.source?.capturedAt!==source.capturedAt||
+        !/^sha256:[a-f0-9]{64}$/.test(source.checksum||'')||!Number.isFinite(captured)||captured>now()||currentBangkokMonth(captured)!==selectedMonth)return null;
+      const sourceOnly={source:{page:9,month:selectedMonth,capturedAt:source.capturedAt,checksum:source.checksum,sourceIsLive:false},stock:null};
+      if(allocation?.status!=='verified-allocation')return sourceOnly;
+      if(allocation.month!==selectedMonth||allocation.source?.checksum!==source.checksum||allocation.source?.capturedAt!==source.capturedAt||
         stock?.revision!==next.revision||stock.reportDate!==next.reportDate||!/^sha256:[a-f0-9]{64}$/.test(stock.planChecksum||'')||
         !Number.isFinite(Date.parse(stock.planCapturedAt||''))||Date.parse(stock.planCapturedAt)>now()||currentBangkokMonth(Date.parse(stock.planCapturedAt))!==selectedMonth)return null;
       return {source:{page:9,month:selectedMonth,capturedAt:source.capturedAt,checksum:source.checksum,sourceIsLive:false},
@@ -149,7 +151,7 @@
       checkCurrentMonth();
       if(loading)return loading;
       if(!force&&!needsLoad)return;
-      if(!expected){suspendSales('รอชุดขายและการจัดสรรเดือน '+selectedMonth+' จากส่วนกลางที่ตรงกัน · ยังไม่ทราบยอด ไม่ใช้เดือนอื่นหรือศูนย์แทน');return;}
+      if(!expected){suspendSales('รอชุดขายเดือน '+selectedMonth+' จากส่วนกลางที่ตรวจครบ · ยังไม่ทราบยอด ไม่ใช้เดือนอื่นหรือศูนย์แทน');return;}
       if(view?.hasDirty?.()||notes.isBusy()||notes.isUncertain()){suspendSales('มีร่างหมายเหตุหรือผลบันทึกที่ต้องตรวจ · เก็บร่างไว้ ไม่แสดงยอดชุดเก่าแทนเดือนนี้ · ตรวจ/เซฟร่างก่อนโหลดภาพรวมล่าสุด');return;}
       const stamp=reportScope(),binding=clone(expected),month=selectedMonth;needsLoad=false;
       tell('กำลังอ่านภาพรวมขายเดือน '+month+' จากส่วนกลาง…');
@@ -160,8 +162,10 @@
           const rm=data.readModel;
           if(data.selectedMonth!==month||rm?.kind!=='current-month-order-review'||rm.selectedMonth&&rm.selectedMonth!==month||rm.sourceIsLive!==false||rm.queueApplied!==false)fail('invalid-report','รูปแบบหรือเดือนรายงานไม่ตรงเดือนปัจจุบัน ยังไม่แสดงยอดปะปน');
           if(rm.status==='pending'&&data.review===null){suspendSales(rm.warning||'ข้อมูลขายเดือนนี้ยังตรวจไม่ครบ · ไม่ใช้เดือนอื่นหรือศูนย์แทน');return;}
-          if(rm.status!=='verified'||!data.review||data.review.metadata?.month!==month||data.review.financial&&data.review.financial.metadata?.month!==month||
-            !equal(rm.source,binding.source)||!equal(rm.stock,binding.stock))fail('invalid-report','ชุดขายหรือแผนจัดสรรไม่ตรงข้อมูลส่วนกลางล่าสุด · รอชุดเดือนปัจจุบันที่ตรงกัน');
+          const salesOnly=rm.status==='verified-sales-only';
+          const invalidCommon=!['verified','verified-sales-only'].includes(rm.status)||!data.review||data.review.metadata?.month!==month||data.review.financial&&data.review.financial.metadata?.month!==month||!equal(rm.source,binding.source);
+          const invalidMode=salesOnly?rm.stock!==null||!win.AAFOrderHeader?.salesOnlyReviewValid?.(data.review,rm,access.currentMonthSold):!binding.stock||!equal(rm.stock,binding.stock);
+          if(invalidCommon||invalidMode)fail('invalid-report','ชุดขายหรือแผนจัดสรรไม่ตรงข้อมูลส่วนกลางล่าสุด · รอชุดเดือนปัจจุบันที่ตรงกัน');
           if(data.revision!==access.revision||data.stockReportDate!==access.reportDate)fail('snapshot-changed','สต๊อกเปลี่ยนระหว่างอ่าน กรุณากดโหลดข้อมูลส่วนกลางล่าสุดด้านบนก่อน');
           if(view?.hasDirty?.()||notes.isBusy()||notes.isUncertain()){needsLoad=true;suspendSales('มีร่างระหว่างโหลด · เก็บร่างไว้ กรุณาตรวจ/เซฟก่อนโหลดภาพรวมล่าสุด');return;}
           response=data;failed=false;if(body){body.hidden=false;body.inert=false;}
@@ -186,7 +190,7 @@
       if(auth&&credential!==auth)invalidate('เซสชันเปลี่ยน กรุณาโหลดข้อมูลส่วนกลางใหม่');
       const changed=!access||access.revision!==next.revision||access.reportDate!==next.reportDate;
       const binding=sourceBinding(next),sourceChanged=!equal(binding,expected);
-      auth=credential;access={revision:next.revision,reportDate:next.reportDate,notesReadOnly:next.notesReadOnly===true};
+      auth=credential;access={revision:next.revision,reportDate:next.reportDate,notesReadOnly:next.notesReadOnly===true,currentMonthSold:clone(next.currentMonthSold||null)};
       expected=binding;
       if(changed||next.refreshReport||sourceChanged){if(changed)epoch++;reportEpoch++;loading=null;needsLoad=true;suspendSales('รอภาพรวมขายเดือน '+selectedMonth+' ที่ตรงกับข้อมูลส่วนกลางล่าสุด');}
       return changed||next.refreshReport||sourceChanged;

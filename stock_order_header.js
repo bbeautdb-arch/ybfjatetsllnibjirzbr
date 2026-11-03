@@ -22,6 +22,51 @@
   const qtyText = value => n(value.sheet) + ' แผ่น' + (value.strip ? ' · ไม้แถบ ' + n(value.strip) + ' ชิ้น' : '');
   const nativeText = value => 'THB ' + n(value.THB) + ' · USD ' + n(value.USD);
 
+  // A complete sales-source view may be useful before a stock cutoff is safe.
+  // This is NOT an allocation fallback: any supplied stock result rejects it.
+  function salesOnlyReviewValid(review, readModel, sold) {
+    try {
+      const rows=review?.rows,queue=review?.queueReview,meta=review?.metadata;
+      if(readModel?.kind!=='current-month-order-review'||readModel.status!=='verified-sales-only'||readModel.stock!==null||readModel.queueApplied!==false||readModel.allocationFullyReconciled!==false||
+        meta?.salesOnly!==true||meta.allocationBasis!=='pending-current-stock-cutoff'||meta.allocationFullyReconciled!==false||meta.stockPhysicalRowsReconciled!==false||meta.month!==sold?.month||sold?.status!=='verified-quantities'||
+        readModel.source?.month!==sold.month||readModel.source.checksum!==sold.source?.checksum||readModel.source.capturedAt!==sold.source?.capturedAt||readModel.source.page!==9||readModel.source.sourceIsLive!==false||
+        !Array.isArray(rows)||rows.length!==sold.source.lineCount||!Array.isArray(review.stockPools)||review.stockPools.length||review.freeStock!==null||
+        !queue||queue.allocationComplete!==false||queue.stockBasis?.physicalCutoffVerified!==false||!Array.isArray(queue.poolQueues)||queue.poolQueues.length||JSON.stringify(queue.rows)!==JSON.stringify(rows))return false;
+      const count=v=>Number.isSafeInteger(v)&&v>=0,empty=v=>Array.isArray(v)&&v.length===0;
+      const ids=new Set(),orders=new Set(),actual=units(),raw=units(),groups={loaded:units(),paidOrDeposit:units(),lcETD:units()};
+      for(const r of rows){
+        const q=r.queue;
+        if(typeof r.id!=='string'||!r.id||ids.has(r.id)||typeof r.orderId!=='string'||!r.orderId||!['sheet','strip'].includes(r.unit)||!count(r.qty)||!count(r.sourceQty)||
+          typeof r.cancelled!=='boolean'||!['loaded','paidOrDeposit','lcETD','notSold'].includes(r.soldGroup)||(r.cancelled?r.qty!==0:r.qty!==r.sourceQty)||r.allocated!==null||r.shortage!==null||r.reservationKind!==null||!empty(r.parts)||!empty(r.priorParts)||
+          !q||typeof q.eligible!=='boolean'||![1,2,3,4].includes(q.group)||q.allocationStatus!=='pending'||q.allocated!==null||q.shortage!==null||q.remaining!==null||
+          q.availableBefore!==undefined&&q.availableBefore!==null||!empty(q.parts)||!count(r.loaded)||!count(r.unreserved)||!count(r.pendingQty)||
+          r.loaded+r.unreserved+r.pendingQty!==r.qty||r.loaded!==(q.group===1?r.qty:0)||r.pendingQty!==(q.eligible?r.qty:0))return false;
+        ids.add(r.id);orders.add(r.orderId);actual[r.unit]+=r.qty;raw[r.unit]+=r.sourceQty;
+        if(Object.hasOwn(groups,r.soldGroup)&&!r.cancelled)groups[r.soldGroup][r.unit]+=r.qty;
+      }
+      const soldRows=rows.filter(r=>!r.cancelled&&r.soldGroup!=='notSold');
+      if(orders.size!==sold.source.orderCount||soldRows.length!==sold.lineCount||new Set(soldRows.map(r=>r.orderId)).size!==sold.orderCount)return false;
+      const unitEqual=(a,b)=>a&&['sheet','strip'].every(u=>count(a[u])&&a[u]===b[u]);
+      for(const key of Object.keys(groups))if(!unitEqual(sold[key],groups[key]))return false;
+      if(!unitEqual(sold.quantity,{sheet:groups.loaded.sheet+groups.paidOrDeposit.sheet+groups.lcETD.sheet,strip:groups.loaded.strip+groups.paidOrDeposit.strip+groups.lcETD.strip}))return false;
+      const total=(rr,field)=>rr.reduce((s,r)=>(s[r.unit]+=r[field],s),units());
+      const checkSummary=(s,rr,withUnits=false)=>{
+        const qty=total(rr,'qty'),sourceQty=total(rr,'sourceQty');
+        if(!s||s.allocationComplete!==false||s.allocated!==null||s.shortage!==null||s.lineCount!==rr.length||s.orderCount!==new Set(rr.map(r=>r.orderId)).size||!unitEqual(s.quantityByUnit,qty)||!unitEqual(s.sourceQuantityByUnit,sourceQty))return false;
+        if(withUnits||s.byUnit)for(const u of ['sheet','strip'])if(!s.byUnit?.[u]||s.byUnit[u].allocated!==null||s.byUnit[u].shortage!==null||s.byUnit[u].ordered!==qty[u]||s.byUnit[u].sourceOrdered!==sourceQty[u])return false;
+        return true;
+      };
+      if(!checkSummary(review.summary,rows,true)||!checkSummary(queue.summary,rows))return false;
+      const thicknesses=[...new Set(rows.map(r=>String(Number(r.t))))].sort();
+      if(!Array.isArray(review.thicknesses)||review.thicknesses.map(t=>String(Number(t))).sort().join('|')!==thicknesses.join('|'))return false;
+      for(const [byThickness,withUnits]of [[review.byThickness,true],[queue.byThickness,false]]){
+        if(!byThickness||Object.keys(byThickness).sort().join('|')!==thicknesses.join('|'))return false;
+        for(const t of thicknesses)if(!checkSummary(byThickness[t],rows.filter(r=>Number(r.t)===Number(t)),withUnits))return false;
+      }
+      return true;
+    } catch {return false;}
+  }
+
   // The current-month sold card is a separate authenticated quantity DTO. It
   // must never inherit another month, money, receipts, or the teaching queue.
   function currentBangkokMonth(now = Date.now()) {
@@ -227,7 +272,7 @@
     if(model?.month!==currentBangkokMonth()||model?.sourceChecksum&&model.sourceChecksum!==currentMonthSold?.source?.checksum)model=null;
     const allocation=currentAllocationView(currentAllocation,warehouse,currentMonthSold);
     const allocationSource=allocation.status==='verified-allocation'?`จองอื่นๆ: ${allocation.monthLabel} · แผนจองส่วนกลางรุ่น ${allocation.stock.revision} · รวมภาระเดือนอื่นในแผนในการคำนวณ Free แยกต่างหาก`:`จองอื่นๆ/การจัดสรร: ${allocation.reason}`;
-    const sales = model ? `รายละเอียดหัวข้อ02 เดือนนี้: ${model.monthLabel} · ทุกความหนา · อ่านขาย ${model.sourceCapturedAt || 'ไม่ระบุเวลา'} · ชุดที่ตรวจแล้ว ไม่ใช่ฟีดขายสด`
+    const sales = model ? `รายละเอียดหัวข้อ02 เดือนนี้: ${model.monthLabel} · ทุกความหนา · อ่านขาย ${model.sourceCapturedAt || 'ไม่ระบุเวลา'} · ${model.salesOnly?'ตรวจต้นทางขายแล้ว · การจัดสรร/Free/ต้องผลิตยังรอยืนยัน':'ชุดที่ตรวจแล้ว'} ไม่ใช่ฟีดขายสด`
       : 'รายละเอียดหัวข้อ02 เดือนนี้: รอชุดเดือนปัจจุบันที่ตรงกับกล่องด้านบน · ไม่ใช้เดือนก่อนแทน';
     const current = warehouse === undefined ? model : warehouse;
     const stock = current ? `Physical/Free ทั้งคลังรายงาน ${current.stockReportDate}${current.stockRevision !== undefined ? ' · รุ่น '+current.stockRevision : ''} · ${allocation.status==='verified-allocation'?'Free จากแผนจองที่ยืนยันกับรุ่นนี้ · คงค่าปรับมือ':'Free ตามยอดที่บันทึก · การจัดสรรล่าสุดยังรอตรวจ'}` : 'Physical/Free รอยืนยันข้อมูลส่วนกลาง';
@@ -290,5 +335,5 @@
       return `<div class="ss-kpi ss-kpi-${card.id}" data-stock-card="${card.id}"${cardMonth ? ` data-order-header-month="${esc(cardMonth)}"` : ''}${liveWarehouse ? ` data-current-stock-revision="${esc(current.stockRevision)}"` : ''}><div class="ss-card-overview-wrap"${open?' hidden':''}>${content}</div><button type="button" class="ss-card-toggle" data-stock-card-toggle="${card.id}" aria-expanded="${open}" aria-controls="ss-card-details-${card.id}" data-html2canvas-ignore>${open?'ซ่อน':'ดู'}รายละเอียด · ${esc(card.label)}</button><div class="ss-card-detail-content" id="ss-card-details-${card.id}"${open?'':' hidden'}>${content}${card.detail || ''}</div></div>`;
     }).join('');
   }
-  return {build, render, sourceText, summarizeMoney, warehouseProjection,currentBangkokMonth,currentMonthSoldView,currentAllocationView};
+  return {build, render, sourceText, summarizeMoney, warehouseProjection,currentBangkokMonth,currentMonthSoldView,currentAllocationView,salesOnlyReviewValid};
 });
