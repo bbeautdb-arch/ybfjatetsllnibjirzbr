@@ -100,6 +100,24 @@ test('compact embedded chrome hides duplicate hero, normal source-only callout a
   assert.match(css,/\.compact-chrome \.top\{display:none\}/);assert.match(css,/\.compact-chrome:not\(\[data-changes-active="true"\]\) \.changes-toolbar\{display:none\}/);
   assert.match(b.shadow.children[1].innerHTML,/วันที่ข้อมูล ขอบเขต และวิธีอ่าน/);a.api.destroy();b.api.destroy();
 });
+test('source-reading details, footer and routine announcement stay hidden while text and source bindings remain intact',()=>{
+  for(const compactChrome of [false,true]){
+    const h=harness({compactChrome}),f=salesOnlyFixture();h.api.update({...f.review,readModel:f.readModel,displaySourceNote:'Synthetic controller source details retained'});
+    const markup=h.shadow.children[1].innerHTML;
+    const details=markup.match(/<details class="basis" hidden><summary>วันที่ข้อมูล ขอบเขต และวิธีอ่าน<\/summary>([\s\S]*?)<\/details>/);
+    assert(details,'only this source-information details block is hidden, not removed');
+    for(const id of ['source-sales','source-stock','source-allocation','queue-order-description'])assert.match(details[1],new RegExp('id="'+id+'"'));
+    for(const text of ['โหลดแล้วไม่หักสต๊อกซ้ำ','ยอดเงินสินค้าใช้ราคาขายจริงในใบขาย','หน่วยแผ่นและชิ้นแยกกัน'])assert(details[1].includes(text));
+    assert.match(markup,/<footer hidden>ข้อมูลบริษัทจากชุดที่บัญชีนี้มีสิทธิ์อ่าน · หน้านี้ไม่เปลี่ยนยอดสต๊อก ยอดจอง ราคา หรือสถานะต้นทาง<\/footer>/);
+    assert.match(markup,/<div id="announcement" hidden role="status" aria-live="polite"/);
+    assert.match(h.nodes.get('source-sales').textContent,/ตัวอย่างหน้า 09/);assert.equal(h.nodes.get('source-stock').textContent,f.review.metadata.stockLabel);assert.equal(h.nodes.get('source-allocation').textContent,f.review.metadata.allocationLabel);
+    if(compactChrome){assert.match(h.nodes.get('source-sales').textContent,/Synthetic controller source details retained/);assert(h.nodes.get('source-sales').textContent.includes(f.readModel.source.capturedAt));}
+    assert.equal(h.nodes.get('announcement').hidden,true);h.api.setView('2.5');assert.equal(h.nodes.get('announcement').hidden,true);assert.match(h.nodes.get('announcement').textContent,/รายการขายหนา 2\.5/);
+    assert.match(h.nodes.get('metrics').innerHTML,/ยังไม่ทราบ Free/);assert.equal(h.nodes.get('notes-status').hidden,false);
+    h.api.suspendSales('Synthetic current source mismatch remains visible');assert.equal(h.nodes.get('source-warning').hidden,false);assert.match(h.nodes.get('source-warning').textContent,/mismatch remains visible/);
+    assert.match(css,/\[hidden\]\{display:none!important\}/);h.api.destroy();
+  }
+});
 test('compact stale and suspended warnings remain visible and suspension preserves active draft nodes',async()=>{
   const h=harness({compactChrome:true}),f=salesOnlyFixture();h.api.update({...f.review,readModel:{...f.readModel,stale:true}});assert.equal(h.nodes.get('source-warning').hidden,false);assert.match(h.nodes.get('source-warning').textContent,/ต้องตรวจเทียบ/);
   h.api.update({...f.review,readModel:f.readModel});h.api.applyNotesSnapshot(snapshot());const input=h.input();input.focus();input.setSelectionRange(2,4,'forward');input.value='synthetic pending draft';await input.dispatch('input');
