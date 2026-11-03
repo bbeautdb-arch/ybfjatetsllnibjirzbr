@@ -971,6 +971,21 @@
     [data-aaf-stock-summary] .ss-overview-breakdown{display:grid;gap:4px}
     [data-aaf-stock-summary] .ss-overview-row{display:flex;justify-content:space-between;align-items:baseline;gap:3px 12px;font-size:11px;flex-wrap:wrap}
     [data-aaf-stock-summary] .ss-overview-row>b{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right;margin-left:auto}
+    [data-aaf-stock-summary] .ss-physical-composition{display:grid;gap:7px;padding:8px 10px;border:1px solid #c7d9e5;border-radius:8px;background:#ffffff80}
+    [data-aaf-stock-summary] .ss-physical-group{display:grid;gap:2px;min-width:0}
+    [data-aaf-stock-summary] .ss-physical-group+.ss-physical-group{border-top:1px dashed #c7d9e5;padding-top:6px}
+    [data-aaf-stock-summary] .ss-physical-group-heading{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:3px 10px;font-size:11px;line-height:1.5}
+    [data-aaf-stock-summary] .ss-physical-group-heading>b{font-size:13px;font-variant-numeric:tabular-nums;margin-left:auto}
+    [data-aaf-stock-summary] .ss-physical-group[data-physical-group="nonstandard"] .ss-physical-group-heading{color:#80521e}
+    [data-aaf-stock-summary] .ss-physical-grades{display:block;line-height:1.7;font-size:10px;color:#52657a;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+    [data-aaf-stock-summary] .ss-physical-grade{display:inline-block}
+    [data-aaf-stock-summary] .ss-physical-subset-note{font-size:10px;color:#52657a}
+    [data-aaf-stock-summary] .ss-physical-equivalent-breakdown{display:grid;gap:9px}
+    [data-aaf-stock-summary] .ss-physical-equivalent{display:grid;gap:5px}
+    [data-aaf-stock-summary] .ss-physical-equivalent+.ss-physical-equivalent{border-top:1px solid #c7d9e5;padding-top:8px}
+    [data-aaf-stock-summary] .ss-physical-subset{margin-left:6px;padding-left:9px;border-left:2px solid #c7d9e5;display:grid;gap:2px}
+    [data-aaf-stock-summary] .ss-physical-subset .ss-overview-row{font-size:10px}
+    [data-aaf-stock-summary] .ss-physical-subset .ss-overview-row>b{font-size:11px}
     [data-aaf-stock-summary] .ss-overview-receipts{display:grid;gap:4px;border-bottom:1px solid #c6d7df;padding-bottom:6px;margin-bottom:2px}
     [data-aaf-stock-summary] .ss-card-overview .ss-overview-warning{color:#a13e27;font-size:10px;line-height:1.5}
     [data-aaf-stock-summary] .ss-card-overview .ss-overview-basis{font-size:10px;line-height:1.5;border-top:1px solid #c6d7df;padding-top:5px}

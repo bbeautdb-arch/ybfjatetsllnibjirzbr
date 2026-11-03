@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic Physical composition preview</title><style>body{margin:0;background:#edf2f6;color:#183e56;font:14px/1.5 system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:20px}.notice{padding:10px 20px;background:#fff1cb}#stock-summary .ss-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}@media(max-width:650px){#stock-summary .ss-kpis{grid-template-columns:1fr}}</style></head><body><div class="notice">SYNTHETIC TEST DATA — ตัวเลขสมมติ ไม่ใช่ข้อมูลบริษัท</div><main><div id="stock-summary" data-aaf-stock-summary></div></main>
+<script src="../stock_order_header.js?v=20261104-physical-composition-r1"></script><script src="../stock_summary.js?v=20261104-physical-composition-r1"></script><script>
+// All numbers and identifiers are synthetic. No network or business writes.
+const row=(key,w,l,t,grade,qty,unit='sheet')=>({key,w,l,t,grade,qty,unit,committedQty:0,freeQty:qty,catalogPrice:12,catalogCurrency:'THB',catalogValue:qty*12,catalogFreeValue:qty*12});
+const stock={reportDate:'2030-06-01',revision:1,savedCatalog:{catalogRevision:1},rows:[row('sample-normal',1220,2440,2.5,'AAA',400),row('sample-reversed',2440,1220,1.6,'B',100),row('sample-small',610,1220,3.2,'AAA',80),row('sample-wide',1260,2440,3.2,'B',40),row('sample-near',1200,2400,2.5,'A',15),row('sample-long',1220,3050,6,'F',20),row('sample-strip',20,1000,3.2,'B',1200,'strip')]};
+const warehouse=window.AAFOrderHeader.warehouseProjection(stock);
+const target=document.getElementById('stock-summary');target.innerHTML='<div class="ss-kpis">'+window.AAFOrderHeader.render(null,new Set(),warehouse)+'</div>';
+</script></body></html>
