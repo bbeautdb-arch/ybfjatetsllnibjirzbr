@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SYNTHETIC · Independent saved stock registry</title>
+  <style>
+    body{margin:0;background:#eef3f1;color:#19372c;font-family:system-ui,sans-serif}
+    header.fixture{padding:18px 24px;background:#fff6d7;border-bottom:2px solid #e4b949}
+    header.fixture h1{font-size:20px;margin:0 0 8px}header.fixture p{margin:5px 0}
+    button{font:inherit;padding:8px 12px;margin:6px 6px 0 0;cursor:pointer}
+    #test-status{font-weight:700;white-space:pre-wrap}#test-status[data-pass="false"]{color:#b42318}
+    #review{max-width:1400px;margin:18px auto;padding:0 12px}
+  </style>
+</head>
+<body>
+  <header class="fixture">
+    <h1>SYNTHETIC — ทะเบียนสต๊อกสมมติ ไม่ใช่ยอดบริษัท</h1>
+    <p>5 แถวทะเบียนจริง / 4 รหัสหมายเหตุร่วม · มีแถวกลับด้าน ขนาดที่ไม่อยู่ในยอดขาย ไม้แถบ และรายการ Physical = 0</p>
+    <p>Physical: 160 แผ่น + 500 ชิ้นไม้แถบ · Free ที่บันทึก: 130 แผ่น + 400 ชิ้นไม้แถบ</p>
+    <p>แถว 2.5 A บันทึก Free ไว้ 75 แม้สูตรเป็น 70 — ต้องไม่คำนวณทับ · แถว 4.5 B ไม่ทราบยอดจอง ไม่แทนด้วย 0</p>
+    <p>ยอดขายยังเป็น source-only: การจัดสรรล่าสุด/ต้องผลิตตามยอดขายยัง pending · ตัวอย่างอ่านอย่างเดียว ไม่มีข้อมูลล็อกอินหรือการเรียก API</p>
+    <button id="sales-all" type="button">ยอดขายทุกความหนา</button>
+    <button id="sales-25" type="button">เลือกยอดขาย 2.5 มม.</button>
+    <button id="sales-strip" type="button">เลือกยอดขาย 3.2 มม.</button>
+    <button id="check-registry" type="button">ตรวจทะเบียนยังครบ 5 แถว</button>
+    <p id="test-status" role="status" aria-live="polite">กำลังประกอบข้อมูลสมมติผ่านตัวเชื่อมจริง…</p>
+  </header>
+  <div id="review"></div>
+  <script src="../stock_review_notes_bridge.js?v=20261103-saved-registry-r1"></script>
+  <script src="../stock_order_header.js?v=20261103-saved-registry-r1"></script>
+  <script src="../stock_order_review.js?v=20261103-saved-registry-r1"></script>
+  <script type="module">
+    import {salesOnlyFixture} from './stock-sales-only-fixture.mjs?v=20261103-saved-registry-r1';
+    const month=window.AAFOrderHeader.currentBangkokMonth(),day=month+'-01',fixture=salesOnlyFixture(month),status=document.getElementById('test-status');
+    const rows=[
+      {key:'w1220_l2440_t2.5_gA',w:1220,l:2440,t:2.5,grade:'A',unit:'sheet',sku:'SYNTH-BOARD-A',qty:100,committedQty:30,freeQty:75,freeOverride:{value:75,at:day+'T01:15:00Z'},followup:'ตัวอย่างแถวหลัก · มี Free ปรับมือ',followupBy:'ผู้ทดสอบสมมติ',followupAt:day+'T01:20:00Z'},
+      {key:'w2440_l1220_t2.5_gA',w:2440,l:1220,t:2.5,grade:'A',unit:'sheet',sku:'SYNTH-BOARD-REVERSE',qty:20,committedQty:5,freeQty:15,followup:'ตัวอย่างแถวกลับด้าน · ไม่รวมข้อความติดตามกับแถวหลัก',followupBy:'ผู้ทดสอบสมมติ',followupAt:day+'T01:21:00Z'},
+      {key:'w1220_l2440_t4.5_gB',w:1220,l:2440,t:4.5,grade:'B',unit:'sheet',sku:'SYNTH-OTHER-THICKNESS',qty:40,committedQty:null,freeQty:40,followup:'ไม่มีรายการขายความหนานี้ แต่ต้องอยู่ในทะเบียนครบ'},
+      {key:'w25_l2000_t3.2_gB',w:25,l:2000,t:3.2,grade:'B',unit:'strip',sku:'SYNTH-STRIP',qty:500,committedQty:100,freeQty:400,followup:'หน่วยไม้แถบแยกจากจำนวนแผ่น'},
+      {key:'w915_l1830_t1.6_gC',w:915,l:1830,t:1.6,grade:'C',unit:'sheet',sku:'SYNTH-ZERO',qty:0,committedQty:0,freeQty:0,followup:'สินค้าศูนย์ยังคงอยู่ ไม่ลบทะเบียน'}
+    ];
+    const stock={ok:true,revision:7,report:{reportDate:day},rows,permissions:{followup:false}};
+    const catalog={ok:true,revision:7,catalogRevision:3,stockReportDate:day,permissions:{pricesAndNotes:false},widgetState:{privateContent:{prices:{},currencies:{},notesBySpec:{
+      '2.5|A|1220|2440|sheet':'หมายเหตุสมมติร่วมของสองแถวกลับด้าน — ปริมาณยังแยกรหัสจริง',
+      '4.5|B|1220|2440|sheet':'สเปกที่ไม่อยู่ในยอดขายเดือนนี้ต้องไม่หายเมื่อเลือก 2.5',
+      '3.2|B|25|2000|strip':'หมายเหตุไม้แถบสมมติ',
+      '1.6|C|915|1830|sheet':'บันทึกหมายเหตุได้แม้ยอดคงเหลือเป็นศูนย์'
+    },notesByThickness:{'2.5':'หมายเหตุความหนาเดิมแบบสมมติ — คงอ่านแยก ไม่กระจายลงสินค้า','4.5':'ข้อความเดิมของความหนาอื่นยังต้องปรากฏ'}}}};
+    const snapshot=window.AAFStockNotesCore.parseSnapshot(stock,catalog,Date.now()).snapshot;
+    if(!window.AAFOrderHeader.salesOnlyReviewValid(fixture.review,fixture.readModel,fixture.currentMonthSold))throw Error('Synthetic sales fixture failed its source-only contract');
+    const host=document.getElementById('review');
+    const view=window.AAFOrderReviewUI.mount(host,{...fixture.review,readModel:fixture.readModel},{compactChrome:true,readNotes:async()=>structuredClone(snapshot)});
+    view.setStockIdentity({revision:snapshot.revision,reportDate:snapshot.reportDate});
+    function check(){
+      const root=host.shadowRoot,shown=[...root.querySelectorAll('[data-stock-raw-key]')],expected=new Set(rows.map(row=>row.key));
+      const rawKeys=shown.map(row=>row.dataset.stockRawKey),manual=shown.find(row=>row.dataset.stockRawKey===rows[0].key),other=shown.find(row=>row.dataset.stockRawKey===rows[2].key);
+      const exact=rawKeys.length===expected.size&&new Set(rawKeys).size===expected.size&&rawKeys.every(key=>expected.has(key));
+      const manualPreserved=manual?.children[4]?.textContent.trim()==='75';
+      const unknownPreserved=!!other&&!/^0(?:\.00)?$/.test(other.children[2].textContent.trim());
+      const pass=exact&&manualPreserved&&unknownPreserved;
+      status.dataset.pass=String(pass);
+      status.textContent=(pass?'PASS':'รอตรวจ / FAIL')+' · ตัวกรองยอดขาย: '+view.getView().thickness+' · ทะเบียน '+rawKeys.length+'/5 แถว · หมายเหตุร่วม '+snapshot.rows.length+' รหัส · Free ปรับมือ 75 '+(manualPreserved?'คงเดิม':'ยังไม่ผ่าน')+' · จองไม่ทราบ '+(unknownPreserved?'ไม่ใช่ 0':'ยังไม่ผ่าน');
+      const basis=root.getElementById('stock-basis');if(basis)basis.open=true;
+      return pass;
+    }
+    for(const [id,value] of [['sales-all','all'],['sales-25','2.5'],['sales-strip','3.2']])document.getElementById(id).addEventListener('click',()=>{view.setView(value);check();});
+    document.getElementById('check-registry').addEventListener('click',check);
+    await new Promise(requestAnimationFrame);check();
+  </script>
+</body>
+</html>

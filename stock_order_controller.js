@@ -170,7 +170,13 @@
           if(view?.hasDirty?.()||notes.isBusy()||notes.isUncertain()){needsLoad=true;suspendSales('มีร่างระหว่างโหลด · เก็บร่างไว้ กรุณาตรวจ/เซฟก่อนโหลดภาพรวมล่าสุด');return;}
           response=data;failed=false;if(body){body.hidden=false;body.inert=false;}
           const review={...data.review,readModel:data.readModel,displaySourceNote:(rm.warning||'ชุดยอดขายที่ตรวจไว้ ไม่ใช่การอ่านหน้า 09 สด')+' · เดือน '+month+' · อ่านส่วนกลาง '+new Date(now()).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})+' · ไม่เปลี่ยนยอดสต๊อก/จอง/ราคา'};
+          const existingView=!!view;
           if(view)view.update(review);else view=win.AAFOrderReviewUI.mount(body,review,{compactChrome:true,readNotes:async()=>{const snapshot=await notes.readNotes();if(snapshot.saveUnresolved)fail('save-uncertain','ข้อมูลหลังบันทึกยังไม่ตรงครบทุกช่องที่ต้องคงเดิม · เก็บร่างและสถานะรอตรวจไว้ ห้ามส่งซ้ำ ยังไม่ถือว่าเซฟสำเร็จ');return access?.notesReadOnly?{...snapshot,canSave:false,canEditFollowup:false}:snapshot;},saveNotes:notes.saveNotes,saveChanges:notes.saveChanges,prepareNotesFile:async(file,settings)=>{if(access?.notesReadOnly)fail('read-only','รายงานหน้านี้อ่านอย่างเดียว');return notes.prepareNotesFile(file,settings);}});
+          // The registry has its own saved-stock basis, never the Page09 month
+          // filter. Invalidate an older basis immediately; reuse the existing
+          // authenticated notes reader after a report refresh (no new timer).
+          view?.setStockIdentity?.({revision:access.revision,reportDate:access.reportDate});
+          if(existingView)void view?.refreshNotes?.();
           publish();tell('');
         }catch(e){
           checkCurrentMonth();if(stamp!==reportScope())return;
@@ -191,6 +197,7 @@
       const changed=!access||access.revision!==next.revision||access.reportDate!==next.reportDate;
       const binding=sourceBinding(next),sourceChanged=!equal(binding,expected);
       auth=credential;access={revision:next.revision,reportDate:next.reportDate,notesReadOnly:next.notesReadOnly===true,currentMonthSold:clone(next.currentMonthSold||null)};
+      view?.setStockIdentity?.({revision:access.revision,reportDate:access.reportDate});
       expected=binding;
       if(changed||next.refreshReport||sourceChanged){if(changed)epoch++;reportEpoch++;loading=null;needsLoad=true;suspendSales('รอภาพรวมขายเดือน '+selectedMonth+' ที่ตรงกับข้อมูลส่วนกลางล่าสุด');}
       return changed||next.refreshReport||sourceChanged;

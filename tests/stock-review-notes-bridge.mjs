@@ -80,8 +80,52 @@ test('snapshot includes all grades and zero-stock rows; drops auth prices and fi
   assert.equal(out.snapshot.rows[1].qty, 0); assert.equal(out.snapshot.rows[0].freeQty, 0);
   assert.equal(out.snapshot.notesBySpec[key], changes[0].before);
   assert.equal(out.snapshot.legacyNotesByThickness['2'], 'legacy synthetic');
-  assert.doesNotMatch(JSON.stringify(out), /prices|priceObj|currencies|fx|actor|username|Bearer|synthetic-token|committedQty/);
+  assert.doesNotMatch(JSON.stringify(out), /prices|priceObj|currencies|fx|actor|username|Bearer|synthetic-token/);
+  assert(out.snapshot.rows.every(row=>!Object.hasOwn(row,'committedQty')),'existing notes rows retain their original schema');
+  assert.equal(out.snapshot.savedStockRegistry.rows[0].committedQty,10);
   assert(h.messages.every(m => m.origin === bridge.LOCAL_ORIGIN)); assert.equal(posts(h).length, 0);
+});
+test('saved stock registry preserves each exact original row and zero quantities independently of canonical notes aliases', () => {
+  const {stock,catalog}=fixture();
+  stock.rows.push({key:'w200_l100_t2_gA',w:200,l:100,t:2,grade:'A',unit:'sheet',sku:'SYNTH-REVERSE',qty:3,freeQty:2,committedQty:1});
+  stock.rows.push({key:'w1200_l2400_t2_gA',w:1200,l:2400,t:2,grade:'A',unit:'sheet',qty:4,freeQty:4,committedQty:0});
+  stock.rows.push({key:'w1220_l2440_t2_gA',w:1220,l:2440,t:2,grade:'A',unit:'sheet',qty:5,freeQty:5,committedQty:0});
+  const before=copy({stock,catalog}),snapshot=bridge.parseSnapshot(stock,catalog,1000).snapshot,registry=snapshot.savedStockRegistry;
+  assert.deepEqual(Object.keys(registry).sort(),['revision','reportDate','readAt','rows'].sort());
+  assert.equal(registry.revision,snapshot.revision);assert.equal(registry.reportDate,snapshot.reportDate);assert.equal(registry.readAt,snapshot.readAt);
+  assert.equal(registry.rows.length,5);assert.equal(snapshot.rows.length,4);assert.equal(snapshot.rows[0].qty,13);
+  assert.deepEqual(registry.rows.map(row=>[row.rawKey,row.w,row.l,row.qty,row.freeQty]),stock.rows.map(row=>[row.key,row.w,row.l,row.qty,row.freeQty]));
+  assert.equal(registry.rows[0].key,registry.rows[2].key);assert.notEqual(registry.rows[3].key,registry.rows[4].key);
+  assert.equal(registry.rows[1].qty,0);assert.equal(registry.rows[1].freeQty,0);
+  for(const row of registry.rows)assert.deepEqual(Object.keys(row).sort(),['rawKey','key','sku','w','l','t','grade','unit','qty','freeQty','committedQty','physicalAt','freeAt'].sort());
+  assert.deepEqual({stock,catalog},before);registry.rows[0].qty=999;assert.equal(stock.rows[0].qty,10);
+});
+test('saved stock registry preserves manual Free and fractional commitments without deriving a new allocation or exposing prices', () => {
+  const {stock,catalog}=fixture();
+  Object.assign(stock.rows[0],{committedQty:3.25,freeQty:8.5,physicalOverride:{value:10,at:'2026-01-01T01:02:03Z',private:'do-not-forward'},freeOverride:{value:8.5,at:'2026-01-01T01:03:04Z'},priceObj:{price:99,currency:'USD'},saleAmount:123});
+  const registry=bridge.parseSnapshot(stock,catalog,1000).snapshot.savedStockRegistry,row=registry.rows[0];
+  assert.equal(row.qty,10);assert.equal(row.committedQty,3.25);assert.equal(row.freeQty,8.5);assert.notEqual(row.freeQty,row.qty-row.committedQty);
+  assert.equal(row.physicalAt,'2026-01-01T01:02:03Z');assert.equal(row.freeAt,'2026-01-01T01:03:04Z');
+  assert.doesNotMatch(JSON.stringify(registry),/price|currency|amount|saleAmount|private|value|permissions|token/i);
+});
+test('missing or null commitments remain unknown; malformed supplied commitments fail closed', () => {
+  for(const value of [undefined,null,0,2.75]){
+    const {stock,catalog}=fixture();if(value===undefined)delete stock.rows[0].committedQty;else stock.rows[0].committedQty=value;
+    assert.equal(bridge.parseSnapshot(stock,catalog,1000).snapshot.savedStockRegistry.rows[0].committedQty,value??null);
+  }
+  for(const value of [-1,NaN,Infinity,-Infinity,'2',false,[],{}]){
+    const {stock,catalog}=fixture();stock.rows[0].committedQty=value;
+    assert.throws(()=>bridge.parseSnapshot(stock,catalog,1000),/ตรวจสอบไม่ครบ/);
+  }
+});
+test('optional saved registry metadata is bounded and sanitized, never a private object', () => {
+  for(const value of [undefined,null,123,false,[],{},'x'.repeat(4001)]){
+    const {stock,catalog}=fixture();stock.rows[0].sku=value;stock.rows[0].physicalOverride={at:value};stock.rows[0].freeOverride={at:value};
+    const row=bridge.parseSnapshot(stock,catalog,1000).snapshot.savedStockRegistry.rows[0];
+    assert.equal(row.sku,'');assert.equal(row.physicalAt,'');assert.equal(row.freeAt,'');
+  }
+  const {stock,catalog}=fixture();stock.rows[0].freeOverride={at:'not a date'};
+  assert.equal(bridge.parseSnapshot(stock,catalog,1000).snapshot.savedStockRegistry.rows[0].freeAt,'');
 });
 test('reversed-axis catalog aliases share one note row while quantities sum exactly', async () => {
   const h = harness();

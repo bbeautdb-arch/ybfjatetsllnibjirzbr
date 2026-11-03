@@ -81,6 +81,19 @@ const report=(b=binding())=>({ok:true,revision:b.revision,stockReportDate:b.repo
 test('authorized overview is GET only, same month and no-store; reattach preserves drafts',async()=>{
   const h=browser();h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push(report());await h.api.attach(new Node());assert.equal(h.mounted.length,1);assert.equal(h.calls[0].options.method,'GET');assert.equal(h.calls[0].options.cache,'no-store');assert.equal(h.calls[0].options.headers.Authorization,'Bearer synthetic-auth');assert(!h.calls[0].url.includes('synthetic-auth'));h.mounted[0].v.dirty=true;await h.api.attach(new Node());assert.equal(h.mounted.length,1);assert(h.api.isDirty());assert.equal(h.api.selectMonth('2026-02'),false);
 });
+test('saved registry binding follows accepted stock and refreshes independently after a report update',async()=>{
+  const h=browser(),a=binding();h.api.setAccess(a);h.responses.push(report(a));await h.api.attach(new Node());
+  const v=h.mounted[0].v,identities=[];let reads=0;
+  v.setStockIdentity=identity=>identities.push(identity);v.refreshNotes=async()=>{reads++;};
+  const b=copy(a);b.revision=2;b.currentAllocation.stock.revision=2;
+  h.responses.push(report(b));await h.api.syncCurrentSource(b);
+  assert.deepEqual(identities.at(-1),{revision:2,reportDate:b.reportDate});assert.equal(reads,1);
+  await h.api.syncCurrentSource(b);assert.equal(reads,1,'unchanged polling does not add notes/registry reads');
+  v.dirty=true;const c=copy(b);c.revision=3;c.currentAllocation.stock.revision=3;
+  await h.api.syncCurrentSource(c);
+  assert.deepEqual(identities.at(-1),{revision:3,reportDate:c.reportDate},'old registry invalidated even when a draft delays sales refresh');
+  assert.equal(reads,1);assert.equal(v.dirty,true);assert(h.calls.every(call=>call.options.method==='GET'));
+});
 test('invalid month/revision and denied auth cannot paint private review',async()=>{
   for(const value of [{...report(),revision:2},{...report(),selectedMonth:'2026-02'},{status:403,ok:false}]){const h=browser();h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push(value);await h.api.attach(new Node());assert.equal(h.mounted.length,0);assert(!h.summaries.some(([r])=>r));}
 });

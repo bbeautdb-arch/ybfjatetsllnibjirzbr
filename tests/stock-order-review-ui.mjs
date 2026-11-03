@@ -35,6 +35,18 @@ function trackingSnapshot(value='before followup',canEditFollowup=true,aliases=f
   const record=(key,text)=>({rawKey:key,note:'',noteBy:'',noteAt:'',followup:text,followupBy:'server synthetic author',followupAt:'2000-01-01T00:00:00Z'});
   out.rows[0].records=[record(rawKey,value),...(aliases?[record('SYNTH-RAW-REVERSED','second followup')]:[])];return out;
 }
+function registrySnapshot(){
+  const out=snapshot();out.rows=[];out.notesBySpec={};out.canEditFollowup=true;out.legacyNotesByThickness={'2':'Synthetic shared thickness note','6':'Synthetic zero-stock thickness note'};
+  const raw=[
+    {w:100,l:200,t:2,grade:'A',unit:'sheet',qty:12,committedQty:5,freeQty:9,freeAt:'2000-01-01T00:00:00Z'},
+    {w:200,l:100,t:2,grade:'A',unit:'sheet',qty:0,committedQty:3.25,freeQty:0},
+    {w:100,l:200,t:3.2,grade:'B',unit:'sheet',qty:2,committedQty:8,freeQty:0},
+    {w:10,l:200,t:3.2,grade:'B',unit:'strip',qty:20,committedQty:4,freeQty:16},
+    {w:100,l:200,t:6,grade:'C',unit:'sheet',qty:0,committedQty:null,freeQty:0}
+  ].map((r,i)=>({...r,rawKey:`w${r.w}_l${r.l}_t${r.t}_g${r.grade}`,key:[r.t,r.grade,Math.min(r.w,r.l),Math.max(r.w,r.l),r.unit].join('|'),sku:'SYNTHETIC-SKU-'+i,physicalAt:'',freeAt:r.freeAt||''}));
+  const grouped=new Map();for(const r of raw){if(!grouped.has(r.key))grouped.set(r.key,{key:r.key,w:Math.min(r.w,r.l),l:Math.max(r.w,r.l),t:r.t,grade:r.grade,unit:r.unit,records:[]});grouped.get(r.key).records.push({rawKey:r.rawKey,note:'',noteBy:'',noteAt:'',followup:'Synthetic tracking '+r.rawKey,followupBy:'Synthetic author',followupAt:'2000-01-01T00:00:00Z'});out.notesBySpec[r.key]='Synthetic shared note '+r.key;}
+  out.rows=[...grouped.values()];out.savedStockRegistry={revision:out.revision,reportDate:out.reportDate,readAt:out.readAt,rows:raw};return out;
+}
 const decode = value => value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 // A deliberately small DOM double exercises mount/event/state logic without an external browser.
 function harness(services = {}) {
@@ -158,6 +170,47 @@ test('source-only can keep normal note drafts while sales suspension preserves t
   const h=harness(),f=salesOnlyFixture();h.api.update({...f.review,readModel:f.readModel});h.api.applyNotesSnapshot(snapshot());
   const input=h.input();input.value='source-only synthetic draft';input.focus();input.setSelectionRange(2,5,'forward');await input.dispatch('input');assert(h.api.hasDirty());
   h.api.suspendSales('เดือนเปลี่ยน · เก็บร่างไว้');assert.equal(h.input(),input);assert.equal(h.shadow.activeElement,input);assert.equal(input.selectionStart,2);assert.equal(input.value,'source-only synthetic draft');h.api.destroy();
+});
+test('saved registry shows every exact raw row including zero, separated units and saved Free without implying current allocation',()=>{
+  const h=harness(),f=salesOnlyFixture(),s=registrySnapshot(),before=JSON.stringify(s);h.api.update({...f.review,readModel:f.readModel});const metrics=h.nodes.get('metrics').innerHTML,sales=h.nodes.get('table-area').innerHTML;
+  h.api.setStockIdentity({revision:1,reportDate:s.reportDate});h.api.applyNotesSnapshot(s);const html=h.nodes.get('stock-table').innerHTML;
+  assert.equal((html.match(/data-stock-raw-key=/g)||[]).length,5);assert.equal((html.match(/data-stock-key="2\|A\|100\|200\|sheet"/g)||[]).length,2);
+  assert.match(h.nodes.get('stock-title').textContent,/ทุกความหนา · 5 แถวทะเบียน/);assert.match(html,/รายงาน 2000-01-01 · Rev 1/);assert.match(html,/ไม่ใช่ผลจัดสรรยอดขายล่าสุด/);
+  assert.match(html,/จองรวมตามแผนที่บันทึก/);assert.match(html,/ต้องผลิตตามแผนที่บันทึก/);assert.match(html,/Free มีค่าปรับหรือไม่ตรงสูตรจอง/);assert.doesNotMatch(html,/จัดให้เดือนนี้|จัดให้ภาระเดือนอื่น/);
+  const row=raw=>html.match(new RegExp('<tr data-stock-key="[^"]+" data-stock-raw-key="'+raw+'">([\\s\\S]*?)<\\/tr>'))[1];
+  assert.match(row('w200_l100_t2_gA'),/>3\.25<\/td>/);assert.match(row('w100_l200_t3.2_gB'),/>6<\/td>/);assert.match(row('w100_l200_t6_gC'),/>0<\/td>/);assert.equal((row('w100_l200_t6_gC').match(/ยังไม่ยืนยัน/g)||[]).length,2);
+  const footer=html.match(/<tfoot>([\s\S]*?)<\/tfoot>/)[1];assert.match(footer,/รวมทะเบียนที่บันทึก · แผ่น/);assert.match(footer,/>14<\/td>/);assert.match(footer,/>9<\/td>/);assert.match(footer,/รวมทะเบียนที่บันทึก · ชิ้นไม้แถบ/);assert.match(footer,/>20<\/td>/);assert.match(footer,/>16<\/td>/);
+  assert.equal(h.nodes.get('metrics').innerHTML,metrics);assert.equal(h.nodes.get('table-area').innerHTML,sales);assert.equal(JSON.stringify(s),before);h.api.destroy();
+});
+test('sales thickness filtering never filters registry or legacy notes and preserves exact shared-note editors/caret',async()=>{
+  const h=harness(),f=salesOnlyFixture(),s=registrySnapshot();h.api.update({...f.review,readModel:f.readModel});h.api.applyNotesSnapshot(s);
+  const stock=h.nodes.get('stock-table'),inputs=stock.querySelectorAll('[data-stock-note]'),target=inputs.find(input=>input.dataset.noteRawKey==='w200_l100_t2_gA');target.focus();target.setSelectionRange(2,7,'forward');target.value='Synthetic shared draft';await target.dispatch('input');
+  assert.equal(inputs.find(input=>input.dataset.noteRawKey==='w100_l200_t2_gA').value,'Synthetic shared draft');const html=stock.innerHTML,legacy=h.nodes.get('stock-legacy').innerHTML;
+  for(const t of ['2.5','3.2','6','all']){h.api.setView(t);assert.equal(stock.innerHTML,html);assert.equal(stock.querySelectorAll('[data-stock-note]').find(input=>input.dataset.noteRawKey==='w200_l100_t2_gA'),target);assert.equal(h.shadow.activeElement,target);assert.equal(target.selectionStart,2);assert.equal(target.selectionEnd,7);assert.equal(h.nodes.get('stock-legacy').innerHTML,legacy);}
+  assert.match(legacy,/หมายเหตุเดิมที่บันทึกรวมตามความหนา/);assert.match(legacy,/ไม่ใช่ความหนาก่อนโยก/);assert.match(legacy,/Synthetic zero-stock thickness note/);assert.equal(h.followups().length,5);assert.equal(new Set(h.followups().map(input=>input.dataset.followupEdit)).size,5);assert.equal(h.api.hasDirty(),true);h.api.destroy();
+});
+test('saved registry rejects duplicate, mismatched, missing or invalid raw evidence without turning unknown into zero',()=>{
+  const mutations=[s=>s.savedStockRegistry.rows.push(copy(s.savedStockRegistry.rows[0])),s=>s.savedStockRegistry.rows[0].w=101,s=>s.savedStockRegistry.rows[0].key='2|A|100|201|sheet',s=>s.savedStockRegistry.rows[0].unit='box',s=>delete s.savedStockRegistry.rows[0].qty,s=>s.savedStockRegistry.rows[0].freeQty=-1,s=>s.savedStockRegistry.rows[0].committedQty=NaN,s=>s.savedStockRegistry.rows[0].committedQty=undefined,s=>s.savedStockRegistry.reportDate='2000-01-02',s=>s.savedStockRegistry.revision=2,s=>s.savedStockRegistry.readAt='bad',s=>s.savedStockRegistry.rows.pop()];
+  for(const mutate of mutations){const h=harness(),f=salesOnlyFixture();h.api.update({...f.review,readModel:f.readModel});h.api.applyNotesSnapshot(registrySnapshot());const bad=registrySnapshot();mutate(bad);assert.throws(()=>h.api.applyNotesSnapshot(bad),/ทะเบียนสต๊อกที่บันทึก/);assert.match(h.nodes.get('stock-table').innerHTML,/รอยืนยันฐานสต๊อก/);assert.doesNotMatch(h.nodes.get('stock-table').innerHTML,/<td class="number(?: ready-val)?">/);h.api.destroy();}
+});
+test('saved registry identity changes and auth suspension hide numeric values until matching authenticated snapshot',()=>{
+  const h=harness(),f=salesOnlyFixture(),s=registrySnapshot();h.api.update({...f.review,readModel:f.readModel});h.api.setStockIdentity({revision:1,reportDate:s.reportDate});h.api.applyNotesSnapshot(s);assert.doesNotMatch(h.nodes.get('stock-table').innerHTML,/รอยืนยันฐานสต๊อก/);
+  h.api.setStockIdentity({revision:2,reportDate:s.reportDate});assert.match(h.nodes.get('stock-table').innerHTML,/รอยืนยันฐานสต๊อก/);assert.match(h.nodes.get('stock-table').innerHTML,/Rev 2/);h.api.applyNotesSnapshot(s);assert.match(h.nodes.get('stock-table').innerHTML,/รอยืนยันฐานสต๊อก/);
+  s.revision=2;s.savedStockRegistry.revision=2;h.api.applyNotesSnapshot(s);assert.doesNotMatch(h.nodes.get('stock-table').innerHTML,/รอยืนยันฐานสต๊อก/);h.api.suspendEditing('Synthetic login expired');assert.match(h.nodes.get('stock-table').innerHTML,/รอยืนยันฐานสต๊อก/);assert.equal(h.input().disabled,true);assert.match(h.nodes.get('notes-status').textContent,/login expired/);
+  h.api.applyNotesSnapshot(s);assert.doesNotMatch(h.nodes.get('stock-table').innerHTML,/รอยืนยันฐานสต๊อก/);h.api.setStockIdentity({revision:2,reportDate:'2000-01-02'});assert.match(h.nodes.get('stock-table').innerHTML,/รอยืนยันฐานสต๊อก/);h.api.destroy();
+});
+test('failed saved-registry refresh keeps drafts but invalidates numeric display until verified retry',async()=>{
+  let fail=false;const s=registrySnapshot(),h=harness({readNotes:async()=>{if(fail)throw Error('Synthetic failed current read');return copy(s);}});await new Promise(resolve=>setImmediate(resolve));h.api.setStockIdentity({revision:1,reportDate:s.reportDate});h.input().value='Synthetic retained draft';await h.input().dispatch('input');fail=true;await h.api.refreshNotes();
+  assert.match(h.nodes.get('stock-table').innerHTML,/รอยืนยันฐานสต๊อก/);assert.equal(h.input().value,'Synthetic retained draft');assert.equal(h.api.hasDirty(),true);fail=false;await h.api.refreshNotes();assert.doesNotMatch(h.nodes.get('stock-table').innerHTML,/รอยืนยันฐานสต๊อก/);assert.equal(h.input().value,'Synthetic retained draft');h.api.destroy();
+});
+test('sales-source suspension preserves independently verified saved registry and never changes source-only pending cards',()=>{
+  const h=harness(),f=salesOnlyFixture();h.api.update({...f.review,readModel:f.readModel});h.api.applyNotesSnapshot(registrySnapshot());const registry=h.nodes.get('stock-table').innerHTML;
+  h.api.suspendSales('Synthetic source-month mismatch');assert.equal(h.nodes.get('stock-table').innerHTML,registry);const style=h.shadow.children.find(node=>node.id==='current-sales-suspension').textContent;assert.match(style,/\.stock-basis-warning:not\(\[data-saved-stock-basis\]\)/);assert.match(style,/\.basis-table.with-notes:not\(\[data-saved-stock-registry\]\)/);assert.match(h.nodes.get('metrics').innerHTML,/ยังไม่ทราบ Free/);assert.equal(h.nodes.get('source-warning').hidden,false);h.api.destroy();
+});
+test('exact raw registry tracking and shared note save remain one raw tracking change plus one canonical note',async()=>{
+  let remote=registrySnapshot();const writes=[];const h=harness({readNotes:async()=>copy(remote),saveChanges:async payload=>{writes.push(copy(payload));remote.notesBySpec[key]=payload.notesChanges[0].after;remote.rows[0].records.find(record=>record.rawKey===payload.followupChanges[0].rawKey).followup=payload.followupChanges[0].after;return copy(remote);}});await new Promise(resolve=>setImmediate(resolve));
+  const inputs=h.nodes.get('stock-table').querySelectorAll('[data-stock-note]');inputs[1].value='Synthetic canonical change';await inputs[1].dispatch('input');const follow=h.followups().find(input=>input.dataset.followupEdit==='w200_l100_t2_gA');follow.value='Synthetic exact tracking';await follow.dispatch('input');await h.nodes.get('changes-stage').click();await h.nodes.get('notes-confirm').click();
+  assert.equal(writes.length,1);assert.equal(writes[0].notesChanges.length,1);assert.equal(writes[0].notesChanges[0].key,key);assert.equal(writes[0].followupChanges.length,1);assert.equal(writes[0].followupChanges[0].rawKey,'w200_l100_t2_gA');assert.equal(h.api.hasDirty(),false);assert.equal(h.followups().find(input=>input.dataset.followupEdit==='w100_l200_t2_gA').value,'Synthetic tracking w100_l200_t2_gA');h.api.destroy();
 });
 
 test('public renderer is runtime-only and isolated; no data acquisition or auth/persistence', () => {

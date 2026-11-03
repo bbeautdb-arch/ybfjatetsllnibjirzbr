@@ -72,14 +72,22 @@
     if (!stock?.ok || !catalog?.ok || !integer(stock.revision) || stock.revision !== catalog.revision || !integer(catalog.catalogRevision) || !/^\d{4}-\d{2}-\d{2}$/.test(stock.report?.reportDate || '') || stock.report.reportDate !== catalog.stockReportDate || !Array.isArray(stock.rows) || !stock.rows.length || stock.rows.length > 2000) fail('invalid-snapshot');
     const p = catalog.widgetState?.privateContent;
     if (!object(p) || !object(p.prices) || !object(p.currencies) || !object(p.notesByThickness) || (p.notesBySpec !== undefined && !object(p.notesBySpec))) fail('invalid-snapshot');
-    const grouped = new Map(), rawKeys = new Set();
+    const grouped = new Map(), rawKeys = new Set(), savedRows = [];
+    const optionalText = value => typeof value === 'string' && value.length <= 4000 ? value : '';
+    const optionalTime = value => typeof value === 'string' && value.length <= 64 && Number.isFinite(Date.parse(value)) ? value : '';
     for (const r of stock.rows) {
       if (!object(r) || !['w', 'l', 't'].every(k => dimension(r[k])) || !GRADES.has(r.grade) || !['sheet', 'strip'].includes(r.unit) || !qty(r.qty) || !qty(r.freeQty)) fail('invalid-snapshot');
+      if (r.committedQty !== undefined && r.committedQty !== null && !qty(r.committedQty)) fail('invalid-snapshot');
       const key = keyOf(r);
       if (!grouped.has(key)) grouped.set(key, { key, w: Math.min(Number(r.w), Number(r.l)), l: Math.max(Number(r.w), Number(r.l)), t: Number(r.t), grade: r.grade, unit: r.unit, qty: 0, freeQty: 0, skus: new Set(), records: [] });
       const row = grouped.get(key); row.qty += r.qty; row.freeQty += r.freeQty;
       if (!qty(row.qty) || !qty(row.freeQty)) fail('invalid-snapshot');
       const record=sourceRecord(r);if(rawKeys.has(record.rawKey))fail('invalid-snapshot');rawKeys.add(record.rawKey);row.records.push(record);
+      // Saved warehouse quantities are a separate surface from notes aliases
+      // and the current-month sales allocation. Never merge original stock rows
+      // or replace an explicitly saved/manual Free with a recomputed formula.
+      savedRows.push({rawKey:record.rawKey,key,sku:optionalText(r.sku),w:Number(r.w),l:Number(r.l),t:Number(r.t),grade:r.grade,unit:r.unit,
+        qty:r.qty,freeQty:r.freeQty,committedQty:r.committedQty??null,physicalAt:optionalTime(r.physicalOverride?.at),freeAt:optionalTime(r.freeOverride?.at)});
       if (typeof r.sku === 'string' && r.sku) row.skus.add(r.sku);
     }
     // Reversed axes are one notes identity. Aggregate only exact dimensions;
@@ -96,7 +104,9 @@
       if (!positive(Number(key)) || String(Number(key)) !== key || typeof value !== 'string' || value.length > 4000) fail('invalid-snapshot');
       legacyNotesByThickness[key] = value;
     }
-    return { snapshot: { rows, notesBySpec, legacyNotesByThickness, revision: stock.revision, catalogRevision: catalog.catalogRevision, reportDate: stock.report.reportDate, readAt: new Date(now).toISOString(), canSave: catalog.permissions?.pricesAndNotes === true, canEditFollowup: stock.permissions?.followup === true }, catalog: clone(catalog), stock: clone(stock) };
+    const readAt = new Date(now).toISOString();
+    const savedStockRegistry = {revision:stock.revision,reportDate:stock.report.reportDate,readAt,rows:savedRows};
+    return { snapshot: { rows, notesBySpec, legacyNotesByThickness, savedStockRegistry, revision: stock.revision, catalogRevision: catalog.catalogRevision, reportDate: stock.report.reportDate, readAt, canSave: catalog.permissions?.pricesAndNotes === true, canEditFollowup: stock.permissions?.followup === true }, catalog: clone(catalog), stock: clone(stock) };
   }
   function validChanges(changes, snapshot) {
     if (!Array.isArray(changes) || !changes.length || changes.length > 2000 || !snapshot.canSave) fail('invalid-request');
