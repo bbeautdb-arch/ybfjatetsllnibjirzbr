@@ -57,6 +57,8 @@ test('compact summary removes duplicated chrome without removing quantity meanin
   assert.match(html,/จองรวม = จองมีของ \+ จองต้องผลิตเพิ่ม/);
   assert.match(html,/Physical − จองมีของ = Free/);
   assert.match(html,/ภาพรวมรายการขาย · เดือนนี้/);
+  assert.doesNotMatch(html,/bbeautdb-arch\.github\.io\/ybfjatetsllnibjirzbr\/stock_manager\.html/);
+  assert.match(html,/แหล่งข้อมูล: Stock AAF ส่วนกลาง/);
   assert.match(source,/dailySource\.textContent=overviewSourceText\(latest\)/);
   assert.equal(JSON.stringify(input),before);
   assert.equal(m.total.count,input.rows.length);

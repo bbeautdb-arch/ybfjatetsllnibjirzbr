@@ -7,7 +7,7 @@ const readPublic=name=>readFileSync(new URL('../'+name,import.meta.url),'utf8');
 assert(readPublic('portal_logout.html').includes(portalBase+'login.html'),'Logout must return to the migrated portal');
 assert(readPublic('stock_shared.js').includes(portalBase+'login.html?reauth=1'),'Stock reauthentication must keep its query on the migrated portal');
 for(const name of ['stock_shared.js','stock_sales_export.js'])assert(readPublic(name).includes(portalBase+'stock_manager.html'),'Stock export source URL must use migrated portal: '+name);
-assert(readPublic('stock_summary.js').includes(portalBase.replace('https://','')+'stock_manager.html'),'Stock summary footer must use the migrated portal');
+assert(!readPublic('stock_summary.js').includes('<br>'+portalBase.replace('https://','')+'stock_manager.html'),'Stock summary footer must omit the visible portal URL as requested');
 const workflow=readFileSync(new URL('../.github/workflows/static.yml',import.meta.url),'utf8');
 assert(readFileSync(new URL('../login-bg.png',import.meta.url)).length>0,'Missing login background');
 assert(workflow.includes('cp ./login-bg.png _site/'),'Login background excluded from deployment');

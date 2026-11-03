@@ -21,7 +21,7 @@ test('both report entry points cache-bust the current sold renderer and auth con
     const html=fs.readFileSync(new URL('../'+page+'.html',import.meta.url),'utf8');
     assert.ok(html.includes('stock_sales_preview.js?v=20261019-notes-only'));assert.ok(html.includes('stock_sales_controller.js?v=20261019-notes-only'));
     for(const file of ['stock_order_header','stock_summary','stock_order_controller']){
-      const version=file==='stock_order_header'?'20261103-sales-only-r1':'20261103-compact-chrome-r1';
+      const version=file==='stock_order_header'?'20261103-sales-only-r1':file==='stock_summary'?'20261103-footer-clean-r1':'20261103-compact-chrome-r1';
       const expected=new RegExp('<script\\s+src="'+file+'\\.js\\?v='+version+'"><\\/script>','g');
       assert.equal([...html.matchAll(expected)].length,1,page+' must load exactly one current '+file+' asset');
       assert.doesNotMatch(html,new RegExp(file+'\\.js\\?v=20261020-monthly-overview'),page+' must not retain a cached dated-stock renderer');
