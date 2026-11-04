@@ -56,6 +56,8 @@ jobs:
           cp ./*.html ./*.js ./*.css _site/
           cp ./login-bg.png _site/
           cp ./icon.svg ./favicon.ico ./favicon-32.png ./apple-touch-icon.png ./icon-192.png ./icon-512.png ./manifest.webmanifest _site/
+          mkdir -p _site/assets
+          cp ./assets/aaf-factory-background.webp _site/assets/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

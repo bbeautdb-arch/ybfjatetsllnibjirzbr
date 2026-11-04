@@ -51,6 +51,14 @@ const hasCondition=(rule,pattern)=>rule.ancestors.some(a=>pattern.test(a));
 const backgrounds=rule=>Object.entries(rule.declarations).filter(([p])=>['background','background-color'].includes(p));
 const opaque=value=>/^(?:#[0-9a-f]{3}(?:[0-9a-f]{3})?|Canvas|var\(--(?:surface|bg|aaf-paper)\))\s*(?:!important)?$/i.test(value);
 
+test('Pages publishes only the named decorative factory asset, not a broad data directory',()=>{
+  const workflow=read('../.github/workflows/static.yml');
+  assert.match(workflow,/mkdir -p _site\/assets/);
+  assert.match(workflow,/cp \.\/assets\/aaf-factory-background\.webp _site\/assets\//);
+  assert.doesNotMatch(workflow,/cp\s+-[a-z]*r|cp\s+\.\/assets\/\*|cp\s+\.\/(?:operations|outputs|work)\b/);
+  assert.ok(fs.statSync(new URL('../assets/aaf-factory-background.webp',import.meta.url)).size>1000);
+});
+
 test('factory image is one local body background within screen-only theme rules',()=>{
   for(const rule of both)assert.equal(rule.ancestors[0],'@media screen',rule.selector+' must not affect print');
   assert.equal((clean(outer).match(/url\s*\(/gi)||[]).length,1);
