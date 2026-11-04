@@ -139,6 +139,20 @@ test('compact stale and suspended warnings remain visible and suspension preserv
   h.api.update({...f.review,readModel:f.readModel});h.api.applyNotesSnapshot(snapshot());const input=h.input();input.focus();input.setSelectionRange(2,4,'forward');input.value='synthetic pending draft';await input.dispatch('input');
   h.api.suspendSales('synthetic mismatched current source');assert.equal(h.nodes.get('source-warning').hidden,false);assert.match(h.nodes.get('source-warning').textContent,/synthetic mismatched/);assert.equal(h.input(),input);assert.equal(h.shadow.activeElement,input);assert.equal(input.selectionStart,2);assert.equal(h.shadow.children[1]['data-changes-active'],'true');h.api.destroy();
 });
+test('retired allocation disclosure stays hidden and verified saved-ledger routine banner is removed without hiding safety alerts',()=>{
+  const h=harness({compactChrome:true}),data=copy(h.data);
+  data.readModel={kind:'current-month-order-review',status:'verified',source:{capturedAt:'2000-01-01T00:00:00Z'},stock:{revision:3,reportDate:'2000-01-01'},warning:'Synthetic routine provenance retained'};
+  Object.assign(data.metadata,{allocationBasis:'same-saved-central-allocation-ledger',stockReportDate:'2000-01-01'});
+  const before=JSON.stringify(data);h.api.update(data);
+  assert.equal(h.nodes.get('allocation-review').hidden,true);
+  assert.doesNotMatch(h.shadow.children[1].innerHTML,/รายละเอียดคิวจัดสรรเดิม|<details class="allocation-review"/);
+  assert.equal(h.nodes.get('source-warning').hidden,true);
+  assert.match(h.nodes.get('source-sales').textContent,/Synthetic routine provenance retained/);
+  assert.ok(h.nodes.get('month-dashboard').innerHTML);assert.ok(h.nodes.get('table-area').innerHTML);assert.ok(h.nodes.get('stock-table').innerHTML);
+  h.api.setView('2');assert.equal(h.nodes.get('allocation-review').hidden,true);assert.equal(h.nodes.get('source-warning').hidden,true);assert.equal(JSON.stringify(data),before);
+  h.api.update({...data,readModel:{...data.readModel,stale:true}});assert.equal(h.nodes.get('source-warning').hidden,false);assert.match(h.nodes.get('source-warning').textContent,/ต้องตรวจเทียบ/);
+  h.api.update(data);h.api.suspendSales('Synthetic current source mismatch');assert.equal(h.nodes.get('source-warning').hidden,false);assert.match(h.nodes.get('source-warning').textContent,/Synthetic current source mismatch/);assert.equal(h.nodes.get('allocation-review').hidden,true);h.api.destroy();
+});
 test('compact save bar appears for note edits and empty tracking clears without replacing focus, then hides after verified save',async()=>{
   let remote=trackingSnapshot(),release;const writes=[];const h=harness({compactChrome:true,readNotes:async()=>copy(remote),saveChanges:async payload=>{writes.push(copy(payload));await new Promise(resolve=>release=resolve);remote=trackingSnapshot(payload.followupChanges[0].after);return copy(remote);}});
   assert.equal(h.shadow.children[1]['data-changes-active'],'true','pending initial read remains visible');await new Promise(resolve=>setImmediate(resolve));assert.equal(h.shadow.children[1]['data-changes-active'],'false');
@@ -222,7 +236,7 @@ test('selected-month dashboard uses three whole-month source groups without chan
   assert.match(html,/ยอดขาย · .*2030-12/);assert.match(html,/ทุกความหนา · ไม่ตามตัวกรอง/);assert.match(card('confirmed'),/50 <small>แผ่น/);assert.match(card('confirmed'),/5 <small>ชิ้นไม้แถบ/);assert.match(card('confirmed'),/โหลดแล้ว/);assert.match(card('confirmed'),/10 <small>แผ่น/);assert.match(card('confirmed'),/รอโหลด/);assert.match(card('confirmed'),/40 <small>แผ่น/);assert.match(card('forecast'),/15 <small>ชิ้นไม้แถบ/);assert.match(html,/เก็บรายการต้นทาง 7 บรรทัด/);
   assert.deepEqual(f.currentMonthSold.quantity,{sheet:30,strip:5},'upper current-month sold policy is unchanged while lower groups include confirmed PI');
   assert.doesNotMatch(html,/฿|US\$|35 <small>แผ่น|ขายแล้วเดือนนี้/);assert.match(html,/ข้อมูลหน้า 09 ที่อ่านเมื่อ/);assert.match(html,/ไม่ใช่ข้อมูลสด/);assert.match(html,new RegExp(f.readModel.source.capturedAt));
-  assert.match(h.shadow.children[1].innerHTML,/<details class="allocation-review" id="allocation-review"><summary>รายละเอียดคิวจัดสรรเดิม/);assert.match(h.nodes.get('table-help').textContent,/ไม่ใช่กลุ่มขาย 1–3/);
+  assert.match(h.shadow.children[1].innerHTML,/<div id="allocation-review" hidden><section class="overview" id="metrics"/);assert.doesNotMatch(h.shadow.children[1].innerHTML,/รายละเอียดคิวจัดสรรเดิม/);assert.match(h.nodes.get('table-help').textContent,/ไม่ใช่กลุ่มขาย 1–3/);
   h.api.setView('2.5');assert.equal(h.nodes.get('month-dashboard').innerHTML,html);assert.match(h.nodes.get('metrics').innerHTML,/ความหนาที่เลือก/);assert.equal(JSON.stringify(f),before);h.api.destroy();
 });
 test('dated historical dashboard retains unresolved source records without deriving groups from old queue numbers',()=>{

@@ -51,8 +51,10 @@ function mount(host, review, services = {}) {
     const frame=ownerDocument.createElement('div');frame.className=compactChrome?'compact-chrome':'';
     frame.innerHTML=STATIC_HTML
       .replace('<section class="controls"','<section class="month-dashboard" id="month-dashboard" aria-label="สรุปยอดขาย 3 กลุ่มของเดือนที่เลือก"></section><section class="controls"')
-      .replace('<section class="overview" id="metrics"','<details class="allocation-review" id="allocation-review"><summary>รายละเอียดคิวจัดสรรเดิม · คนละกลุ่มกับสรุปการขายด้านบน</summary><p class="small muted">กลุ่มคิว 1–4 ใช้ตรวจสต๊อกตามแผนที่ระบุ ไม่ใช่กลุ่มขาย 1–3 และไม่เปลี่ยนเมื่อจัดกลุ่มแสดงผลใหม่</p><section class="overview" id="metrics"')
-      .replace('<div class="sectionbar">','</details><div class="sectionbar">');
+      // Owner Nov5 retired this duplicate allocation summary. Keep its render
+      // targets inert for compatibility, without a visible disclosure or label.
+      .replace('<section class="overview" id="metrics"','<div id="allocation-review" hidden><section class="overview" id="metrics"')
+      .replace('<div class="sectionbar">','</div><div class="sectionbar">');
     shadow.append(frame);
     let importReviewPending=false;
     const isCurrent=()=>!destroyed&&version===generation;
@@ -751,7 +753,9 @@ function mount(host, review, services = {}) {
     document.getElementById('table-title').textContent=all?`${thicknesses.length} ความหนา · รายการขาย ${selectedMonthLabel}`:`${thick(value)} มม. · ${values.length?'รายการ 1–'+values.length:'ไม่มีรายการขายเดือนที่เลือก'}`;
     document.getElementById('table-help').textContent='คิวจัดสรรเดิม 1 → 4 · ไม่ใช่กลุ่มขาย 1–3 ด้านบน · ภายในคิวเรียง ETD ก่อน–หลัง';
     document.getElementById('back').hidden=all;document.getElementById('collapse').hidden=all||!values.length;
-    const warning=document.getElementById('source-warning');warning.hidden=compactChrome&&currentSalesOnly&&data.readModel?.stale!==true&&!salesSuspended;warning.textContent=[data.readModel?.stale?'ต้องตรวจเทียบ: ฐานย้อนหลังต่างจากส่วนกลางหรือยังยืนยันไม่ได้':'',data.readModel?.warning,metadata.warning,basis.otherMonthWarning,basis.readbackLabel,'หน้านี้ไม่เปลี่ยนยอดสต๊อกหรือสถานะเงินส่วนกลาง · รายการโหลดแล้วไม่หักซ้ำ'].filter(Boolean).join(' · ');
+    // Routine provenance remains in source details; actual stale/suspended
+    // evidence still surfaces an alert instead of silently showing old values.
+    const warning=document.getElementById('source-warning');warning.hidden=compactChrome&&currentSource&&data.readModel?.stale!==true&&!salesSuspended;warning.textContent=[data.readModel?.stale?'ต้องตรวจเทียบ: ฐานย้อนหลังต่างจากส่วนกลางหรือยังยืนยันไม่ได้':'',data.readModel?.warning,metadata.warning,basis.otherMonthWarning,basis.readbackLabel,'หน้านี้ไม่เปลี่ยนยอดสต๊อกหรือสถานะเงินส่วนกลาง · รายการโหลดแล้วไม่หักซ้ำ'].filter(Boolean).join(' · ');
     if(compactChrome)document.getElementById('source-sales').textContent=[metadata.sourceSalesReadLabel||'ข้อมูลรายการขาย: ดูวันที่ตรวจในบันทึกประกอบ',data.readModel?.source?.capturedAt?'ชุดหน้า 09 ตรวจเวลา '+data.readModel.source.capturedAt:'',data.displaySourceNote,warning.textContent].filter(Boolean).join('\n');
     document.getElementById('allocation-legend').innerHTML=currentSalesOnly?'<span>1 โหลดแล้วตามต้นทาง · ไม่หักซ้ำ</span><span>2 รับเงิน/มัดจำแล้ว · ยังไม่โหลด</span><span>3 ออเดอร์ยืนยันอื่น · รอตรวจจอง</span><span>4 ยังไม่เข้าเกณฑ์จอง / ยกเลิก</span><span>ทุกกลุ่มแสดงสถานะต้นทาง · จำนวนมีของ / ต้องผลิต / Free ยังรอยืนยัน</span>':currentSavedLedger?'<span>1 โหลดแล้ว · ไม่หักซ้ำ</span><span>2 รับเงิน/มัดจำแล้ว · ยังไม่โหลด</span><span>3 จองอื่นและ LC · ดูสถานะต้นทางแต่ละรายการ</span><span>4 ยังไม่จอง / ยกเลิก · ไม่รวมต้องผลิต</span><span>มีของ / ต้องผลิต อ่านจากแผนส่วนกลางที่บันทึกแล้ว</span>':'<span><i class="dot"></i>1 โหลดแล้ว ไม่หักซ้ำ</span><span><i class="dot green"></i>2 รับเงินแล้ว จัดก่อน · มัดจำแยกไว้</span><span><i class="dot orange"></i>3 จอง จัดต่อจากกลุ่ม 2</span><span>4 ไม่มี ETD / รอเงื่อนไข · เฉพาะส่วนที่ได้รับอนุมัติ ที่อนุมัติ จัดท้ายคิวกองนี้</span><span>ยังไม่ยืนยันจำนวน ≠ ไม่มีของ</span>';
     document.getElementById('queue-order-description').textContent=queueReview.description||'เรียงกลุ่มก่อน แล้ว ETD ก่อน–หลัง ไม่มีวันที่ไว้ท้าย คงข้อยกเว้นเฉพาะรายการที่ชุดข้อมูลอนุมัติ ไม่เปลี่ยนสถานะต้นทาง';
