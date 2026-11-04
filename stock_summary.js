@@ -37,6 +37,26 @@
     window.AAFOrderReview?.attachFreeSurface?.(root?.querySelector('[data-free-followup-host]'));
     if(retained.focused?.isConnected){retained.focused.focus({preventScroll:true});if(retained.selection)retained.focused.setSelectionRange(retained.selection.start,retained.selection.end,retained.selection.direction);}
   }
+  // Price drafts remain a separate exact-spec catalog workflow. Reuse the
+  // same node during report repaint; never discard edits or unlock annotations.
+  function retainPriceSurface(){
+    const panel=root?.querySelector('[data-stock-price-panel-host]'),active=document.activeElement;
+    const focused=panel?.contains(active)?active:null;
+    panel?.remove();return {panel,focused};
+  }
+  function restorePriceSurface(retained={}){
+    const fresh=root?.querySelector('[data-stock-price-panel-host]');
+    if(fresh&&retained.panel)fresh.replaceWith(retained.panel);
+    const panel=root?.querySelector('[data-stock-price-panel-host]');
+    window.AAFStockPricePanel?.mount?.(panel,{service:window.AAFStockPriceEditor,context:latest,onSaved:()=>{
+      if(window.AAFOrderReview?.isDirty?.()||window.AAFOrderReview?.isSaving?.()||window.AAFSalesPreview?.isDirty?.()||window.AAFSalesPreview?.isSaving?.())return false;
+      // Use the existing guarded read-only refresh; it does not import mail,
+      // repeat reservations or reload away unrelated unsaved form state.
+      const refresh=document.getElementById('stock-owner-reload')||document.getElementById('stock-sales-reload')||document.getElementById('stock-report-retry')||document.getElementById('reload-shared');
+      if(!refresh)return false;refresh.click();return true;
+    }});
+    if(retained.focused?.isConnected)retained.focused.focus({preventScroll:true});
+  }
   const expandedThickness=new Set();
   const expandedThicknessProduction=new Set();
   // Scenario inputs are browser-memory estimates, never saved catalog prices.
@@ -96,6 +116,7 @@
     // The monthly sales header must also follow asynchronously verified current
     // catalog/FX values. Only repaint cards, never rebuild notes or draft editors.
     if(window.AAFOrderHeader)setSalesSummary(latest.salesSummary||null);
+    restorePriceSurface();
   }
   function setSavedStockCatalog(value){savedStockCatalog=value;repaintSavedCatalog();}
 
@@ -821,6 +842,7 @@
       <div class="ss-content"><div class="ss-context"><span>ข้อมูลส่วนกลางล่าสุด <b>${esc(when(m.updatedAt))}</b></span><span hidden data-internal-metadata>เวลาไทย (UTC+7) · ภาพรวมทั้งชุด ไม่ใช้ตัวกรองในหน้าสต๊อก</span></div>
       <p class="ss-sales-summary-source" role="status" hidden>${esc(window.AAFOrderHeader?overviewSourceText(m):summarySourceText(m.salesSummary,m))}</p>
       ${dailyOverviewHTML(m)}
+      <div data-stock-price-panel-host data-html2canvas-ignore></div>
       <div data-stock-readiness-slot hidden>${readinessHTML(m)}</div>
       <div class="ss-section-title"><span>01</span><h3>ภาพรวมแยกเกรดและความหนา · ทั้งคลัง</h3></div>
       <p class="ss-help ss-reservation-help"><strong>จำนวนจองตามแผนทั้งคลังเดิม ไม่ใช่จองเฉพาะเดือนหรือคิวใหม่หัวข้อ02</strong><br>จองรวม = จองมีของ + จองต้องผลิตเพิ่ม · Physical − จองมีของ = Free · แยกคำนวณรายสเปกก่อนรวม ไม่เอาของคนละสเปกหักกัน${m.rows.some(r=>r.freeReconciliationException)?'<br><strong class="ss-manual">มีค่า Free ที่บันทึกไว้ต่างจากสูตรในบางสเปก · คงค่าที่บันทึกไว้ ไม่ล้างค่าปรับเอง</strong>':''}</p>
@@ -840,6 +862,7 @@
   }
 
   const style=document.createElement('style');style.textContent=`
+    [data-aaf-stock-summary] .ss-physical-item-value>small{display:block;line-height:1.5;margin-top:4px;font-weight:500}
     [data-aaf-stock-summary] .ss-all-production{margin:24px 0;padding:24px;border:1px solid #e5d4b8;border-radius:22px;background:rgba(255,250,239,.96);box-shadow:0 9px 30px #193a3115;color:#294335;break-inside:auto}
     [data-aaf-stock-summary] .ss-all-production-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
     [data-aaf-stock-summary] .ss-all-production-heading span{font-size:11px;font-weight:700;letter-spacing:.07em;color:#927040}
@@ -1286,6 +1309,7 @@
     const preview=root.querySelector('#stock-sales-preview-host');
     const orderPreview=root.querySelector('#stock-order-review-host');
     const freeSurface=retainFreeSurface();
+    const priceSurface=retainPriceSurface();
     const planningFocus=root.querySelector('[data-production-setting]:focus')?.dataset.productionSetting;
     const focused=orderPreview?.shadowRoot?.activeElement||orderPreview?.querySelector('input:focus,textarea:focus,select:focus')||preview?.shadowRoot?.activeElement;
     const selection=focused&&typeof focused.selectionStart==='number'?{start:focused.selectionStart,end:focused.selectionEnd}:null;
@@ -1296,6 +1320,7 @@
     window.AAFSalesPreview?.attach(root.querySelector('#stock-sales-preview-slot'));
     window.AAFOrderReview?.attach(root.querySelector('#stock-order-review-slot'));
     restoreFreeSurface(freeSurface);
+    restorePriceSurface(priceSurface);
     syncPriceDrafts();
     if(focused?.isConnected){focused.focus({preventScroll:true});if(selection)focused.setSelectionRange(selection.start,selection.end);}
     if(planningFocus)root.querySelector('[data-production-setting="'+planningFocus+'"]')?.focus({preventScroll:true});

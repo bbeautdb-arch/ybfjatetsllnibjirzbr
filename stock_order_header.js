@@ -268,11 +268,15 @@
     requireValue(stock && typeof stock.reportDate === 'string' && Array.isArray(stock.rows) && stock.rows.length > 0, 'ยังไม่มีสต๊อกส่วนกลางล่าสุด');
     const keys = new Set();
     const bucket = () => ({quantity: units(), eq4x8: 0, eq25: 0, value: null,
-      knownValueTHB: null, complete: false, unknownQuantity: units(), unpricedSpecCount: 0, valuedSpecCount: 0});
+      knownValueTHB: null, complete: false, unknownQuantity: units(), unpricedSpecCount: 0, valuedSpecCount: 0,
+      missingPriceSpecCount:0,missingCurrencySpecCount:0,missingFxSpecCount:0,pendingValueSpecCount:0});
     const physical = bucket(), free = bucket(), catalogVerified = !!stock.savedCatalog;
+    const exchange=stock.headerExchangeRate,exchangeDate=/^\d{4}-\d{2}-\d{2}$/.test(exchange?.date||'')?new Date(exchange.date+'T00:00:00Z'):null;
+    const exchangeUsable=valid(exchange?.rate)&&exchange.rate>0&&exchange.rate<=1000&&exchange.basis==='BOT_USD_THB_BUYING_TRANSFER'&&
+      ['current','stale','unavailable'].includes(exchange.status)&&exchangeDate&&!Number.isNaN(exchangeDate.getTime())&&exchangeDate.toISOString().slice(0,10)===exchange.date;
     const reservationTotals={demand:units(),allocated:units(),shortage:units(),manualFreeDelta:units()};let manualFreeOverrideCount=0;
     let physicalKnown = 0, freeKnown = 0;
-    const freeValueItems={};
+    const freeValueItems={},coverage=new Map([[physical,new Map()],[free,new Map()]]);
     for (const row of stock.rows) {
       requireValue(typeof row.key === 'string' && row.key && !keys.has(row.key), 'ทะเบียนสต๊อกซ้ำหรือไม่มีรหัส');
       keys.add(row.key);
@@ -290,17 +294,26 @@
         target.eq4x8 += qty * area; target.eq25 += qty * area * Number(row.t) / 2.5;
         const priced = catalogVerified && valid(row.catalogPrice) && row.catalogPrice > 0 &&
           ['THB','USD'].includes(row.catalogCurrency) && valid(row[valueField]);
+        const key=physicalItemKey(row.w,row.l,row.t,row.grade,row.unit);
+        const reason=!catalogVerified?'pendingValue':!valid(row.catalogPrice)||row.catalogPrice<=0?'missingPrice':
+          !['THB','USD'].includes(row.catalogCurrency)?'missingCurrency':row.catalogCurrency==='USD'&&!exchangeUsable?'missingFx':'pendingValue';
         if(field==='freeQty'){
           // catalogFreeValue is already THB, decorated by the exact saved
           // catalog and evidenced FX. Never use Page09 or legacy row prices.
-          const key=physicalItemKey(row.w,row.l,row.t,row.grade,row.unit);
-          const item=freeValueItems[key]||(freeValueItems[key]={freeQty:0,valueTHB:0,knownValueTHB:0,unknownPriceRows:0});
+          const item=freeValueItems[key]||(freeValueItems[key]={freeQty:0,valueTHB:0,knownValueTHB:0,unknownPriceRows:0,
+            missingPriceRows:0,missingCurrencyRows:0,missingFxRows:0,pendingValueRows:0,valuedRows:0});
           item.freeQty+=qty;
-          if(priced){item.knownValueTHB+=row[valueField];if(item.valueTHB!==null)item.valueTHB+=row[valueField];}
-          else {item.valueTHB=null;item.unknownPriceRows++;}
+          // A verified zero Free quantity has zero value without assigning a
+          // unit price. Retained zero rows never inflate missing-price counts.
+          if(qty>0&&priced){item.knownValueTHB+=row[valueField];if(item.valueTHB!==null)item.valueTHB+=row[valueField];item.valuedRows++;}
+          else if(qty>0){item.valueTHB=null;item.unknownPriceRows++;item[reason+'Rows']++;}
         }
-        if (qty > 0 && !priced) {target.unknownQuantity[row.unit] += qty; target.unpricedSpecCount++;}
-        if (priced) {
+        if (qty > 0 && !priced) {
+          target.unknownQuantity[row.unit] += qty;
+          if(!coverage.get(target).has(key))coverage.get(target).set(key,new Set());
+          coverage.get(target).get(key).add(reason);
+        }
+        if (qty > 0 && priced) {
           if (qty > 0) target.valuedSpecCount++;
           if (field === 'qty') physicalKnown += row[valueField];
           else freeKnown += row[valueField];
@@ -308,6 +321,8 @@
       }
     }
     for (const [target, known] of [[physical,physicalKnown],[free,freeKnown]]) {
+      target.unpricedSpecCount=coverage.get(target).size;
+      for(const reasons of coverage.get(target).values())for(const reason of reasons)target[reason+'SpecCount']++;
       requireValue([target.quantity.sheet,target.quantity.strip,target.eq4x8,target.eq25,known].every(valid), 'ยอดสต๊อกเกินขอบเขต');
       target.complete = catalogVerified && target.unpricedSpecCount === 0;
       target.knownValueTHB = catalogVerified && (target.complete || target.valuedSpecCount > 0) ? known : null;
@@ -342,6 +357,10 @@
     return c?.status==='verified-quantities'&&c.groups&&close(c.quantity?.sheet,physical.quantity?.sheet)&&close(c.quantity?.strip,physical.quantity?.strip)&&close(c.eq4x8,physical.eq4x8)&&close(c.eq25,physical.eq25)?c:null;
   };
   const physicalNumber=(value,field)=>field==='quantity'?Number(value).toLocaleString('th-TH',{maximumFractionDigits:20}):value>0&&value<0.005?'&lt; 0.01':n(value);
+  const priceCoverageText=value=>[
+    ['missingPriceSpecCount','ขาดราคาสต๊อก'],['missingCurrencySpecCount','ขาดสกุลเงิน'],
+    ['missingFxSpecCount','ขาดเรท USD/THB'],['pendingValueSpecCount','รอยืนยันมูลค่า']
+  ].filter(([key])=>value[key]>0).map(([key,label])=>`${label} ${n(value[key])} รายการ`).join(' · ');
   const physicalGradesHTML=(group,field,unit)=>{
     const entries=group.grades.filter(g=>g.quantity>0).map(g=>`<span class="ss-physical-grade" data-physical-grade="${esc(g.grade)}">${esc(g.grade)} ${physicalNumber(g[field],field)} ${esc(unit)}</span>`);
     if(group.unknownGrade.quantity>0)entries.push(`<span class="ss-physical-grade ss-overview-warning">ยังไม่ระบุเกรด ${physicalNumber(group.unknownGrade[field],field)} ${esc(unit)} · รอตรวจ</span>`);
@@ -355,22 +374,36 @@
       if(!complete)return `<div class="ss-physical-grade">${label}<small class="ss-overview-warning"> รายละเอียดรายความหนารอยืนยัน</small></div>`;
       let previousSize='';
       // Grade totals are a read-only sum of the same exact displayed items.
-      // Sum unrounded values once; an unknown Free or price stays unknown.
-      const total={physical:0,free:0,value:0,freeKnown:true,valueKnown:true};
+      // Sum the verified, unrounded subtotal once. Missing-price quantities
+      // remain excluded and explicitly counted, never silently valued at zero.
+      const total={physical:0,free:0,value:0,freeKnown:true,valueKnown:true,valueBound:true,valuedItems:0,
+        unpricedSpecCount:0,missingPriceSpecCount:0,missingCurrencySpecCount:0,missingFxSpecCount:0,pendingValueSpecCount:0};
       const rows=items.map(i=>{
         const size=i.w+' × '+i.l,heading=size!==previousSize?`<div class="ss-physical-item-size">${esc(size)} มม.</div>`:'';previousSize=size;
         const knownFree=freeBound&&valid(i.freeQty);
         const valuation=freeValuation?.items?.[physicalItemKey(i.w,i.l,i.t,g.grade,i.unit)];
-        const knownValue=knownFree&&valueBound&&valuation?.unknownPriceRows===0&&close(valuation.freeQty,i.freeQty)&&close(valuation.valueTHB,valuation.knownValueTHB);
+        const zeroFree=knownFree&&i.freeQty===0;
+        const boundValue=knownFree&&valueBound&&close(valuation?.freeQty,i.freeQty)&&valid(valuation?.knownValueTHB)&&Number.isSafeInteger(valuation?.unknownPriceRows)&&valuation.unknownPriceRows>=0&&
+          (valuation.unknownPriceRows===0?close(valuation.valueTHB,valuation.knownValueTHB):valuation.valueTHB===null);
+        const knownValue=zeroFree||boundValue&&valuation.unknownPriceRows===0&&close(valuation.valueTHB,valuation.knownValueTHB);
+        const partialValue=boundValue&&valuation.unknownPriceRows>0&&valuation.valuedRows>0;
+        const missing={};
+        for(const reason of ['missingPrice','missingCurrency','missingFx','pendingValue'])missing[reason+'SpecCount']=boundValue&&valuation[reason+'Rows']>0?1:0;
+        const missingText=priceCoverageText(missing)||'รอยืนยันมูลค่า';
         total.physical+=i.quantity;
         if(knownFree)total.free+=i.freeQty;else total.freeKnown=false;
-        if(knownValue)total.value+=valuation.valueTHB;else total.valueKnown=false;
-        const valueText=!knownFree?'รอยืนยัน':knownValue?money(valuation.valueTHB):'รอราคา/FX';
+        if(knownValue||partialValue){total.value+=zeroFree?0:valuation.knownValueTHB;if(!zeroFree)total.valuedItems++;}
+        if(!knownValue)total.valueKnown=false;
+        if(!zeroFree&&!boundValue)total.valueBound=false;
+        if(boundValue&&valuation.unknownPriceRows>0){total.unpricedSpecCount++;for(const key of Object.keys(missing))total[key]+=missing[key];}
+        const valueText=!knownFree?'รอยืนยัน':knownValue?money(zeroFree?0:valuation.valueTHB):partialValue?
+          `${money(valuation.knownValueTHB)}<small>เฉพาะส่วนที่มีราคา · ${missingText}</small>`:boundValue?missingText:'รอยืนยันชุดราคา/เรท';
         return `${heading}<div class="ss-physical-item" data-physical-item="${esc([i.w,i.l,i.t,i.unit].join('|'))}"><span>${esc(i.t)} <small>มม.</small></span><b data-item-physical>${physicalNumber(i.quantity,'quantity')}</b><b class="ss-physical-item-free${knownFree?'':' ss-overview-warning'}" data-item-free>${knownFree?physicalNumber(i.freeQty,'quantity'):'รอยืนยัน'}</b><b class="ss-physical-item-value${knownValue?'':' ss-overview-warning'}" data-item-free-value>${valueText}</b></div>`;
       }).join('');
       total.freeKnown=total.freeKnown&&valid(total.free);
       total.valueKnown=total.freeKnown&&total.valueKnown&&valid(total.value);
-      const totalValueText=!total.freeKnown?'รอยืนยัน':total.valueKnown?money(total.value):'รอราคา/FX';
+      const totalValueText=!total.freeKnown?'รอยืนยัน':total.valueKnown?money(total.value):!total.valueBound?'รอยืนยันชุดราคา/เรท':
+        `${total.valuedItems?money(total.value):'ยังไม่มีมูลค่าที่คำนวณได้'}<small>รวมเฉพาะส่วนที่มีราคา · ยังขาด ${n(total.unpricedSpecCount)} รายการ</small><small>${priceCoverageText(total)}</small>`;
       const footer=`<div class="ss-physical-item-total" data-physical-grade-total aria-label="รวมเกรด ${esc(g.grade)} ${esc(unit)}"><span>รวม <small>${esc(unit)}</small></span><b data-grade-total-field="physical">${physicalNumber(total.physical,'quantity')}</b><b class="ss-physical-item-free${total.freeKnown?'':' ss-overview-warning'}" data-grade-total-field="free">${total.freeKnown?physicalNumber(total.free,'quantity'):'รอยืนยัน'}</b><b class="ss-physical-item-value${total.valueKnown?'':' ss-overview-warning'}" data-grade-total-field="value">${totalValueText}</b></div>`;
       return `<details class="ss-physical-grade-detail" data-physical-grade="${esc(g.grade)}"><summary aria-label="ดูขนาดและความหนา เกรด ${esc(g.grade)} ${esc(unit)}"><span>${label}</span><small>ดูความหนา</small></summary><div class="ss-physical-items"><div class="ss-physical-item-head"><span>หนา</span><span>สต๊อก · ${esc(unit)}</span><span>Free ที่บันทึก</span><span>มูลค่า Free<br>ประเมิน · บาท</span></div>${rows}${footer}<small class="ss-physical-value-note">ราคาสต๊อกที่บันทึก · ไม่ใช่ราคาขายจริง</small></div></details>`;
     });
@@ -386,9 +419,14 @@
     const close=(a,b)=>valid(a)&&valid(b)&&Math.abs(a-b)<=Math.max(1e-6,Math.abs(b)*1e-12);
     const freeBound=c.stockReportDate===current?.stockReportDate&&c.stockRevision===current?.stockRevision&&['sheet','strip'].every(u=>close(c.savedFreeQuantity?.[u],current?.free?.quantity?.[u])&&close(itemFree[u],c.savedFreeQuantity[u]));
     const valuation=c.freeValuation,fxIdentity=fx=>fx?JSON.stringify([fx.rate,fx.date,fx.status,fx.basis]):'none';
+    const summedKnown=Object.values(valuation?.items||{}).reduce((sum,item)=>sum+item.knownValueTHB,0);
+    // With every positive-Free item unpriced, null is the unknown *total*;
+    // the verified catalog still explains which items are missing. Do not
+    // confuse that case with an absent/stale catalog or an invented zero total.
+    const knownSubtotalBound=close(valuation?.knownValueTHB,current.free?.knownValueTHB)&&close(summedKnown,valuation?.knownValueTHB)||
+      valuation?.knownValueTHB===null&&current.free?.knownValueTHB===null&&summedKnown===0;
     const valueBound=freeBound&&current?.catalogRevision!==null&&current?.catalogRevision!==undefined&&valuation?.catalogRevision===current.catalogRevision&&
-      fxIdentity(valuation.fx)===fxIdentity(current.fx)&&close(valuation.knownValueTHB,current.free?.knownValueTHB)&&
-      close(Object.values(valuation.items||{}).reduce((sum,item)=>sum+item.knownValueTHB,0),valuation.knownValueTHB);
+      fxIdentity(valuation.fx)===fxIdentity(current.fx)&&knownSubtotalBound;
     return {freeBound,valueBound,valuation};
   }
   function physicalCompositionHTML(physical,current,verified){
@@ -479,7 +517,7 @@
       const open = expanded.has(card.id), native = card.data.money ? `<small>${card.id==='reserved'?'ราคาขายจริงตามใบขาย (ไม่ใช่ราคาประเมินสต๊อก): ':''}${esc(nativeText(card.data.money.sale))}${card.data.money.complete?'':' · เฉพาะส่วนที่มีราคา; รอราคา '+n(card.data.money.missingPriceLineCount)+' บรรทัด'}</small>` : '';
       const liveWarehouse = warehouse !== undefined && ['physical','free'].includes(card.id);
       const coverage = liveWarehouse ? card.data.complete ? `<small hidden data-internal-metadata>ชุดราคาส่วนกลาง ${esc(current.catalogRevision ?? '—')} · ไม่ใช่ราคาขายจริง</small>` :
-        `<small class="ss-overview-warning">${card.data.knownValueTHB === null ? 'รอยืนยันชุดราคาหรือเรทส่วนกลาง' : 'เฉพาะส่วนที่ยืนยันราคาได้'}${card.data.unpricedSpecCount ? ' · รอราคา/เรท '+n(card.data.unpricedSpecCount)+' สเปก ('+qtyText(card.data.unknownQuantity)+')' : ''} · ไม่ใช้ 0 หรือราคาชุดเก่าแทน</small>` : '';
+        `<small class="ss-overview-warning">${card.data.knownValueTHB === null ? 'รอยืนยันชุดราคาหรือเรทส่วนกลาง' : 'เฉพาะส่วนที่ยืนยันราคาได้'}${card.data.unpricedSpecCount ? ' · รอราคา/เรท '+n(card.data.unpricedSpecCount)+' สเปก ('+qtyText(card.data.unknownQuantity)+') · '+priceCoverageText(card.data) : ''} · ไม่ใช้ 0 หรือราคาชุดเก่าแทน</small>` : '';
       const stockFx = liveWarehouse && current.fx ? `<small hidden data-internal-metadata>USD/THB ${n(current.fx.rate)} · ${esc(current.fx.date)}${current.fx.status !== 'current' ? ' · คงเรทที่ยืนยันแล้ว ไม่ใช่เรทสด' : ''}</small>` : '';
       const composition=card.id==='physical'?physicalCompositionHTML(physical,current,verified):card.id==='free'?freeCompositionHTML(current,verified):'';
       const breakdown=card.id==='free'?`<details class="ss-free-allocation-basis"><summary>ดูการหักจองและที่มาของ Free</summary>${card.breakdown}<small class="ss-overview-basis">${esc(card.basis)}</small></details>`:card.breakdown;

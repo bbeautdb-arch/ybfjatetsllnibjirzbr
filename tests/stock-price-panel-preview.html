@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="th"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>พรีวิวราคาสต๊อก · ข้อมูลสมมติ</title>
+<style>body{font-family:system-ui,sans-serif;background:#eff4e9;color:#294a38;margin:0;padding:28px}main{max-width:1120px;margin:auto}.demo{background:#fffbed;padding:12px;border:1px solid #d8c793;border-radius:12px;font-size:13px}h1{font-size:24px}button{padding:8px;border-radius:8px;border:1px solid #a8bba0;background:#fff}#mode{display:flex;gap:10px;margin:18px 0}#demo-log{font-size:12px;white-space:pre-wrap}</style>
+<main><h1>ตรวจ / แก้ราคาสต๊อก</h1><p class="demo">ทดสอบด้วยข้อมูลสมมติเท่านั้น · ไม่มีการเชื่อม API หรือบันทึกข้อมูลบริษัท</p><div id="mode"><button id="demo-deny">ทดสอบไม่มีสิทธิ์</button><button id="demo-allow">ทดสอบมีสิทธิ์</button></div><div id="panel"></div><p id="demo-log" role="status"></p></main>
+<script src="../stock_price_panel.js"></script>
+<script>
+  const demoRows=[
+    {key:'2.5|AAA|1220|2440|sheet',t:2.5,grade:'AAA',w:1220,l:2440,unit:'sheet',qty:100,freeQty:60,price:20,currency:'THB',priceStatus:'saved-price'},
+    {key:'3|AAA|1220|2440|sheet',t:3,grade:'AAA',w:1220,l:2440,unit:'sheet',qty:40,freeQty:25,price:null,currency:'THB',priceStatus:'missing-price'},
+    {key:'4|AAA|1220|2440|sheet',t:4,grade:'AAA',w:1220,l:2440,unit:'sheet',qty:0,freeQty:0,price:null,currency:'THB',priceStatus:'missing-price'},
+    {key:'2.5|B|25|1000|strip',t:2.5,grade:'B',w:25,l:1000,unit:'strip',qty:50,freeQty:30,price:2,currency:'THB',priceStatus:'saved-price'}
+  ];
+  const state={loaded:false,canEdit:true,busy:false,uncertain:false,revision:1,catalogRevision:1,reportDate:'2026-01-01',rows:demoRows,error:'',errorCode:''};
+  const clone=value=>JSON.parse(JSON.stringify(value));
+  const service={getState:()=>clone(state),load:async()=>{state.loaded=true;return clone(state);},save:async changes=>{if(!state.canEdit)throw Error('ไม่มีสิทธิ์');for(const change of changes){const row=state.rows.find(row=>row.key===change.key);row.price=change.price;row.currency=change.currency;row.priceStatus='saved-price';}state.revision++;state.catalogRevision++;document.querySelector('#demo-log').textContent='บันทึกในตัวอย่างสมมติ: '+JSON.stringify(changes);return clone(state);}};
+  const demo=AAFStockPricePanel.mount(document.querySelector('#panel'),{service,onSaved:()=>true});
+  document.querySelector('#demo-deny').onclick=()=>{state.canEdit=false;demo.load();};document.querySelector('#demo-allow').onclick=()=>{state.canEdit=true;demo.load();};
+</script></html>

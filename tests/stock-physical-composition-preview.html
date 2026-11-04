@@ -58,7 +58,7 @@
       target.innerHTML='<div class="ss-kpis">'+window.AAFOrderHeader.render(null,new Set(),model)+'</div>';
       target.querySelectorAll('details.ss-physical-grade-detail').forEach(node=>{node.open=openGrades.has(JSON.stringify([node.closest('[data-physical-group]').dataset.physicalGroup,node.dataset.physicalGrade]));});
       for(const id of modes)document.getElementById('fixture-'+id).setAttribute('aria-pressed',String(mode===id));
-      const message={known:'ราคา/เรทครบตามฐานสมมติ · มูลค่า Free เป็น THB',missingprice:'ขาดราคาหนึ่งส่วนของเกรด AAA 2.5 · ไม่แสดงมูลค่าบางส่วนเป็นยอดรวม',nofx:'USD ต้องรอราคา/FX · THB ยังแสดงมูลค่า',fxchange:'FX สมมติ 31 · เปลี่ยนเฉพาะมูลค่า USD ไม่เปลี่ยนจำนวน',unknown:'Free ขาดบางสเปก · Free และมูลค่าต้องรอยืนยัน',stale:'Free รายละเอียดไม่ตรงฐาน · Free และมูลค่าต้องรอยืนยัน',catalogstale:'ชุดราคาไม่ตรงรุ่น · ห้ามใช้มูลค่าเดิมแทน'}[mode];
+      const message={known:'ราคา/เรทครบตามฐานสมมติ · มูลค่า Free เป็น THB',missingprice:'ขาดราคาหนึ่งส่วนของเกรด AAA 2.5 · รวมเฉพาะมูลค่าที่ทราบพร้อมจำนวนสเปกที่ขาด',nofx:'USD ขาดเรท USD/THB · รวมมูลค่า THB ที่ทราบก่อน',fxchange:'FX สมมติ 31 · เปลี่ยนเฉพาะมูลค่า USD ไม่เปลี่ยนจำนวน',unknown:'Free ขาดบางสเปก · Free และมูลค่าต้องรอยืนยัน',stale:'Free รายละเอียดไม่ตรงฐาน · Free และมูลค่าต้องรอยืนยัน',catalogstale:'ชุดราคาไม่ตรงรุ่น · ห้ามใช้มูลค่าเดิมแทน'}[mode];
       document.getElementById('fixture-status').textContent=message+' · '+(JSON.stringify({stock,catalog,fx})===before?'ข้อมูลตั้งต้นคงเดิม':'ผิดพลาด: ข้อมูลตั้งต้นเปลี่ยน')+' · ทุกตัวเลขเป็นข้อมูลสมมติ';
       document.body.dataset.fixtureReady='true';
     }

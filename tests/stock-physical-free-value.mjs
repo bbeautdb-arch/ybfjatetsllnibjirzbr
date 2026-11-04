@@ -48,24 +48,25 @@ test('allocation-only near sizes, grades and strips retain separate value entrie
   assert.deepEqual(w.free.quantity,{sheet:9,strip:5});assert.equal(w.free.knownValueTHB,166);
 });
 
-test('missing, zero or invalid prices and currencies stay unknown even when saved Free is zero',()=>{
+test('missing prices stay unknown for positive Free; verified zero Free needs no fabricated unit price',()=>{
   for(const freeQty of [0,2])for(const change of [{price:0},{price:null},{price:-1},{price:'12'},{price:NaN},{price:Infinity},{currency:'EUR'},{currency:null}]){
     const r=row('synthetic-price',610,1220,2.5,'A',10,freeQty),{warehouse:w}=setup([r],[{price:12,currency:'THB',...change}]);
-    assert.equal(entry(w,r).valueTHB,null);assert.equal(entry(w,r).unknownPriceRows,1);assert.match(itemCell(w,r),/รอราคา\/FX/);assert.doesNotMatch(itemCell(w,r),/฿ 0/);
+    if(freeQty===0){assert.equal(entry(w,r).valueTHB,0);assert.equal(entry(w,r).unknownPriceRows,0);expectMoney(w,r,0);assert.equal(w.free.unpricedSpecCount,0);}
+    else{assert.equal(entry(w,r).valueTHB,null);assert.equal(entry(w,r).unknownPriceRows,1);assert.match(itemCell(w,r),/ขาดราคาสต๊อก|ขาดสกุลเงิน/);assert.doesNotMatch(itemCell(w,r),/฿ 0/);}
   }
 });
 
 test('missing verified USD FX leaves USD value unknown without suppressing known THB values',()=>{
   const rows=[row('synthetic-thb',610,1220,2.5,'A',10,2),row('synthetic-usd',1220,2440,3.2,'AAA',10,3)],prices=[{price:12,currency:'THB'},{price:2,currency:'USD'}];
   for(const rate of [null,{...fx,rate:0},{...fx,basis:'unverified'},{...fx,date:'2000-02-30'}]){
-    const {warehouse:w}=setup(rows,prices,rate);expectMoney(w,rows[0],24);assert.match(itemCell(w,rows[1]),/รอราคา\/FX/);assert.equal(entry(w,rows[1]).valueTHB,null);
+    const {warehouse:w}=setup(rows,prices,rate);expectMoney(w,rows[0],24);assert.match(itemCell(w,rows[1]),/ขาดเรท USD\/THB/);assert.equal(entry(w,rows[1]).valueTHB,null);
   }
 });
 
 test('one unpriced reversed component never renders a known subtotal as the complete item value',()=>{
   const rows=[row('synthetic-priced',610,1220,2.5,'A',8,3),row('synthetic-unknown',1220,610,2.5,'A',10,5)],{warehouse:w}=setup(rows,[{price:10,currency:'THB'},{price:null,currency:'THB'}]);
   assert.equal(entry(w,rows[0]).valueTHB,null);assert.equal(entry(w,rows[0]).knownValueTHB,30);assert.equal(entry(w,rows[0]).unknownPriceRows,1);assert.equal(w.free.knownValueTHB,30);
-  assert.match(itemCell(w,rows[0]),/รอราคา\/FX/);assert.doesNotMatch(itemCell(w,rows[0]),/≈ ฿ 30/);
+  assert.match(itemCell(w,rows[0]),/≈ ฿ 30<small>เฉพาะส่วนที่มีราคา · ขาดราคาสต๊อก 1 รายการ/);assert.notEqual(itemCell(w,rows[0]),'≈ ฿ 30');assert.equal(w.free.unpricedSpecCount,1);
 });
 
 test('missing or invalid decorated THB Free amount never falls back to a raw price or legacy freeValue',()=>{
@@ -73,7 +74,7 @@ test('missing or invalid decorated THB Free amount never falls back to a raw pri
   for(const amount of [undefined,null,-1,NaN,Infinity,'36']){
     const decorated=copy(f.decorated);decorated.rows[0].catalogFreeValue=amount;decorated.rows[0].freeValue=999;
     if(amount===undefined)delete decorated.rows[0].catalogFreeValue;
-    const w=header.warehouseProjection(decorated);assert.equal(entry(w,r).valueTHB,null);assert.match(itemCell(w,r),/รอราคา\/FX/);assert.doesNotMatch(itemCell(w,r),/≈ ฿/);
+    const w=header.warehouseProjection(decorated);assert.equal(entry(w,r).valueTHB,null);assert.match(itemCell(w,r),/รอยืนยันมูลค่า/);assert.doesNotMatch(itemCell(w,r),/≈ ฿/);
   }
 });
 
@@ -121,4 +122,22 @@ test('item estimates remain read-only and do not alter other cards, money totals
   const rows=[row('synthetic-a',610,1220,2.5,'A',10,2.125),row('synthetic-b',25,2000,3.2,'B',100,80,'strip')],f=setup(rows,[{price:12.25,currency:'THB'},{price:0.125,currency:'USD'}]),before=JSON.stringify(f),plain=copy(f.warehouse);delete plain.physical.composition.freeValuation;
   const after=header.render(null,new Set(),f.warehouse),baseline=header.render(null,new Set(),plain);for(const id of ['sold','reserved','free'])assert.equal(card(after,id),card(baseline,id));
   assert.equal(header.sourceText(null,f.warehouse),header.sourceText(null,plain));assert.equal(JSON.stringify(f),before);expectMoney(f.warehouse,rows[0],26.03125);expectMoney(f.warehouse,rows[1],300);
+});
+
+test('coverage counts exact positive-Free specifications once and distinguishes missing stock price, currency and FX',()=>{
+  const rows=[row('synthetic-no-price',610,1220,1.6,'A',10,2),row('synthetic-reversed-no-price',1220,610,1.6,'A',4,1),
+    row('synthetic-no-currency',610,1220,2.5,'A',10,3),row('synthetic-no-fx',610,1220,3.2,'A',10,4),
+    row('synthetic-zero-unpriced',610,1220,4,'A',10,0),row('synthetic-known',610,1220,5,'A',10,5)];
+  const {warehouse:w}=setup(rows,[{price:null,currency:'THB'},{price:null,currency:'THB'},{price:12,currency:null},
+    {price:2,currency:'USD'},{price:null,currency:'THB'},{price:8,currency:'THB'}],null);
+  assert.equal(w.free.unpricedSpecCount,3);assert.equal(w.free.missingPriceSpecCount,1);assert.equal(w.free.missingCurrencySpecCount,1);assert.equal(w.free.missingFxSpecCount,1);
+  assert.deepEqual(w.free.unknownQuantity,{sheet:10,strip:0});assert.equal(w.free.knownValueTHB,40);
+  assert.match(itemCell(w,rows[0]),/ขาดราคาสต๊อก 1 รายการ/);assert.match(itemCell(w,rows[2]),/ขาดสกุลเงิน 1 รายการ/);assert.match(itemCell(w,rows[3]),/ขาดเรท USD\/THB 1 รายการ/);
+  expectMoney(w,rows[4],0);assert.match(physical(w),/ขาดราคาสต๊อก 2 รายการ/,'Physical coverage still includes a positive-Physical zero-Free item');
+});
+
+test('all-positive-Free prices missing exposes missing coverage without presenting zero as a full total',()=>{
+  const r=row('synthetic-all-missing',1220,2440,2.5,'AAA',10,3),{warehouse:w}=setup([r],[{price:null,currency:'THB'}]);
+  assert.equal(w.free.knownValueTHB,null);assert.equal(header.freeCompositionView(w).valueBound,true);
+  const html=physical(w);assert.match(html,/ยังไม่มีมูลค่าที่คำนวณได้/);assert.match(html,/ยังขาด 1 รายการ/);assert.doesNotMatch(html,/data-grade-total-field="value">≈ ฿ 0/);
 });

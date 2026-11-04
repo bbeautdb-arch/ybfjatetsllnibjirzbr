@@ -42,7 +42,7 @@ test('grade detail shows Physical, saved Free and saved-stock Free value, with o
 test('unknown price is not zero; only affected values remain unknown while saved Free still reconciles',()=>{
   const w=fixture([row('a',1220,2440,1.6,'AAA',5,2,10),row('b',1220,2440,2.5,'AAA',8,3,null)]),v=header.freeCompositionView(w),p=panel(w);
   assert.equal(v.status,'verified-quantities');assert.equal(v.groups.normal.quantity,5);
-  assert.match(p,/data-grade-total-field="free">5/);assert.match(p,/data-grade-total-field="value">รอราคา\/FX/);assert.match(p,/data-item-free-value>≈ ฿ 20/);
+  assert.match(p,/data-grade-total-field="free">5/);assert.match(p,/data-grade-total-field="value">≈ ฿ 20<small>รวมเฉพาะส่วนที่มีราคา · ยังขาด 1 รายการ/);assert.match(p,/ขาดราคาสต๊อก 1 รายการ/);assert.match(p,/data-item-free-value>≈ ฿ 20/);
 });
 
 test('mismatched stock identity, Free totals, or tampered item Free cannot render a plausible subset',()=>{
@@ -55,7 +55,7 @@ test('mismatched stock identity, Free totals, or tampered item Free cannot rende
 test('catalog/FX mismatch cannot reuse an old Free money subtotal',()=>{
   const base=fixture([row('a',1220,2440,2.5,'AAA',12,3)]);
   for(const mutate of [w=>w.catalogRevision++,w=>w.fx={rate:30,date:'2000-06-01'},w=>w.free.knownValueTHB++]){
-    const w=clone(base);mutate(w);const v=header.freeCompositionView(w);assert.equal(v.status,'verified-quantities');assert.equal(v.valueBound,false);assert.match(panel(w),/data-grade-total-field="value">รอราคา\/FX/);
+    const w=clone(base);mutate(w);const v=header.freeCompositionView(w);assert.equal(v.status,'verified-quantities');assert.equal(v.valueBound,false);assert.match(panel(w),/data-grade-total-field="value">รอยืนยันชุดราคา\/เรท/);
   }
 });
 

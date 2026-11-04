@@ -83,22 +83,22 @@ test('verified all-zero Free is zero, but a zero-Physical Free-only grade remain
   expectTotals(f.warehouse,'normal','F',0,4,8);
 });
 
-test('a missing grade item price keeps complete quantity totals but not a partial monetary total',()=>{
+test('a missing grade item price keeps known subtotal and explicit missing coverage, never a complete monetary total',()=>{
   const rows=[row('synthetic-known',1220,2440,1.6,'AAA',10,2),row('synthetic-unpriced',1220,2440,2.5,'AAA',5,3),row('synthetic-other',1220,2440,3.2,'B',1,1)],f=setup(rows,[{price:12,currency:'THB'},{price:null,currency:'THB'},{price:7,currency:'THB'}]);
-  expectTotals(f.warehouse,'normal','AAA',15,5,'รอราคา/FX');
+  expectTotals(f.warehouse,'normal','AAA',15,5,'≈ ฿ 24รวมเฉพาะส่วนที่มีราคา · ยังขาด 1 รายการขาดราคาสต๊อก 1 รายการ');
   expectTotals(f.warehouse,'normal','B',1,1,7);
   assert.notEqual(totals(f.warehouse).value,money(24));
 });
 
-test('zero Free without a verified price remains unknown rather than a fabricated zero-value total',()=>{
+test('zero Free without a verified price is zero value without fabricating a unit price',()=>{
   const rows=[row('synthetic-unpriced-zero',1220,2440,2.5,'AAA',10,0)],f=setup(rows,[{price:null,currency:'THB'}]);
-  expectTotals(f.warehouse,'normal','AAA',10,0,'รอราคา/FX');
+  expectTotals(f.warehouse,'normal','AAA',10,0,0);assert.equal(f.warehouse.free.unpricedSpecCount,0);assert.equal(f.decorated.rows[0].catalogPrice,null);
 });
 
 test('missing USD FX makes only the affected grade value pending while exact quantities remain',()=>{
   const rows=[row('synthetic-thb',1220,2440,1.6,'AAA',10,2),row('synthetic-usd',1220,2440,2.5,'AAA',5,3),row('synthetic-thb-grade',610,1220,2.5,'B',4,1)],prices=[{price:12,currency:'THB'},{price:2,currency:'USD'},{price:7,currency:'THB'}];
   for(const rate of [null,{...fx,rate:0},{...fx,basis:'unverified'}]){
-    const f=setup(rows,prices,rate);expectTotals(f.warehouse,'normal','AAA',15,5,'รอราคา/FX');expectTotals(f.warehouse,'nonstandard','B',4,1,7);
+    const f=setup(rows,prices,rate);expectTotals(f.warehouse,'normal','AAA',15,5,'≈ ฿ 24รวมเฉพาะส่วนที่มีราคา · ยังขาด 1 รายการขาดเรท USD/THB 1 รายการ');expectTotals(f.warehouse,'nonstandard','B',4,1,7);
   }
 });
 
@@ -119,7 +119,7 @@ test('stale Free or report identity leaves footer Free and value pending without
 test('stale catalog or FX identity preserves quantity totals but cannot reuse a previous money total',()=>{
   const rows=[row('synthetic-stale-value',1220,2440,2.5,'AAA',10,3)],f=setup(rows,[{price:2,currency:'USD'}]);
   for(const mutate of [w=>w.catalogRevision++,w=>w.fx.rate++,w=>w.fx.date='2000-06-02',w=>w.free.knownValueTHB++]){
-    const w=copy(f.warehouse);mutate(w);expectTotals(w,'normal','AAA',10,3,'รอราคา/FX');
+    const w=copy(f.warehouse);mutate(w);expectTotals(w,'normal','AAA',10,3,'รอยืนยันชุดราคา/เรท');
   }
 });
 
