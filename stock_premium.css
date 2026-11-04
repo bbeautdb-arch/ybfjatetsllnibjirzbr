@@ -39,6 +39,7 @@
   body[data-aaf-premium] #stock-summary>.ss-status:not([hidden]),
   body[data-aaf-premium] #stock-summary>p:not(:empty):not([hidden]),
   body[data-aaf-premium] #stock-summary .ss-content>.ss-context:not([hidden]),
+  body[data-aaf-premium] #stock-summary .ss-content>.ss-reservation-help:not([hidden]),
   body[data-aaf-premium] #stock-summary .ss-content>.ss-sales-summary-source:not([hidden]) {
     padding: 10px 15px;
     border: 1px solid #fffffff0;
@@ -46,6 +47,14 @@
     background: rgba(255,254,248,.96);
     color: #435c4c;
     box-shadow: 0 4px 16px #173c3210;
+  }
+  /* Keep the allocation explanation readable even on the darkest photo areas. */
+  body[data-aaf-premium] #stock-summary .ss-content>.ss-reservation-help:not([hidden]) {
+    background: #fffef8;
+    color: #213e30;
+    font-size: 13px;
+    line-height: 1.8;
+    padding: 12px 16px;
   }
   body[data-aaf-premium] .report-nav { padding: 15px 18px; color: #213e30; }
   body[data-aaf-premium] #stock-summary>.ss-error:not([hidden]),
@@ -186,6 +195,7 @@
   }
   @media (forced-colors: active) {
     body[data-aaf-premium="ivory"] { background: Canvas; color: CanvasText; }
+    body[data-aaf-premium] #stock-summary .ss-content>.ss-reservation-help:not([hidden]) { background: Canvas; color: CanvasText; border-color: CanvasText; box-shadow: none; }
     body[data-aaf-premium] #stock-summary :is(.ss-hero,.ss-overview-header,.ss-kpi[data-stock-card],.ss-readiness,.ss-section-title,.stock-order-toolbar,.ss-aging,.ss-footer,.ss-overview-footer,.ss-group) { background: Canvas; color: CanvasText; border-color: CanvasText; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
     body[data-aaf-premium] :is(button,a,select,input,textarea,summary):focus-visible { outline-color: Highlight; }
   }

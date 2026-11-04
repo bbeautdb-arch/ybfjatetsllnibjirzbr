@@ -59,6 +59,7 @@ jobs:
           node --test tests/stock-price-editor.mjs tests/stock-price-panel.mjs tests/stock-physical-free-value.mjs tests/stock-physical-grade-totals.mjs
           node --test tests/stock-category-free-values.mjs tests/stock-physical-free-pair.mjs
           node --test tests/stock-free-grade-summary-values.mjs
+          node --test tests/stock-caption-contrast.mjs
       - name: Stage public files only
         run: |
           mkdir _site
