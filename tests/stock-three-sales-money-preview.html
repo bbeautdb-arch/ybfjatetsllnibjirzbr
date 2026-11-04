@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Synthetic three-card receipt preview</title>
+  <style>
+    body{margin:0;background:#eef3ed;color:#243e31;font:14px/1.5 system-ui,sans-serif}
+    header{padding:18px 24px;background:#fff5dc;border-bottom:1px solid #d7ba7f}
+    h1{font-size:18px;margin:0 0 5px}p{margin:5px 0}
+    select,button{font:inherit;padding:8px;margin:8px 8px 0 0}
+    #preview{display:block;max-width:1240px;margin:18px auto;padding:0 12px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SYNTHETIC — เงินรับในสรุป 3 กลุ่ม</h1>
+    <p>ข้อมูลสมมติทั้งหมด · ไม่เชื่อมบัญชี ไม่อ่านข้อมูลบริษัท และไม่บันทึกข้อมูล</p>
+    <label>กรณีทดสอบ <select id="scenario"><option value="partial">มีหลักฐานบางส่วน · บาทและดอลลาร์</option><option value="missing">สถานะรับแล้ว แต่ยังขาดจำนวนเงิน</option><option value="future">วันรับในอนาคต · ต้องแจ้งเตือน</option></select></label>
+    <button id="expand" type="button">เปิดรายละเอียดทั้งหมด</button>
+  </header>
+  <div id="preview"></div>
+  <script src="../stock_sales_groups.js"></script>
+  <script src="../stock_sales_groups_view.js"></script>
+  <script>
+    'use strict';
+    const clone=value=>JSON.parse(JSON.stringify(value));
+    const row=(id,status,qty,extra={})=>({id,orderId:'SYNTH-'+id,ref:'SYNTH-'+id,customer:'ลูกค้าตัวอย่าง '+id,w:1220,l:2440,t:2.5,grade:'AAA',unit:'sheet',qty,sourceStatus:status,productStatus:'ready',etd:'12/11/30',...extra});
+    const review={metadata:{month:'2030-11',sourceSalesCapturedAt:'2030-11-03T04:20:22Z'},readModel:{kind:'current-month-order-review',status:'verified-sales-only',selectedMonth:'2030-11',source:{month:'2030-11',capturedAt:'2030-11-03T04:20:22Z'}},rows:[row('CONF-1','เปิด PI',12000),row('CONF-2','ออก INV',5000),row('NEG-1','เจรจา',7000),row('FORECAST-1','Forecast',9000)]};
+    const confirmed={status:'partial',checkedAt:'2030-11-03T04:20:22Z',currencies:[{currency:'THB',received:125000,pending:75000,receivedKnownOrders:1,pendingKnownOrders:1},{currency:'USD',received:3500,pending:7000,receivedKnownOrders:1,pendingKnownOrders:1}],counts:{orders:3,received:0,partial:2,waiting:0,lcAwaiting:0,unconfirmed:1,missingAmount:1},receiptMonths:[{month:'2030-10',orderCount:1,knownAmountByCurrency:{THB:125000,USD:null},missingAmountCount:0},{month:'2030-11',orderCount:1,knownAmountByCurrency:{THB:null,USD:3500},missingAmountCount:0},{month:null,orderCount:1,knownAmountByCurrency:{THB:null,USD:null},missingAmountCount:1}],orders:[{orderId:'SYNTH-CONF-1',customer:'ลูกค้าตัวอย่างรับบางส่วน',ref:'SYNTH-CONF-1',statusLabel:'รับมัดจำแล้ว · รอส่วนที่เหลือ',term:'TT',received:125000,pending:75000,currency:'THB',receiptEvents:[{date:'2030-10-29',month:'2030-10',amount:125000,currency:'THB',label:'มัดจำ'}],issues:[]},{orderId:'SYNTH-CONF-2',customer:'ลูกค้าตัวอย่างดอลลาร์',ref:'SYNTH-CONF-2',statusLabel:'รับบางส่วน',term:'TT',received:3500,pending:7000,currency:'USD',receiptEvents:[{date:'2030-11-02',month:'2030-11',amount:3500,currency:'USD',label:'งวดรับ'}],issues:[]},{orderId:'SYNTH-CONF-3',customer:'ลูกค้าตัวอย่างรอหลักฐาน',ref:'SYNTH-CONF-3',statusLabel:'รับแล้วตามสถานะ · จำนวนเงินยังไม่ยืนยัน',term:'TT',received:null,pending:null,currency:null,receiptEvents:[{date:null,month:null,amount:null,currency:null,label:'รับแล้วตามสถานะ'}],issues:['ยังขาดจำนวนเงินและวันรับ']}],issues:[]};
+    const unknown=(id,status,term)=>({status:'partial',checkedAt:confirmed.checkedAt,currencies:[],counts:{orders:1,received:0,partial:0,waiting:0,lcAwaiting:term==='LC'?1:0,unconfirmed:term==='LC'?0:1,missingAmount:1},receiptMonths:[],orders:[{orderId:'SYNTH-'+id,customer:'ลูกค้าตัวอย่าง '+id,ref:'SYNTH-'+id,statusLabel:status,term,received:null,pending:null,currency:null,receiptEvents:[],issues:['ไม่มีหลักฐานจำนวนเงินที่ใช้สรุปได้']}],issues:[]});
+    const shadow=document.getElementById('preview').attachShadow({mode:'open'}),link=document.createElement('link'),main=document.createElement('main');
+    link.rel='stylesheet';link.href='../stock_order_review.css';shadow.append(link,main);
+    function render(){
+      const model=window.AAFSalesGroups.build(clone(review)),scenario=document.getElementById('scenario').value;
+      model.groups[0].money=clone(confirmed);model.groups[1].money=unknown('NEG-1','ได้ LC แล้ว · ยังไม่ใช่เงินรับ','LC');model.groups[2].money=unknown('FORECAST-1','ยังไม่ยืนยันสถานะรับเงิน','TT');
+      if(scenario==='missing'){
+        const money=model.groups[0].money;money.currencies=[];money.status='pending';money.receiptMonths.forEach(month=>{month.knownAmountByCurrency={THB:null,USD:null};month.missingAmountCount=1;});money.orders.forEach(order=>{order.received=null;order.pending=null;order.receiptEvents.forEach(event=>{event.amount=null;});});money.counts.missingAmount=3;
+      }
+      if(scenario==='future')model.groups[0].money.issues.push({severity:'error',message:'วันรับเงิน 12/11/2573 อยู่หลังวันตรวจ 03/11/2573 · ข้อมูลต้องตรวจ ไม่ใช่เงินคาดว่าจะเข้า'});
+      main.innerHTML=window.AAFSalesGroupsView.render(model,{monthLabel:'พฤศจิกายน 2573 · ตัวอย่าง'});
+    }
+    document.getElementById('scenario').addEventListener('change',render);
+    document.getElementById('expand').addEventListener('click',()=>main.querySelectorAll('details').forEach(detail=>{detail.open=true;}));
+    render();
+  </script>
+</body>
+</html>

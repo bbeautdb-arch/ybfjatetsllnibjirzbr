@@ -226,3 +226,23 @@ main{background:var(--bg);color:var(--text)}
     .plainbutton, .expand { transition: none; }
   }
 }
+
+/* Selected-month receipt evidence stays inside the existing three sales cards. */
+.sg-money-summary{display:grid;gap:7px;margin-top:12px;padding-top:11px;border-top:1px solid var(--line);font-size:12px;line-height:1.5}
+.sg-money-label,.sg-money-counts,.sg-money-coverage,.sg-money-scope{display:block;font-size:11px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere}
+.sg-money-label{font-weight:600}.sg-money-row{display:grid;grid-template-columns:minmax(70px,1fr) minmax(0,1.45fr);align-items:start;gap:8px}
+.sg-money-row>strong{display:grid;gap:2px;text-align:right;font-size:14px;line-height:1.5;font-weight:650;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.sg-money-unconfirmed{font-size:11px;font-weight:400;color:var(--muted)}.sg-money-coverage{color:var(--orange)}
+.sg-money-alert{display:block;border-left:3px solid var(--orange);padding:7px 8px;background:var(--orange-bg);border-radius:0 7px 7px 0;font-size:11px;line-height:1.6;color:var(--orange);overflow-wrap:anywhere}
+.sg-money-details{margin:0 0 12px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.sg-money-details>summary{padding:11px 12px;cursor:pointer;background:var(--accent);font-size:12px;font-weight:600;line-height:1.5}
+.sg-money-detail-content{padding:10px 12px}.sg-money-detail-content>.sg-table-scroll{margin-top:10px}.sg-money-scope{margin:0 0 8px}
+.sg-money-table{font-variant-numeric:tabular-nums}.sg-money-table caption{caption-side:top;text-align:left;padding:10px 0;font-size:12px;font-weight:600;color:var(--text)}
+.sg-money-table th[scope="row"]{font-weight:600;vertical-align:top;text-align:left}.sg-money-table th,.sg-money-table td{overflow-wrap:anywhere}
+.sg-money-table td:nth-child(3),.sg-money-table td:nth-child(4){min-width:115px}.sg-money-table td:last-child{min-width:185px}
+.sg-receipt-events{list-style:none;margin:0;padding:0}.sg-receipt-events li{display:grid;gap:3px;padding:0 0 8px}.sg-receipt-events li+li{padding-top:8px;border-top:1px dashed var(--line)}
+.sg-receipt-events span{font-size:11px}.sg-card>summary:focus-visible,.sg-money-details>summary:focus-visible,.sg-subset>summary:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}
+@media(max-width:750px){.sg-money-row{grid-template-columns:1fr;gap:1px}.sg-money-row>strong{text-align:left;font-size:13px}}
+@media(max-width:600px){.sg-money-row{grid-template-columns:minmax(80px,1fr) minmax(0,1.5fr);gap:8px}.sg-money-row>strong{text-align:right}.sg-money-detail-content{padding:9px}.sg-money-table{min-width:700px}}
+@media print{.sg-money-alert{border:1px solid currentColor}.sg-money-table{min-width:0}.sg-money-detail-content .sg-table-scroll{max-height:none;overflow:visible}}
+@media(forced-colors:active){.sg-money-alert,.sg-money-details{background:Canvas;color:CanvasText;border-color:CanvasText}.sg-money-coverage{color:CanvasText}.sg-card>summary:focus-visible,.sg-money-details>summary:focus-visible{outline-color:Highlight}}
