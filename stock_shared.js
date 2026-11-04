@@ -220,7 +220,7 @@
       $('open-stock-report').hidden=true;
       document.querySelectorAll('#stock-report-access a').forEach(a=>a.hidden=true);
       const info=document.createElement('div');info.style.cssText='max-width:1500px;width:100%;margin:0 auto 12px;padding:10px 14px;border:1px solid #b6d7cc;background:#effaf5;border-radius:10px;font-size:13px';
-      info.textContent='เข้าผ่านลิงก์ฝ่ายขาย · แก้ราคา/หมายเหตุได้ · ห้ามส่งต่อลิงก์โดยไม่ได้รับอนุญาต ';
+      info.textContent='เข้าผ่านลิงก์ฝ่ายขาย · ติดตามและหมายเหตุต้องล็อกอินบัญชี AAF แล้วใส่รหัสปลดล็อก · ห้ามส่งต่อลิงก์โดยไม่ได้รับอนุญาต ';
       const exit=document.createElement('button');exit.textContent='ออกจากโหมดลิงก์';exit.onclick=()=>window.AAFStockAccess.exit();info.append(exit);$('stock-report-access').before(info);
     }
     $('btn-rollback-stock').hidden=true;$('btn-rollback-stock').classList.add('hidden');$('btn-edit-raw').hidden=true;$('btn-edit-raw').style.display='none';$('raw-edit-controls').remove();
