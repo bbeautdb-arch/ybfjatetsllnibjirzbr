@@ -223,6 +223,41 @@
     return {status:'saved-plan',grades:expected.map(([grade])=>grouped.get(grade)).filter(g=>g.specs.length),byUnit,fractional:rows.some(r=>!Number.isInteger(r.reservedProductionQty))};
   }
   const productionQuantity=totals=>['sheet','strip'].filter(unit=>totals[unit]>0).map(unit=>number(totals[unit])+' '+(unit==='sheet'?'แผ่น':'ชิ้นไม้แถบ')).join(' · ');
+  // Whole saved warehouse plan, independent of every screen/month filter.
+  // Validate existing per-spec subsets; do not allocate or reserve again.
+  function allProduction(m){
+    const pending=reason=>({status:'pending',reason,byUnit:null,rows:[],thickness:[]});
+    if(!Array.isArray(m?.rows)||!m.rows.length||!Array.isArray(m.thickness)||!Array.isArray(m.thicknessGrades))return pending('ยังไม่มีฐานสต๊อกและแผนที่บันทึกครบชุด');
+    const keys=[...new Set(m.rows.map(r=>String(Number(r?.t))))];
+    const complete=entries=>entries.length===keys.length&&entries.every(e=>Array.isArray(e)&&e.length===2&&keys.includes(e[0]))&&new Set(entries.map(e=>e[0])).size===keys.length;
+    if(!complete(m.thickness)||!complete(m.thicknessGrades))return pending('รายการความหนาไม่ครบหรือซ้ำ · ยังไม่รวมยอดทั้งคลัง');
+    const byUnit={sheet:0,strip:0},thickness=[];
+    for(const key of keys.sort((a,b)=>Number(a)-Number(b))){
+      const part=thicknessProduction(m,key);
+      if(part.status!=='saved-plan')return pending(part.reason);
+      for(const unit of ['sheet','strip'])byUnit[unit]+=Math.round(part.byUnit[unit]*100);
+      if(part.grades.length)thickness.push({t:Number(key),byUnit:{...part.byUnit}});
+    }
+    for(const unit of ['sheet','strip']){
+      const total=m.total?.byUnit?.[unit]?.reservedProductionQty;
+      if(!Number.isSafeInteger(byUnit[unit])||typeof total!=='number'||!Number.isFinite(total)||total<0||Math.abs(byUnit[unit]/100-total)>0.000001)return pending('ยอดรายสเปกไม่ตรงกับยอดต้องผลิตทั้งคลัง · รอตรวจ');
+      byUnit[unit]/=100;
+    }
+    const rank=g=>gradeOrder.includes(g)?gradeOrder.indexOf(g):gradeOrder.length;
+    const rows=m.rows.filter(r=>r.reservedProductionQty>0).map(r=>({key:r.key,w:Number(r.w),l:Number(r.l),t:Number(r.t),grade:r.grade,unit:r.unit,demand:r.committedQty,allocated:r.reservedInStockQty,shortage:r.reservedProductionQty})).sort((a,b)=>a.t-b.t||rank(a.grade)-rank(b.grade)||a.grade.localeCompare(b.grade)||a.w-b.w||a.l-b.l||a.unit.localeCompare(b.unit)||a.key.localeCompare(b.key));
+    return {status:'saved-plan',byUnit,rows,thickness,fractional:rows.some(r=>!Number.isInteger(r.shortage))};
+  }
+  function allProductionHTML(m){
+    const view=allProduction(m),label=u=>u==='sheet'?'แผ่น':'ชิ้นไม้แถบ';
+    const heading='<header class="ss-all-production-heading"><div><span>ภาพรวมงานผลิต</span><h3>สรุปยอดต้องผลิตเพิ่มทั้งหมด</h3></div><small>ทุกความหนา · ทุกขนาด · ทุกเกรด</small></header>';
+    const basis=`ตามแผนที่บันทึก · ฐานสต๊อก ${reportDay(m?.reportDate)} · รุ่น ${m?.revision||'รอยืนยัน'} · รวมภาระทุกเดือนในแผน`;
+    const warning=`<p class="ss-all-production-warning" data-all-production-warning role="status">${esc(thicknessProductionWarning(m))}</p>`;
+    if(view.status==='pending')return `<section class="ss-all-production" data-all-production-summary="pending" aria-label="สรุปยอดต้องผลิตเพิ่มทั้งหมด">${heading}<p class="ss-all-production-basis">${esc(basis)}</p><p class="ss-production-pending" role="status">ยังสรุปยอดต้องผลิตเพิ่มไม่ได้: ${esc(view.reason)} · ไม่ใช้ศูนย์แทน</p></section>`;
+    const cards=['sheet','strip'].map(u=>`<div class="ss-all-production-stat"><span>${u==='sheet'?'แผ่นที่ต้องผลิตเพิ่ม':'ไม้แถบที่ต้องผลิตเพิ่ม'}</span><strong data-all-production-total="${u}">${number(view.byUnit[u])}<small>${label(u)}</small></strong></div>`).join('');
+    const chips=view.thickness.map(v=>`<div class="ss-all-production-thickness"><b>${number(v.t)} มม.</b><span>${productionQuantity(v.byUnit)}</span></div>`).join('');
+    const table=view.rows.length?`<div class="ss-all-production-scroll" role="region" tabindex="0" aria-label="รายการต้องผลิตเพิ่มครบทุกสเปก เลื่อนแนวนอนได้"><table><caption>รายละเอียดต้องผลิตเพิ่ม · ${view.rows.length} สเปก</caption><thead><tr><th scope="col">หนา (มม.)</th><th scope="col">เกรด</th><th scope="col">ขนาด (มม.)</th><th scope="col">หน่วย</th><th scope="col" class="ss-num">ยอดจอง</th><th scope="col" class="ss-num">จัดจากคลังแล้ว</th><th scope="col" class="ss-num">ต้องผลิตเพิ่ม</th></tr></thead><tbody>${view.rows.map(r=>`<tr data-all-production-row="${esc(r.key)}"><th scope="row">${number(r.t,3)}</th><td><b>${esc(r.grade)}</b></td><td>${number(r.w,3)} × ${number(r.l,3)}</td><td>${label(r.unit)}</td><td class="ss-num">${number(r.demand)}</td><td class="ss-num">${number(r.allocated)}</td><td class="ss-num ss-all-production-need">${number(r.shortage)}</td></tr>`).join('')}</tbody><tfoot>${['sheet','strip'].map(u=>`<tr data-all-production-unit="${u}"><th scope="row" colspan="6">รวมต้องผลิตเพิ่ม · ${label(u)}</th><td class="ss-num">${number(view.byUnit[u])}</td></tr>`).join('')}</tfoot></table></div>`:'<p class="ss-all-production-empty">ไม่มีรายการต้องผลิตเพิ่มตามแผนที่บันทึก</p>';
+    return `<section class="ss-all-production" data-all-production-summary="saved-plan" aria-label="สรุปยอดต้องผลิตเพิ่มทั้งหมด">${heading}<p class="ss-all-production-basis">${esc(basis)}</p><div class="ss-all-production-totals">${cards}<div class="ss-all-production-count"><strong>${view.rows.length}<small>สเปกที่ขาด</small></strong><span>${view.thickness.length} ความหนา</span></div></div>${warning}${chips?`<div class="ss-all-production-thicknesses" aria-label="ยอดต้องผลิตแยกความหนา">${chips}</div>`:''}${table}${view.fractional?'<p class="ss-all-production-basis">คงยอดทศนิยมตามแผนที่บันทึก · ยังไม่ปัดเป็นคำสั่งผลิต</p>':''}<p class="ss-all-production-note">ยอดจอง − จัดจากคลังแล้ว = ต้องผลิตเพิ่ม · รวมเฉพาะสเปกที่ขาด ไม่หักของต่างสเปก และไม่รวมยอดนี้เป็นสต๊อกจริง</p></section>`;
+  }
   function thicknessProductionWarning(m){
     const api=window.AAFOrderHeader;
     const allocation=api?.currentAllocationView?.(m?.currentAllocation,currentWarehouse(m),m?.currentMonthSold);
@@ -239,6 +274,7 @@
   }
   function repaintThicknessProductionWarnings(){
     for(const node of root?.querySelectorAll('[data-thickness-production-warning]')||[])node.textContent=thicknessProductionWarning(latest);
+    for(const node of root?.querySelectorAll('[data-all-production-warning]')||[])node.textContent=thicknessProductionWarning(latest);
   }
   function groupTable(title,groups,label,total,detail=null){
     const agingCells=v=>stockQuantityCell(v,'aging90',false,'ss-aging-mail')+stockQuantityCell(v,'aging180',false,'ss-aging-mail')+stockQuantityCell(v,'agingOver180',false,'ss-aging-mail ss-aging-over');
@@ -692,6 +728,7 @@
       <p class="ss-help ss-reservation-help"><strong>จำนวนจองตามแผนทั้งคลังเดิม ไม่ใช่จองเฉพาะเดือนหรือคิวใหม่หัวข้อ02</strong><br>จองรวม = จองมีของ + จองต้องผลิตเพิ่ม · Physical − จองมีของ = Free · แยกคำนวณรายสเปกก่อนรวม ไม่เอาของคนละสเปกหักกัน${m.rows.some(r=>r.freeReconciliationException)?'<br><strong class="ss-manual">มีค่า Free ที่บันทึกไว้ต่างจากสูตรในบางสเปก · คงค่าที่บันทึกไว้ ไม่ล้างค่าปรับเอง</strong>':''}</p>
       <div class="ss-groups">${groupTable('แยกตามเกรด',m.grades,'เกรด',t)}${groupTable('แยกตามความหนา',m.thickness.filter(([,totals])=>totals.qty>0||totals.committedQty>0||totals.freeQty>0),'หนา (mm)',t,{grades:m.thicknessGrades,expanded:thicknessOpen,productionExpanded:productionOpen,model:m})}</div>
       ${agingPanel(m)}
+      ${allProductionHTML(m)}
       <section class="ss-sales-block" data-html2canvas-ignore><div class="ss-section-title"><span>02</span><h3>ภาพรวมรายการขาย · เลือกเดือน</h3></div><div id="stock-order-review-slot"></div></section>
       <section class="ss-legacy-sales-services" hidden aria-hidden="true"><div id="stock-sales-preview-slot"></div></section>
       <section class="ss-legacy-detail" hidden aria-hidden="true">
@@ -705,6 +742,34 @@
   }
 
   const style=document.createElement('style');style.textContent=`
+    [data-aaf-stock-summary] .ss-all-production{margin:24px 0;padding:24px;border:1px solid #e5d4b8;border-radius:22px;background:rgba(255,250,239,.96);box-shadow:0 9px 30px #193a3115;color:#294335;break-inside:auto}
+    [data-aaf-stock-summary] .ss-all-production-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    [data-aaf-stock-summary] .ss-all-production-heading span{font-size:11px;font-weight:700;letter-spacing:.07em;color:#927040}
+    [data-aaf-stock-summary] .ss-all-production-heading h3{font-size:23px;margin:3px 0;font-weight:700}
+    [data-aaf-stock-summary] .ss-all-production-heading small,[data-aaf-stock-summary] .ss-all-production-basis,[data-aaf-stock-summary] .ss-all-production-note{font-size:11px;color:#68745e;margin:7px 0;line-height:1.6}
+    [data-aaf-stock-summary] .ss-all-production-totals{display:grid;grid-template-columns:1fr 1fr .6fr;gap:12px;margin:18px 0}
+    [data-aaf-stock-summary] .ss-all-production-stat,[data-aaf-stock-summary] .ss-all-production-count{padding:18px;border:1px solid #e9d1a9;border-radius:16px;background:#fff4dc;display:flex;flex-direction:column;gap:7px}
+    [data-aaf-stock-summary] .ss-all-production-stat>span{font-size:13px;font-weight:600;color:#805621}
+    [data-aaf-stock-summary] .ss-all-production-totals strong{font-size:34px;line-height:1.3;font-weight:800;color:#865117;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+    [data-aaf-stock-summary] .ss-all-production-totals strong small{font-size:13px;font-weight:500;margin-left:8px}
+    [data-aaf-stock-summary] .ss-all-production-count{background:#f0f3e9;border-color:#d4dfc8;justify-content:center}
+    [data-aaf-stock-summary] .ss-all-production-count strong{color:#38513a;font-size:28px}
+    [data-aaf-stock-summary] .ss-all-production-count>span{font-size:12px;color:#61705c}
+    [data-aaf-stock-summary] .ss-all-production-warning{font-size:11px;line-height:1.6;color:#856030;border-left:3px solid #d7b36f;padding:5px 10px;margin:12px 0}
+    [data-aaf-stock-summary] .ss-all-production-thicknesses{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}
+    [data-aaf-stock-summary] .ss-all-production-thickness{display:flex;gap:8px;padding:7px 11px;border:1px solid #dce1ce;border-radius:9px;background:#fcfdf7;font-size:12px;font-variant-numeric:tabular-nums}
+    [data-aaf-stock-summary] .ss-all-production-thickness span{color:#89571d}
+    [data-aaf-stock-summary] .ss-all-production-scroll{overflow-x:auto;border:1px solid #e5d9c1;border-radius:12px;background:#fffef9;margin-top:16px}
+    [data-aaf-stock-summary] .ss-all-production table{width:100%;min-width:650px;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+    [data-aaf-stock-summary] .ss-all-production caption{text-align:left;padding:12px 14px;font-weight:700;font-size:13px;color:#58674c}
+    [data-aaf-stock-summary] .ss-all-production th,[data-aaf-stock-summary] .ss-all-production td{padding:11px 13px;text-align:left;border-bottom:1px solid #e7e6d9;white-space:nowrap}
+    [data-aaf-stock-summary] .ss-all-production .ss-num{text-align:right}
+    [data-aaf-stock-summary] .ss-all-production thead{background:#f0f3e7;color:#536244}
+    [data-aaf-stock-summary] .ss-all-production .ss-all-production-need{background:#fff4df;color:#8d5418;font-weight:700}
+    [data-aaf-stock-summary] .ss-all-production tfoot{background:#eaf0e2;font-weight:700;color:#425434;border-top:2px solid #c4d0b5}
+    [data-aaf-stock-summary] .ss-all-production-empty{background:#eaf4e7;color:#345a3b;padding:14px;border-radius:12px}
+    @media(max-width:650px){[data-aaf-stock-summary] .ss-all-production{padding:16px}[data-aaf-stock-summary] .ss-all-production-heading h3{font-size:20px}[data-aaf-stock-summary] .ss-all-production-totals{grid-template-columns:1fr 1fr}[data-aaf-stock-summary] .ss-all-production-count{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center;padding:10px 16px}[data-aaf-stock-summary] .ss-all-production-totals strong{font-size:27px}[data-aaf-stock-summary] .ss-all-production-stat{padding:13px}[data-aaf-stock-summary] .ss-all-production-totals strong small{display:block;margin:2px 0 0}}
+    @media print{[data-aaf-stock-summary] .ss-all-production{background:#fff;box-shadow:none}[data-aaf-stock-summary] .ss-all-production-scroll{overflow:visible}[data-aaf-stock-summary] .ss-all-production table{min-width:0}[data-aaf-stock-summary] .ss-all-production tr{break-inside:avoid}}
     [data-aaf-stock-summary] .ss-readiness{margin:22px 0;border:1px solid #cddde7;border-radius:16px;background:#f7fafc;overflow:hidden}
     [data-aaf-stock-summary] .ss-readiness-inner{padding:22px}
     [data-aaf-stock-summary] .ss-readiness-heading span{font-size:12px;letter-spacing:.06em;color:#48718a;font-weight:700}
@@ -1088,6 +1153,8 @@
   // Pure read-only builders exposed for regression tests and isolated previews.
   window.AAFStockSummary.buildModel=model;window.AAFStockSummary.renderHTML=html;window.AAFStockSummary.renderKpis=kpiHTML;
   window.AAFStockSummary.buildThicknessProduction=thicknessProduction;
+  window.AAFStockSummary.buildAllProduction=allProduction;
+  window.AAFStockSummary.renderAllProduction=allProductionHTML;
   window.AAFStockSummary.soldLoadingBreakdown=soldLoadingBreakdown;
   window.AAFStockSummary.soldSettlementState=soldSettlementState;
   window.AAFStockSummary.exchangeRateDisplay=exchangeRateDisplay;
