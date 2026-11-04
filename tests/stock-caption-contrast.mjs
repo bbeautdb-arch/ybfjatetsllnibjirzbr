@@ -24,7 +24,10 @@ test('caption stays screen scoped, preserves hidden state and supports forced co
 });
 
 test('owner and Sales04 load the same refreshed caption styles',()=>{
+  let version;
   for(const page of ['stock_manager.html','stock_report.html']){
-    assert.match(read(page),/stock_premium\.css\?v=20261105-caption-contrast-r1/);
+    const assets=[...read(page).matchAll(/stock_premium\.css\?v=([A-Za-z0-9-]+)/g)];
+    assert.equal(assets.length,1);assert.match(assets[0][1],/^\d{8}-.+/);
+    if(version)assert.equal(assets[0][1],version);else version=assets[0][1];
   }
 });

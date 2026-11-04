@@ -50,15 +50,17 @@
     for(const row of stock.rows){
       if(!object(row)||typeof row.key!=='string'||!row.key||rawKeys.has(row.key)||!['w','l','t'].every(k=>positive(Number(row[k])))||typeof row.grade!=='string'||!/^[A-Z]+$/.test(row.grade)||!['sheet','strip'].includes(row.unit)||!['qty','freeQty','committedQty'].every(k=>quantity(row[k])))fail('read-failed');
       rawKeys.add(row.key);const key=exactKey(row);
-      if(!groups.has(key))groups.set(key,{key,rawKeys:[],w:Math.min(Number(row.w),Number(row.l)),l:Math.max(Number(row.w),Number(row.l)),t:Number(row.t),grade:row.grade,unit:row.unit,qty:0,freeQty:0,price:null,currency:'THB',priceStatus:'missing-price'});
+      if(!groups.has(key))groups.set(key,{key,rawKeys:[],w:Math.min(Number(row.w),Number(row.l)),l:Math.max(Number(row.w),Number(row.l)),t:Number(row.t),grade:row.grade,unit:row.unit,qty:0,freeQty:0,price:null,currency:null,priceStatus:'missing-price'});
       const item=groups.get(key);item.rawKeys.push(row.key);item.qty+=row.qty;item.freeQty+=row.freeQty;
       if(!quantity(item.qty)||!quantity(item.freeQty))fail('read-failed');
     }
     for(const row of groups.values()){
       const keys=aliases.get(row.key)||[];
-      const values=keys.map(key=>({price:Object.hasOwn(p.prices,key)?p.prices[key]:null,currency:p.currencies[key]||'THB'}));
+      // A saved number without currency is not evidence of a THB price. Keep
+      // it repairable, including an explicit currency-only edit at that price.
+      const values=keys.map(key=>({price:Object.hasOwn(p.prices,key)?p.prices[key]:null,currency:p.currencies[key]||null}));
       if(values.some(value=>!equal(value,values[0]))){row.priceStatus='price-conflict';row.currency=null;}
-      else if(values.length){row.price=values[0].price;row.currency=values[0].currency;row.priceStatus=row.price===null?'missing-price':'saved-price';}
+      else if(values.length){row.price=values[0].price;row.currency=values[0].currency;row.priceStatus=row.price===null?'missing-price':row.currency===null?'missing-currency':'saved-price';}
     }
     const rows=[...groups.values()].sort((a,b)=>a.t-b.t||a.grade.localeCompare(b.grade)||a.w-b.w||a.l-b.l||a.unit.localeCompare(b.unit));
     const protectedStock={rows:clone(stock.rows).sort((a,b)=>a.key.localeCompare(b.key))};

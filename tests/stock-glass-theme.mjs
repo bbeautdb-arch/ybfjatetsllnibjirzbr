@@ -8,7 +8,17 @@ const clean=text=>text.replace(/\/\*[\s\S]*?\*\//g,'').trim();
 const outer=read('../stock_premium.css'),review=read('../stock_order_review.css');
 const marker='/* AAF calm premium screen theme.';
 assert.ok(review.includes(marker),'the retained shadow theme boundary exists');
-const shadow=review.slice(review.indexOf(marker));
+// Receipt and annotation modules can follow the theme. Only the balanced screen
+// block is the theme; do not mistake later functional/print CSS for theme paint.
+const themeTail=review.slice(review.indexOf(marker));
+const themeOpen=themeTail.indexOf('{',themeTail.indexOf('@media screen'));
+let themeDepth=1,themeEnd=themeOpen+1;
+for(;themeEnd<themeTail.length&&themeDepth;themeEnd++){
+  if(themeTail[themeEnd]==='{')themeDepth++;
+  else if(themeTail[themeEnd]==='}')themeDepth--;
+}
+assert.equal(themeDepth,0,'the screen theme closes before later module rules');
+const shadow=themeTail.slice(0,themeEnd);
 
 // Small balanced-block reader: nested screen/support/accessibility conditions are
 // retained instead of inferring their scope from a single startsWith assertion.
@@ -50,6 +60,12 @@ const outerRules=rules(outer),shadowRules=rules(shadow),both=[...outerRules,...s
 const hasCondition=(rule,pattern)=>rule.ancestors.some(a=>pattern.test(a));
 const backgrounds=rule=>Object.entries(rule.declarations).filter(([p])=>['background','background-color'].includes(p));
 const opaque=value=>/^(?:#[0-9a-f]{3}(?:[0-9a-f]{3})?|Canvas|var\(--(?:surface|bg|aaf-paper)\))\s*(?:!important)?$/i.test(value);
+const annotationDisplay=new Map([
+  ['.annotation-unlock-form > label','block'],
+  ['.annotation-tools #notes-import-preview:empty','none'],
+  ['.annotation-tools #notes-import-preview td small','block'],
+  ['[data-managed-annotations="true"] .notes-draft-warning','none']
+]);
 
 test('Pages publishes only the named decorative factory asset, not a broad data directory',()=>{
   const workflow=read('../.github/workflows/static.yml');
@@ -76,12 +92,17 @@ test('glass changes background paint, never whole-content opacity, hidden state 
   for(const r of both)for(const[p,v]of Object.entries(r.declarations)){
     assert.ok(!['visibility','pointer-events','touch-action','overflow','overflow-x','overflow-y','contain','transform','animation','order'].includes(p),p+' is not a paint-only change');
     if(p==='filter'){assert.equal(r.selector,'body[data-aaf-premium] #stock-summary button:not(:disabled):hover');assert.equal(v,'brightness(.97)','only the retained button hover paint can use a content filter');}
-    if(p==='opacity'&&v!=='1'){assert.equal(r.selector,'body[data-aaf-premium] #stock-summary button:disabled');assert.equal(v,'.55','only the retained disabled button style can fade; never a content container');}
-    if(p==='display')assert.equal(v,'none !important');
+    if(p==='opacity'&&v!=='1'){
+      const allowed=r.selector==='.annotation-tools #notes-import-preview td small'?'.7':'.55';
+      assert.ok(['.annotation-tools #notes-import-preview td small','body[data-aaf-premium] #stock-summary button:disabled'].includes(r.selector),'only retained disabled controls or import-preview metadata may fade');
+      assert.equal(v,allowed,'stock quantities and content containers never fade');
+    }
+    if(p==='display')assert.equal(v,annotationDisplay.get(r.selector)||'none !important');
     if(p==='position')assert.equal(v,'relative','no new fixed/absolute interactive overlay');
     assert.ok(!/^z-index$/.test(p),'theme does not change control stacking');
   }
-  assert.equal(both.filter(r=>Object.hasOwn(r.declarations,'display')).length,1);
+  assert.equal(outerRules.filter(r=>Object.hasOwn(r.declarations,'display')).length,1);
+  assert.equal(shadowRules.filter(r=>Object.hasOwn(r.declarations,'display')).length,annotationDisplay.size);
   const hidden=outerRules.find(r=>r.selector==='body[data-aaf-premium] [hidden]');
   assert.equal(hidden?.declarations.display,'none !important');
   assert.match(review,/\[hidden\]\{display:none!important\}/);

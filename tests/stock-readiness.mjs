@@ -47,9 +47,17 @@ test('verified zero shortage is explicit, while the module remains read-only and
   const view=api.build(stock);assert.equal(view.status,'verified');assert.equal(view.shortages.length,0);assert.match(api.render(view),/ไม่มีรายการขาดผลิต/);assert.doesNotMatch(api.render(view),/ยอดขาดมีทศนิยม/);
   const source=fs.readFileSync(new URL('../stock_readiness.js',import.meta.url),'utf8');assert.doesNotMatch(source,/\b(?:fetch|XMLHttpRequest|WebSocket|localStorage|sessionStorage|setInterval|setTimeout)\b/);
 });
-test('v101 lower-review unavailable leaves independently verified readiness and current cards visible without writes',()=>{
+test('unavailable Page09 review preserves verified warehouse readiness but cannot substitute legacy sold totals',()=>{
   const nodes={cards:{innerHTML:'',querySelectorAll:()=>[]},source:{},status:{classList:{add(){}}}},root={classList:{remove(){}},addEventListener(){},querySelectorAll:()=>[],innerHTML:'',querySelector:s=>s==='.ss-kpis'?nodes.cards:s==='.ss-status'?nodes.status:s==='.ss-sales-summary-source'||s==='.ss-overview-source'?nodes.source:s==='.ss-download'?{addEventListener(){}}:null};
   const window={AAFOrderHeader:header,AAFStockReadiness:api};vm.runInNewContext(fs.readFileSync(new URL('../stock_summary.js',import.meta.url),'utf8'),{window,document:{getElementById:()=>root,createElement:()=>({}),head:{append(){}}},location:{hash:''}});
   const summary=window.AAFStockSummary,stock=fixture(),before=JSON.stringify(stock);summary.update(stock,r=>({eq:r.qty,price:1,curr:'THB',value:r.qty,freeValue:r.freeQty}));
-  assert.match(root.innerHTML,/data-readiness-status="verified"/);summary.setOrderReview(null,{status:'pending'});assert.match(root.innerHTML,/data-readiness-status="verified"/);assert.match(nodes.cards.innerHTML,/ขายแล้วเดือนนี้/);assert.match(nodes.cards.innerHTML,/<strong>22<\/strong>/);assert.equal(JSON.stringify(stock),before);
+  assert.match(root.innerHTML,/data-readiness-status="verified"/);summary.setOrderReview(null,{status:'pending'});assert.match(root.innerHTML,/data-readiness-status="verified"/);
+  const card=id=>nodes.cards.innerHTML.split(`data-stock-card="${id}"`)[1]?.split('data-stock-card="')[0]||'';
+  assert.match(card('physical'),/<strong>100<\/strong>/);assert.match(card('free'),/<strong>78<\/strong>/);
+  assert.match(card('sold'),/ขายแล้วเดือนนี้/);assert.match(card('reserved'),/เจรจา 80%\+/);
+  for(const id of ['sold','reserved']){
+    assert.match(card(id),/รอชุดหน้า 09|รอสรุปกลุ่มขาย/);assert.match(card(id),/role="status"/);
+    assert.doesNotMatch(card(id),/<strong>\d|22 แผ่น|8 แผ่น/,'no old sold/allocation quantity fallback without the shared Page09 groups');
+  }
+  assert.equal(JSON.stringify(stock),before);
 });

@@ -1356,8 +1356,12 @@
     const status=text=>{const p=root.querySelector('.ss-status');if(p)p.textContent=text;};
     root.querySelectorAll('.ss-download,.cash-download,.ss-overview-download').forEach(b=>b.disabled=true);status(which==='overview'?'กำลังสร้างภาพรวม 4 กล่อง…':'กำลังสร้างภาพยาวครบทุกแถว กรุณารอสักครู่…');
     try{
+      // Snapshot the rendered content before canvas/fonts yield: header groups,
+      // receipt evidence and catalog prices can refresh independently of latest.
+      // A report must not mix an older captured warehouse with those later reads.
+      const capturedHTML=which==='cash'?window.AAFStockCash.render(captured.cash):which==='overview'?dailyOverviewHTML(captured):html(captured,capturedThickness,capturedProduction,capturedProductionContext);
       const canvasFn=await loadCanvas();await document.fonts?.ready;
-      box=document.createElement('div');box.dataset.aafStockSummary='';box.className='ss-export'+(which==='overview'?' ss-overview-export':'');box.style.cssText='position:absolute;left:-20000px;top:0;width:1440px;box-sizing:border-box;padding:0;background:white;';box.innerHTML=which==='cash'?window.AAFStockCash.render(captured.cash):which==='overview'?dailyOverviewHTML(captured):html(captured,capturedThickness,capturedProduction,capturedProductionContext);document.body.append(box);
+      box=document.createElement('div');box.dataset.aafStockSummary='';box.className='ss-export'+(which==='overview'?' ss-overview-export':'');box.style.cssText='position:absolute;left:-20000px;top:0;width:1440px;box-sizing:border-box;padding:0;background:white;';box.innerHTML=capturedHTML;document.body.append(box);
       for(const card of box.querySelectorAll('[data-stock-card]'))setCardView(card,which!=='overview');
       restorePhysicalGrades(box,capturedPhysicalGrades);
       const sheet=which==='overview'?box:box.querySelector(which==='cash'?'.cash-sheet':'.ss-sheet'),width=Math.ceil(sheet.getBoundingClientRect().width),height=Math.ceil(sheet.getBoundingClientRect().height),scale=Math.min(1.5,30000/height,Math.sqrt(48000000/(width*height)));

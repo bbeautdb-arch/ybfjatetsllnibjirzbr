@@ -9,7 +9,15 @@ const require=createRequire(import.meta.url),header=require('../stock_order_head
 const read=name=>fs.readFileSync(new URL(name,import.meta.url),'utf8');
 const outer=read('../stock_premium.css'),reviewCSS=read('../stock_order_review.css'),summary=read('../stock_summary.js'),preview=read('./stock-premium-preview.html');
 const stripComments=value=>value.replace(/\/\*[\s\S]*?\*\//g,'').trim();
-const shadowTheme=reviewCSS.slice(reviewCSS.indexOf('/* AAF calm premium screen theme.'));
+const themeTail=reviewCSS.slice(reviewCSS.indexOf('/* AAF calm premium screen theme.'));
+const themeOpen=themeTail.indexOf('{',themeTail.indexOf('@media screen'));
+let themeDepth=1,themeEnd=themeOpen+1;
+for(;themeEnd<themeTail.length&&themeDepth;themeEnd++){
+  if(themeTail[themeEnd]==='{')themeDepth++;
+  else if(themeTail[themeEnd]==='}')themeDepth--;
+}
+assert.equal(themeDepth,0,'screen theme is bounded independently of later receipt/print styles');
+const shadowTheme=themeTail.slice(0,themeEnd);
 const declarations=value=>[...stripComments(value).matchAll(/(?:\{|;)\s*([\w-]+)\s*:\s*([^;{}]+)/g)].map(m=>[m[1],m[2].trim()]);
 const pure=preview.split('// BEGIN PURE SYNTHETIC DATA')[1].replace(/^[^\n]*\n/,'').split('// END PURE SYNTHETIC DATA')[0];
 const fixture=vm.runInNewContext('(function(){'+pure+';return {createSyntheticData,calculateSyntheticRow};})()');
@@ -25,10 +33,17 @@ test('premium theme is screen-only, live-root scoped, and does not change hidden
     assert.doesNotMatch(stripComments(text),/@import|https?:|data:|@media\s+print|@font-face|content\s*:/i,'no remote assets, print overrides or invented business text');
     for(const [property,value] of declarations(text)){
       assert.ok(!['visibility','pointer-events','overflow','overflow-x','overflow-y','contain','transform','animation','order'].includes(property),property+' changes behavior');
-      if(property==='display')assert.equal(value,'none !important','only hidden safety may change display');
+      if(property==='display')assert.ok(['none !important','none','block'].includes(value),'only hidden safety and existing annotation-form display are allowed');
     }
   }
   assert.equal((outer.match(/display\s*:/g)||[]).length,1);
+  const formDisplay=[...stripComments(shadowTheme).matchAll(/([^{}]+)\{([^{}]*\bdisplay\s*:[^{}]*)\}/g)].map(m=>[m[1].trim(),m[2].match(/\bdisplay\s*:\s*([^;]+)/)[1].trim()]);
+  assert.deepEqual(formDisplay,[
+    ['.annotation-unlock-form > label','block'],
+    ['.annotation-tools #notes-import-preview:empty','none'],
+    ['.annotation-tools #notes-import-preview td small','block'],
+    ['[data-managed-annotations="true"] .notes-draft-warning','none']
+  ],'only the retained annotation form may have display styling; data/card visibility stays untouched');
   assert.match(outer,/body\[data-aaf-premium\] \[hidden\]\s*\{\s*display:\s*none !important;/);
   for(const match of stripComments(outer).matchAll(/([^{}]+)\{/g)){
     if(match[1].trim().startsWith('@'))continue;
@@ -56,13 +71,18 @@ test('PNG exports cannot inherit premium report selectors and retain the existin
 });
 
 test('both entries opt in to the same theme and refresh only the matching presentation assets',()=>{
+  const versions=[];
   for(const name of ['stock_manager.html','stock_report.html']){
     const text=read('../'+name);
     assert.equal((text.match(/data-aaf-premium="ivory"/g)||[]).length,1);
-    assert.equal((text.match(/stock_premium\.css\?v=20261104-factory-glass-r1/g)||[]).length,1);
-    assert.equal((text.match(/stock_order_review\.js\?v=20261104-three-sales-groups-r1/g)||[]).length,1);
+    const theme=[...text.matchAll(/stock_premium\.css\?v=([^"']+)/g)],review=[...text.matchAll(/stock_order_review\.js\?v=([^"']+)/g)];
+    assert.equal(theme.length,1);assert.equal(review.length,1);
+    assert.match(theme[0][1],/^\d{8}-[a-z0-9-]+$/);assert.match(review[0][1],/^\d{8}-[a-z0-9-]+$/);
+    versions.push({theme:theme[0][1],review:review[0][1]});
   }
-  assert.match(read('../stock_order_review.js'),/stock_order_review\.css\?v=20261104-three-sales-groups-r1/);
+  assert.deepEqual(versions[0],versions[1],'owner and Sales04 cannot serve different presentation versions');
+  const reviewVersions=[...read('../stock_order_review.js').matchAll(/stock_order_review\.css\?v=([^'"\s]+)/g)].map(m=>m[1]);
+  assert.ok(reviewVersions.length>0);assert.ok(reviewVersions.every(v=>v===versions[0].review),'renderer cache key is paired with its stylesheet');
 });
 
 test('synthetic full summary covers exact sizes, separate units, zero stock and saved manual Free without mutation',()=>{

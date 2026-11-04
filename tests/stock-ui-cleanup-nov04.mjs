@@ -90,7 +90,13 @@ test('readiness is hidden as a whole for verified and pending states; pure readi
 test('incomplete valuation and pending current-allocation warnings outside the removed panel remain visible',()=>{
   const f=fixture({pending:true,unpriced:true}),html=cards(f),doc=inspect(html),visible=doc.visible();
   assert.match(visible,/Synthetic cutoff pending/);assert.match(visible,/Free นี้ยังเป็นยอดที่บันทึกไว้/);assert.match(visible,/ยังรอยืนยันกับยอดขายล่าสุด/);
-  assert.match(visible,/รอราคา\/เรท 1 สเปก/);assert.match(visible,/ไม่ใช้ 0 หรือราคาชุดเก่าแทน/);assert.match(visible,/ยังไม่มีหลักฐานราคาขาย\/รับเงินตรงชุดนี้/);
+  assert.match(visible,/รอราคา\/เรท 1 สเปก/);assert.match(visible,/ไม่ใช้ 0 หรือราคาชุดเก่าแทน/);
+  for(const id of ['sold','reserved']){
+    const card=doc.nodes.find(node=>node.attrs['data-stock-card']===id);assert.ok(card);
+    assert.match(doc.visible(card),/รอชุดหน้า 09 เดือนปัจจุบันที่ตรงกับหัวข้อ 02/);
+    assert.match(doc.visible(card),/ไม่ใช้ยอดเก่าหรือเดือนอื่นแทน/);
+    assert.doesNotMatch(doc.visible(card),/฿|US\$|\d+ แผ่น/,'no sales quantity or money fallback without the shared current review');
+  }
   const warnings=doc.nodes.filter(n=>n.attrs.class?.split(' ').includes('ss-overview-warning')&&!n.hidden);assert.ok(warnings.length>=3);
   assert.match(visible,/88 แผ่น/);assert.match(visible,/11 ชิ้น/);assert.equal(f.warehouse.free.complete,false);assert.equal(f.warehouse.free.knownValueTHB,11);
 });
@@ -101,7 +107,8 @@ test('cleanup preserves exact units, amounts, per-spec shortage, manual Free and
   assert.equal(f.warehouse.physical.knownValueTHB,8140);assert.equal(f.warehouse.free.knownValueTHB,7931);
   assert.equal(f.model.rows.find(r=>r.grade==='F').freeQty,88);assert.equal(f.model.rows.find(r=>r.t===2.5).reservedProductionQty,5);
   assert.match(visible,/≈ ฿ 8,140/);assert.match(visible,/≈ ฿ 7,931/);assert.match(visible,/ปรับ Free ด้วยมือ 1 สเปก/);
-  assert.match(visible,/ขายแล้วเดือนนี้/);assert.match(visible,/10 แผ่น/);assert.match(visible,/จองอื่นๆ · ไม่ซ้ำขายแล้ว/);
+  assert.match(visible,/ขายแล้วเดือนนี้/);assert.match(visible,/10 แผ่น/);assert.match(visible,/จองอื่นๆ · เจรจา 80%\+/);
+  assert.match(visible,/รอชุดหน้า 09 เดือนปัจจุบันที่ตรงกับหัวข้อ 02/,'verified warehouse is not a substitute for current sales groups');
   summary.renderHTML(f.model);header.render(null,new Set(['physical','free']),f.warehouse,'',f.sold,f.allocation);
   assert.equal(JSON.stringify(f),before,'display cleanup never mutates saved values, pricing or source evidence');
 });

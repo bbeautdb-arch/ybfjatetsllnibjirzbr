@@ -61,6 +61,9 @@ jobs:
           node --test tests/stock-category-free-values.mjs tests/stock-physical-free-pair.mjs
           node --test tests/stock-free-grade-summary-values.mjs
           node --test tests/stock-caption-contrast.mjs
+          node --test tests/stock-premium.mjs tests/stock-glass-theme.mjs tests/stock-premium-polish.mjs
+          node --test tests/stock-summary-export-snapshot.mjs tests/stock-price-missing-currency.mjs
+          node --test tests/stock-readiness.mjs tests/stock-report-evidence.mjs tests/stock-ui-cleanup-nov04.mjs
       - name: Stage public files only
         run: |
           mkdir _site

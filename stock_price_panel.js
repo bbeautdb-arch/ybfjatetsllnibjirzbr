@@ -30,11 +30,23 @@
     if(mode==='unpriced')return rows.filter(row=>!hasPrice(row));
     return rows;
   }
+  function missingDetails(rows){
+    const missing={price:new Set(),currency:new Set(),conflict:new Set()};
+    for(const row of rows){
+      if(!hasStock(row)||hasPrice(row))continue;
+      const key=[row.t,row.grade,...[row.w,row.l].map(Number).sort((a,b)=>a-b),row.unit].join('|');
+      missing[row.priceStatus==='price-conflict'?'conflict':!positive(row.price)?'price':'currency'].add(key);
+    }
+    return Object.fromEntries(Object.entries(missing).map(([kind,keys])=>[kind,keys.size]));
+  }
   function changesFor(rows,drafts){
     const changes=[],invalid=[];
     for(const row of rows){
       const draft=drafts.get(row.key);if(!draft)continue;
-      if(draft.value===(row.price===null||row.price===undefined?'':String(row.price))&&draft.currency===(row.currency||'THB'))continue;
+      // An untouched blank price is not a request to erase anything. A saved
+      // positive number with no currency, however, requires explicit repair.
+      if(!positive(row.price)&&typeof draft.value==='string'&&!draft.value.trim())continue;
+      if(draft.value===(row.price===null||row.price===undefined?'':String(row.price))&&draft.currency===(row.currency||''))continue;
       const value=typeof draft.value==='string'&&draft.value.trim()!==''?Number(draft.value):NaN;
       if(!positive(value)||!['THB','USD'].includes(draft.currency)){invalid.push(row.key);continue;}
       if(value===row.price&&draft.currency===row.currency)continue;
@@ -44,13 +56,13 @@
   }
   function rowMarkup(row,draft,disabled){
     const value=draft?.value??(row.price===null||row.price===undefined?'':String(row.price));
-    const currency=draft?.currency??row.currency??'THB';
+    const currency=draft?.currency??row.currency??'';
     const suffix=esc(label(row));
-    return `<tr data-price-panel-key="${esc(row.key)}"><th scope="row">${esc(row.t)} มม. · ${esc(row.grade)}<small>${num(row.w)} × ${num(row.l)} · ${unit(row)}</small></th><td class="spp-number">${num(row.qty)}</td><td class="spp-number">${num(row.freeQty)}</td><td><input type="number" step="any" min="0.0000001" inputmode="decimal" data-spp-price aria-label="ราคาสต๊อก ${suffix}" value="${esc(value)}" placeholder="ใส่ราคาต่อหน่วย" ${disabled?'disabled':''}></td><td><select data-spp-currency aria-label="สกุลเงินราคาสต๊อก ${suffix}" ${disabled?'disabled':''}><option value="THB" ${currency==='THB'?'selected':''}>บาท</option><option value="USD" ${currency==='USD'?'selected':''}>USD</option></select></td><td class="spp-row-status">${row.priceStatus==='price-conflict'?'ราคาขนาดกลับด้านขัดกัน · รอตรวจ':hasPrice(row)?'มีราคาที่บันทึก':hasStock(row)?'ขาดราคาสต๊อก / สกุลเงิน':'ยอด 0 · ยังไม่มีราคา'}</td></tr>`;
+    return `<tr data-price-panel-key="${esc(row.key)}"><th scope="row">${esc(row.t)} มม. · ${esc(row.grade)}<small>${num(row.w)} × ${num(row.l)} · ${unit(row)}</small></th><td class="spp-number">${num(row.qty)}</td><td class="spp-number">${num(row.freeQty)}</td><td><input type="number" step="any" min="0.0000001" inputmode="decimal" data-spp-price aria-label="ราคาสต๊อก ${suffix}" value="${esc(value)}" placeholder="ใส่ราคาต่อหน่วย" ${disabled?'disabled':''}></td><td><select data-spp-currency aria-label="สกุลเงินราคาสต๊อก ${suffix}" ${disabled?'disabled':''}><option value="" ${currency===''?'selected':''}>เลือกสกุลเงิน</option><option value="THB" ${currency==='THB'?'selected':''}>บาท</option><option value="USD" ${currency==='USD'?'selected':''}>USD</option></select></td><td class="spp-row-status">${row.priceStatus==='price-conflict'?'ราคาขนาดกลับด้านขัดกัน · รอตรวจ':hasPrice(row)?'มีราคาที่บันทึก':positive(row.price)?'ขาดสกุลเงิน · เลือกเพื่อยืนยันราคาเดิม':hasStock(row)?'ขาดราคาสต๊อก / สกุลเงิน':'ยอด 0 · ยังไม่มีราคา'}</td></tr>`;
   }
   function reviewMarkup(rows,changes){
     const map=new Map(rows.map(row=>[row.key,row]));
-    return `<section class="spp-review" aria-label="ตรวจราคาก่อนบันทึก"><h4>ตรวจราคา ${num(changes.length)} รายการก่อนบันทึก</h4><ul>${changes.map(change=>{const row=map.get(change.key);return `<li><b>${esc(label(row))}</b><span>${row.priceStatus==='price-conflict'?'ราคาเดิมขนาดกลับด้านขัดกัน':hasPrice(row)?num(row.price)+' '+esc(row.currency):'ยังไม่มีราคา'} → <strong>${num(change.price)} ${esc(change.currency)}</strong> / ${unit(row)}</span>${row.priceStatus==='price-conflict'?'<small>ยืนยันใช้ราคาใหม่นี้กับสเปกเดียวกันทั้งสองทิศทาง ไม่รวมขนาดอื่น</small>':''}</li>`;}).join('')}</ul><p>เปลี่ยนเฉพาะราคาสต๊อกและสกุลเงินของรายการนี้ ไม่เปลี่ยนยอดสต๊อก ราคาขายจริง ติดตาม หรือหมายเหตุ</p><button type="button" data-spp-confirm>ยืนยันบันทึกราคาสต๊อก</button><button type="button" data-spp-back>กลับไปแก้</button></section>`;
+    return `<section class="spp-review" aria-label="ตรวจราคาก่อนบันทึก"><h4>ตรวจราคา ${num(changes.length)} รายการก่อนบันทึก</h4><ul>${changes.map(change=>{const row=map.get(change.key);return `<li><b>${esc(label(row))}</b><span>${row.priceStatus==='price-conflict'?'ราคาเดิมขนาดกลับด้านขัดกัน':hasPrice(row)?num(row.price)+' '+esc(row.currency):positive(row.price)?num(row.price)+' · ยังไม่มีสกุลเงิน':'ยังไม่มีราคา'} → <strong>${num(change.price)} ${esc(change.currency)}</strong> / ${unit(row)}</span>${row.priceStatus==='price-conflict'?'<small>ยืนยันใช้ราคาใหม่นี้กับสเปกเดียวกันทั้งสองทิศทาง ไม่รวมขนาดอื่น</small>':''}</li>`;}).join('')}</ul><p>เปลี่ยนเฉพาะราคาสต๊อกและสกุลเงินของรายการนี้ ไม่เปลี่ยนยอดสต๊อก ราคาขายจริง ติดตาม หรือหมายเหตุ</p><button type="button" data-spp-confirm>ยืนยันบันทึกราคาสต๊อก</button><button type="button" data-spp-back>กลับไปแก้</button></section>`;
   }
   const css=`
     .ss-price-panel{margin:14px 0 24px;border:1px solid #c8d7bd;border-radius:16px;background:rgba(250,253,246,.96);color:#274939;overflow:hidden;font-size:13px}
@@ -75,7 +87,8 @@
     function updateCoverage(){
       const rows=rowsForCoverage(),node=host.querySelector('[data-spp-coverage]');
       if(!rows){node.textContent='กดเพื่อตรวจราคาและสิทธิ์ล่าสุด';return;}
-      const c=coverage(rows);node.textContent=`ขาดราคา ${num(c.active)} สเปกที่มียอด${c.free?' · มี Free '+num(c.free)+' สเปก':''}${c.zero?' · ทะเบียนยอด 0 ยังไม่มีราคา '+num(c.zero)+' รายการ':''}`;
+      const c=coverage(rows),details=missingDetails(rows),reasons=[details.price?'ขาดราคา '+num(details.price):'',details.currency?'ขาดสกุลเงิน '+num(details.currency):'',details.conflict?'ราคาขัดกัน '+num(details.conflict):''].filter(Boolean).join(' · ');
+      node.textContent=`รอราคา / สกุลเงิน ${num(c.active)} สเปกที่มียอด${reasons?' ('+reasons+')':''}${c.free?' · มี Free '+num(c.free)+' สเปก':''}${c.zero?' · ทะเบียนยอด 0 ยังขาดข้อมูลราคา '+num(c.zero)+' รายการ':''}`;
     }
     function setStatus(value,error=false){status.textContent=value;status.classList.toggle('spp-error',error);}
     function pending(){return changesFor(state.rows||[],drafts);}
@@ -143,5 +156,5 @@
     const api={updateContext(value){if(value)context=value;updateCoverage();actions();},hasDraft:()=>drafts.size>0,isBusy:()=>working,load,destroy(){doc?.defaultView?.removeEventListener?.('beforeunload',unload);instances.delete(host);}};
     instances.set(host,api);render();return api;
   }
-  return {mount,coverage,visibleRows,changesFor,rowMarkup,reviewMarkup};
+  return {mount,coverage,missingDetails,visibleRows,changesFor,rowMarkup,reviewMarkup};
 });

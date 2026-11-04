@@ -17,29 +17,34 @@ test('standalone auth failure invalidates pending controller reads as well as cl
   const r=await setup({stockSessionToken:'synthetic'},[{data},{status:401}]);r.polls[0]();await r.tick();assert.equal(r.invalidations.length,1);assert.match(r.invalidations[0],/เข้าสู่ระบบ/);assert.equal(r.errors.length,1);
 });
 test('both report entry points cache-bust the current sold renderer and auth controller, preserving unrelated assets',()=>{
+  const sharedVersions=new Map();
+  const assets=['stock_sales_preview','stock_sales_controller','stock_order_header','stock_summary','stock_order_controller','stock_production_planner','stock_readiness','stock_review_notes_bridge','stock_order_review','stock_sales_groups','stock_sales_receipts','stock_current_sales_groups','stock_sales_groups_view'];
   for(const page of ['stock_report','stock_manager']){
     const html=fs.readFileSync(new URL('../'+page+'.html',import.meta.url),'utf8');
-    assert.ok(html.includes('stock_sales_preview.js?v=20261019-notes-only'));assert.ok(html.includes('stock_sales_controller.js?v=20261019-notes-only'));
-    for(const file of ['stock_order_header','stock_summary','stock_order_controller']){
-      const version=file==='stock_order_controller'?'20261104-selected-month-dashboard-r1':file==='stock_summary'?'20261105-production-cost-r1':'20261104-grade-totals-r1';
-      const expected=new RegExp('<script\\s+src="'+file+'\\.js\\?v='+version+'"><\\/script>','g');
-      assert.equal([...html.matchAll(expected)].length,1,page+' must load exactly one current '+file+' asset');
-      assert.doesNotMatch(html,new RegExp(file+'\\.js\\?v=20261020-monthly-overview'),page+' must not retain a cached dated-stock renderer');
+    const assertVersioned=file=>{
+      const loads=[...html.matchAll(new RegExp('<script\\b[^>]*\\bsrc="('+file+'\\.js[^" ]*)"[^>]*>', 'g'))];
+      assert.equal(loads.length,1,page+' must load exactly one '+file+' asset');
+      const version=loads[0][1].match(new RegExp('^'+file+'\\.js\\?v=([A-Za-z0-9._-]+)$'))?.[1];
+      assert.ok(version,page+' must cache-version '+file);
+      return version;
+    };
+    for(const file of assets){
+      const version=assertVersioned(file);
+      if(sharedVersions.has(file))assert.equal(version,sharedVersions.get(file),'owner and Sales04 must use the same '+file+' release');
+      else sharedVersions.set(file,version);
     }
-    assert.ok(html.indexOf('stock_order_header.js?')<html.indexOf('stock_summary.js?'),'current warehouse adapter must load before summary');
-    assert.equal((html.match(/stock_production_planner\.js\?v=20261105-production-cost-r1/g)||[]).length,1);
-    assert.ok(html.indexOf('stock_production_planner.js?')<html.indexOf('stock_summary.js?'),'production estimator loads before summary');
-    assert.ok(html.includes('stock_readiness.js?v=20261103-stock-readiness-r1'));assert.ok(html.indexOf('stock_readiness.js?')<html.indexOf('stock_summary.js?'));
-    assert.ok(html.includes('stock_review_notes_bridge.js?v=20261103-saved-registry-r1'));
-    assert.ok(html.includes('stock_order_review.js?v=20261104-three-sales-groups-r1'));
-    for(const asset of ['stock_sales_groups','stock_sales_groups_view']){
-      assert.equal((html.match(new RegExp(asset+'\\.js\\?v=20261104-three-sales-groups-r1','g'))||[]).length,1);
-      assert.ok(html.indexOf(asset+'.js?')<html.indexOf('stock_order_review.js?'),'grouping dependencies load before review');
+    for(const [dependency,consumer] of [
+      ['stock_sales_preview','stock_sales_controller'],['stock_sales_groups','stock_current_sales_groups'],['stock_sales_receipts','stock_current_sales_groups'],
+      ['stock_current_sales_groups','stock_order_header'],['stock_sales_groups','stock_sales_groups_view'],['stock_sales_receipts','stock_sales_groups_view'],
+      ['stock_sales_groups_view','stock_order_review'],['stock_review_notes_bridge','stock_order_review'],['stock_order_review','stock_order_controller'],
+      ['stock_order_header','stock_summary'],['stock_production_planner','stock_summary'],['stock_readiness','stock_summary']
+    ]){
+      assert.ok(html.indexOf(dependency+'.js?')<html.indexOf(consumer+'.js?'),dependency+' must load before '+consumer);
     }
+    const reader=page==='stock_report'?'stock_report':'stock_shared';assertVersioned(reader);
+    assert.ok(html.indexOf('stock_summary.js?')<html.indexOf(reader+'.js?'),'summary and readers retain their initialization order');
     assert.ok(html.includes('rel="manifest" href="manifest.webmanifest"'),'preserve the newer shortcut icon release');
   }
-  assert.match(fs.readFileSync(new URL('../stock_report.html',import.meta.url),'utf8'),/stock_report.js\?v=20261103-current-month-review-r1/);
-  assert.match(fs.readFileSync(new URL('../stock_manager.html',import.meta.url),'utf8'),/stock_shared.js\?v=20261103-current-month-review-r1/);
 });
 test('existing refresh lifecycle synchronizes both views and checks month before dirty or busy guards without adding timers',()=>{
   const shared=fs.readFileSync(new URL('../stock_shared.js',import.meta.url),'utf8');
