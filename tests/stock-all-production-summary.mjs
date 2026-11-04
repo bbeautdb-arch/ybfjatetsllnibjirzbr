@@ -136,6 +136,16 @@ test('scenario inputs and money use the requested formulas without writes or rou
   assert.equal(JSON.stringify(m),before);
 });
 
+test('daily capacity clearly labels the average 4x8 2.5mm equivalent sheets per day',()=>{
+  const {api,m}=build(),html=api.renderAllProduction(m);
+  const control=html.match(/<label>[^<]*<input\b[^>]*data-production-setting="dailyCapacitySheets"[^>]*><small>[^<]*<\/small><\/label>/)?.[0];
+  assert.ok(control,'daily capacity input and its visible label');
+  assert.match(control,/^<label>กำลังผลิตเฉลี่ย<input/);
+  assert.match(control,/<small>แผ่นเทียบ 4×8 หนา 2\.5 มม\. \/ วัน<\/small>/);
+  assert.match(control,/aria-label="กำลังผลิตเฉลี่ย แผ่นเทียบ 4×8 หนา 2\.5 มม\. \/ วัน"/);
+  assert.match(control,/value="17500"/);
+});
+
 function datedModel(){
   const api=runtime({currentMonthSoldView:()=>null,currentAllocationView:v=>v,warehouseProjection:()=>({})}),m=api.buildModel(data(),calculate);
   const source={page:9,sourceIsLive:false,checksum:'sha256:'+'a'.repeat(64),capturedAt:'2000-06-02T00:00:00Z'},stock={revision:7,reportDate:'2000-06-02',planChecksum:'sha256:'+'b'.repeat(64),planCapturedAt:'2000-06-02T00:00:01Z'};

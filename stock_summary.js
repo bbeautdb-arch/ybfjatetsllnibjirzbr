@@ -27,7 +27,7 @@
   const expandedThicknessProduction=new Set();
   // Scenario inputs are browser-memory estimates, never saved catalog prices.
   const productionSettings={woodPricePerTonne:'1550',dailyCapacitySheets:'17500',fuelPricePerTonne:'1050',fuelTonnesPerDay:'80'};
-  const productionSettingLabels={woodPricePerTonne:['ราคาไม้ยูคา','บาท / ตัน'],dailyCapacitySheets:['กำลังผลิต','แผ่นเทียบ / วัน'],fuelPricePerTonne:['ราคาเชื้อเพลิง','บาท / ตัน'],fuelTonnesPerDay:['ใช้เชื้อเพลิง','ตัน / วัน']};
+  const productionSettingLabels={woodPricePerTonne:['ราคาไม้ยูคา','บาท / ตัน'],dailyCapacitySheets:['กำลังผลิตเฉลี่ย','แผ่นเทียบ 4×8 หนา 2.5 มม. / วัน'],fuelPricePerTonne:['ราคาเชื้อเพลิง','บาท / ตัน'],fuelTonnesPerDay:['ใช้เชื้อเพลิง','ตัน / วัน']};
 
   // Saved stock prices are independent of the sales-allocation package. Exact
   // identity is required; never apply yesterday's prices/quantities as today's
