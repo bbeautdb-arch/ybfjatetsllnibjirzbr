@@ -12,6 +12,7 @@
   const valid = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
   const zero = () => ({THB: 0, USD: 0});
   const units = () => ({sheet: 0, strip: 0});
+  const physicalItemKey=(w,l,t,grade,unit)=>JSON.stringify([Math.min(Number(w),Number(l)),Math.max(Number(w),Number(l)),Number(t),String(grade??'').trim(),unit]);
   const requireValue = (condition, message) => {if (!condition) throw new Error(message);};
   const add = (target, currency, value) => {requireValue(['THB','USD'].includes(currency) && valid(value), 'ข้อมูลมูลค่าไม่ครบ'); target[currency] += value;};
   const quantity = rows => rows.reduce((out, row) => {requireValue(['sheet','strip'].includes(row.unit) && valid(row.qty), 'ข้อมูลจำนวนไม่ครบ'); out[row.unit] += row.qty; return out;}, units());
@@ -271,6 +272,7 @@
     const physical = bucket(), free = bucket(), catalogVerified = !!stock.savedCatalog;
     const reservationTotals={demand:units(),allocated:units(),shortage:units(),manualFreeDelta:units()};let manualFreeOverrideCount=0;
     let physicalKnown = 0, freeKnown = 0;
+    const freeValueItems={};
     for (const row of stock.rows) {
       requireValue(typeof row.key === 'string' && row.key && !keys.has(row.key), 'ทะเบียนสต๊อกซ้ำหรือไม่มีรหัส');
       keys.add(row.key);
@@ -288,6 +290,15 @@
         target.eq4x8 += qty * area; target.eq25 += qty * area * Number(row.t) / 2.5;
         const priced = catalogVerified && valid(row.catalogPrice) && row.catalogPrice > 0 &&
           ['THB','USD'].includes(row.catalogCurrency) && valid(row[valueField]);
+        if(field==='freeQty'){
+          // catalogFreeValue is already THB, decorated by the exact saved
+          // catalog and evidenced FX. Never use Page09 or legacy row prices.
+          const key=physicalItemKey(row.w,row.l,row.t,row.grade,row.unit);
+          const item=freeValueItems[key]||(freeValueItems[key]={freeQty:0,valueTHB:0,knownValueTHB:0,unknownPriceRows:0});
+          item.freeQty+=qty;
+          if(priced){item.knownValueTHB+=row[valueField];if(item.valueTHB!==null)item.valueTHB+=row[valueField];}
+          else {item.valueTHB=null;item.unknownPriceRows++;}
+        }
         if (qty > 0 && !priced) {target.unknownQuantity[row.unit] += qty; target.unpricedSpecCount++;}
         if (priced) {
           if (qty > 0) target.valuedSpecCount++;
@@ -302,7 +313,8 @@
       target.knownValueTHB = catalogVerified && (target.complete || target.valuedSpecCount > 0) ? known : null;
       target.value = target.complete ? {equivalentTHB: known} : null;
     }
-    physical.composition={...physicalComposition(stock.rows),stockReportDate:stock.reportDate,stockRevision:stock.revision};
+    physical.composition={...physicalComposition(stock.rows),stockReportDate:stock.reportDate,stockRevision:stock.revision,
+      freeValuation:{catalogRevision:stock.savedCatalog?.catalogRevision??null,fx:stock.headerExchangeRate||null,knownValueTHB:free.knownValueTHB,items:freeValueItems}};
     return {physical,free,stockReportDate:stock.reportDate,stockRevision:stock.revision,
       catalogRevision:stock.savedCatalog?.catalogRevision ?? null,stockUpdatedAt:stock.updatedAt || '',
       fx:stock.headerExchangeRate || null,source:'current-central-saved-stock',queueApplied:false,
@@ -331,7 +343,7 @@
     if(group.unknownGrade.quantity>0)entries.push(`<span class="ss-physical-grade ss-overview-warning">ยังไม่ระบุเกรด ${physicalNumber(group.unknownGrade[field],field)} ${esc(unit)} · รอตรวจ</span>`);
     return entries.length?`<small class="ss-physical-grades"${field==='quantity'?'':' data-grade-quantity-basis="equivalent"'}>เกรด: ${entries.join(' · ')}</small>`:'';
   };
-  function physicalGradeDetailsHTML(group,unit,freeBound){
+  function physicalGradeDetailsHTML(group,unit,freeBound,freeValuation,valueBound){
     const entries=group.grades.map(g=>{
       const items=g.items,close=(a,b)=>valid(a)&&valid(b)&&Math.abs(a-b)<=Math.max(1e-6,Math.abs(b)*1e-12);
       const complete=Array.isArray(items)&&items.length>0&&items.every(i=>[i.w,i.l,i.t].every(v=>valid(v)&&v>0)&&valid(i.quantity)&&['sheet','strip'].includes(i.unit))&&close(items.reduce((s,i)=>s+i.quantity,0),g.quantity);
@@ -341,9 +353,12 @@
       const rows=items.map(i=>{
         const size=i.w+' × '+i.l,heading=size!==previousSize?`<div class="ss-physical-item-size">${esc(size)} มม.</div>`:'';previousSize=size;
         const knownFree=freeBound&&valid(i.freeQty);
-        return `${heading}<div class="ss-physical-item" data-physical-item="${esc([i.w,i.l,i.t,i.unit].join('|'))}"><span>${esc(i.t)} <small>มม.</small></span><b data-item-physical>${physicalNumber(i.quantity,'quantity')}</b><b class="ss-physical-item-free${knownFree?'':' ss-overview-warning'}" data-item-free>${knownFree?physicalNumber(i.freeQty,'quantity'):'รอยืนยัน'}</b></div>`;
+        const valuation=freeValuation?.items?.[physicalItemKey(i.w,i.l,i.t,g.grade,i.unit)];
+        const knownValue=knownFree&&valueBound&&valuation?.unknownPriceRows===0&&close(valuation.freeQty,i.freeQty)&&close(valuation.valueTHB,valuation.knownValueTHB);
+        const valueText=!knownFree?'รอยืนยัน':knownValue?money(valuation.valueTHB):'รอราคา/FX';
+        return `${heading}<div class="ss-physical-item" data-physical-item="${esc([i.w,i.l,i.t,i.unit].join('|'))}"><span>${esc(i.t)} <small>มม.</small></span><b data-item-physical>${physicalNumber(i.quantity,'quantity')}</b><b class="ss-physical-item-free${knownFree?'':' ss-overview-warning'}" data-item-free>${knownFree?physicalNumber(i.freeQty,'quantity'):'รอยืนยัน'}</b><b class="ss-physical-item-value${knownValue?'':' ss-overview-warning'}" data-item-free-value>${valueText}</b></div>`;
       }).join('');
-      return `<details class="ss-physical-grade-detail" data-physical-grade="${esc(g.grade)}"><summary aria-label="ดูขนาดและความหนา เกรด ${esc(g.grade)} ${esc(unit)}"><span>${label}</span><small>ดูความหนา</small></summary><div class="ss-physical-items"><div class="ss-physical-item-head"><span>หนา</span><span>สต๊อก · ${esc(unit)}</span><span>Free ที่บันทึก</span></div>${rows}</div></details>`;
+      return `<details class="ss-physical-grade-detail" data-physical-grade="${esc(g.grade)}"><summary aria-label="ดูขนาดและความหนา เกรด ${esc(g.grade)} ${esc(unit)}"><span>${label}</span><small>ดูความหนา</small></summary><div class="ss-physical-items"><div class="ss-physical-item-head"><span>หนา</span><span>สต๊อก · ${esc(unit)}</span><span>Free ที่บันทึก</span><span>มูลค่า Free<br>ประเมิน · บาท</span></div>${rows}<small class="ss-physical-value-note">ราคาสต๊อกที่บันทึก · ไม่ใช่ราคาขายจริง</small></div></details>`;
     });
     if(group.unknownGrade.quantity>0)entries.push(`<small class="ss-overview-warning">ยังไม่ระบุเกรด ${physicalNumber(group.unknownGrade.quantity,'quantity')} ${esc(unit)} · รอตรวจ</small>`);
     return entries.length?'<div class="ss-physical-grade-list"><small class="ss-physical-grade-hint">เกรด: กดดูขนาด / ความหนา / Free</small>'+entries.join('')+'</div>':'';
@@ -358,10 +373,14 @@
     }
     const close=(a,b)=>valid(a)&&valid(b)&&Math.abs(a-b)<=Math.max(1e-6,Math.abs(b)*1e-12);
     const freeBound=c.stockReportDate===current?.stockReportDate&&c.stockRevision===current?.stockRevision&&['sheet','strip'].every(u=>close(c.savedFreeQuantity?.[u],current?.free?.quantity?.[u])&&close(itemFree[u],c.savedFreeQuantity[u]));
+    const valuation=c.freeValuation,fxIdentity=fx=>fx?JSON.stringify([fx.rate,fx.date,fx.status,fx.basis]):'none';
+    const valueBound=freeBound&&current?.catalogRevision!==null&&current?.catalogRevision!==undefined&&valuation?.catalogRevision===current.catalogRevision&&
+      fxIdentity(valuation.fx)===fxIdentity(current.fx)&&close(valuation.knownValueTHB,current.free?.knownValueTHB)&&
+      close(Object.values(valuation.items||{}).reduce((sum,item)=>sum+item.knownValueTHB,0),valuation.knownValueTHB);
     const definitions=[['normal','แผ่นปกติ 1220×2440 · ในยอดแผ่นรวม','แผ่น'],['nonstandard','ไม่ใช่ขนาดปกติ · ในยอดแผ่นรวม','แผ่น'],['strip','ไม้แถบ · แยกจากยอดแผ่น','ชิ้น']];
     const basis=`รายงาน ${esc(current?.stockReportDate||'รอยืนยัน')}${current?.stockRevision!==undefined?' · รุ่น '+esc(current.stockRevision):''}`;
     const warning=!freeBound?'Free รายรายการยังรอยืนยันฐานเดียวกับยอดรวม':verified?'Free ตามแผนที่บันทึก · ไม่ใช่การยืนยันพร้อมโหลด':'Free ที่บันทึก · ยังรอยืนยันกับยอดขายล่าสุด';
-    return '<div class="ss-physical-composition">'+definitions.filter(([id])=>id!=='strip'||c.groups.strip.quantity>0||c.groups.strip.grades.length).map(([id,label,unit])=>{const g=c.groups[id];return `<div class="ss-physical-group" data-physical-group="${id}"><div class="ss-physical-group-heading"><span>${esc(label)}</span><b>${physicalNumber(g.quantity,'quantity')} ${esc(unit)}</b></div>${physicalGradeDetailsHTML(g,unit,freeBound)}</div>`;}).join('')+`<small class="ss-physical-subset-note">ส่วนย่อยของยอดรวม ไม่บวกเพิ่ม · ${basis}</small><small class="ss-physical-free-basis${verified&&freeBound?'':' ss-overview-warning'}" role="status">${warning}</small></div>`;
+    return '<div class="ss-physical-composition">'+definitions.filter(([id])=>id!=='strip'||c.groups.strip.quantity>0||c.groups.strip.grades.length).map(([id,label,unit])=>{const g=c.groups[id];return `<div class="ss-physical-group" data-physical-group="${id}"><div class="ss-physical-group-heading"><span>${esc(label)}</span><b>${physicalNumber(g.quantity,'quantity')} ${esc(unit)}</b></div>${physicalGradeDetailsHTML(g,unit,freeBound,valuation,valueBound)}</div>`;}).join('')+`<small class="ss-physical-subset-note">ส่วนย่อยของยอดรวม ไม่บวกเพิ่ม · ${basis}</small><small class="ss-physical-free-basis${verified&&freeBound?'':' ss-overview-warning'}" role="status">${warning}</small></div>`;
   }
   function physicalEquivalentsHTML(physical){
     const c=boundPhysicalComposition(physical);
