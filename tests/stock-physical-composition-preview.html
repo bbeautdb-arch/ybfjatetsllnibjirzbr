@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Synthetic Physical Free value preview</title>
-  <link rel="stylesheet" href="../stock_premium.css?v=20261104-factory-glass-r1">
+  <link rel="stylesheet" href="../stock_premium.css?v=20261105-free-category-r1">
   <style>
     .fixture-notice{max-width:1460px;margin:0 auto 20px;padding:17px 21px;border:1px solid #d9c397;border-radius:18px;background:#fff5de;color:#51472e;font:14px/1.7 system-ui,sans-serif}.fixture-notice h1{margin:0;font-size:19px}.fixture-notice p{margin:7px 0}.fixture-actions{display:flex;gap:9px;flex-wrap:wrap}.fixture-actions button{padding:9px 13px;border:1px solid #b4c4aa;border-radius:12px;color:#2e4839;background:#fffdf5;font:inherit;cursor:pointer}.fixture-actions button[aria-pressed="true"]{background:#dfead6;border-color:#688f70}.fixture-actions button:focus-visible{outline:3px solid #276f69;outline-offset:3px}#fixture-status{font-size:12px}#stock-summary .ss-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}@media(max-width:700px){#stock-summary .ss-kpis{grid-template-columns:1fr}.fixture-notice{padding:14px 16px}}
   </style>
@@ -17,8 +17,8 @@
     <p id="fixture-status" role="status"></p>
   </header>
   <main class="report-shell"><div id="stock-summary" data-aaf-stock-summary></div></main>
-  <script src="../stock_order_header.js?v=20261104-grade-totals-r1"></script>
-  <script src="../stock_summary.js?v=20261104-grade-totals-r1"></script>
+  <script src="../stock_order_header.js?v=20261105-free-category-r1"></script>
+  <script src="../stock_summary.js?v=20261105-free-category-r1"></script>
   <script>
     // Pure synthetic saved rows. No fetch, account, storage, or business writes.
     const row=(key,w,l,t,grade,qty,freeQty,unit='sheet')=>({key,w,l,t,grade,qty,unit,committedQty:0,freeQty});

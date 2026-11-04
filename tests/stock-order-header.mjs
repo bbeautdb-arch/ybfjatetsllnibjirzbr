@@ -121,7 +121,13 @@ test('current stock is visible before the monthly review or price catalog arrive
   assert.equal(current.physical.knownValueTHB,null);assert.equal(current.free.knownValueTHB,null);
   assert.match(cardSection(html,'physical'),/<strong>73<\/strong>/);assert.match(cardSection(html,'free'),/<strong>29<\/strong>/);
   assert.match(cardSection(html,'sold'),/รอข้อมูลขายเดือน/);assert.match(cardSection(html,'reserved'),/รอยืนยันยอดจองเดือนนี้/);
-  assert.match(cardSection(html,'physical'),/รอยืนยันชุดราคาหรือเรทส่วนกลาง/);assert.doesNotMatch(cardSection(html,'physical'),/฿ 0(?:[< ·]|$)/);
+  const physical=cardSection(html,'physical');
+  assert.match(physical,/รอยืนยันชุดราคาหรือเรทส่วนกลาง/);
+  // Positive warehouse totals must stay unknown, but a verified empty size
+  // category genuinely has zero Free value without inventing a unit price.
+  const valuePanels=[...physical.matchAll(/<div class="ss-overview-value(?: ss-physical-free-estimate)?"[^>]*>([\s\S]*?)<\/div>/g)];
+  assert.ok(valuePanels.length>=2);for(const [,panel] of valuePanels)assert.doesNotMatch(panel,/฿ 0(?:[< ·]|$)/);
+  assert.match(physical,/data-category-free-summary="nonstandard"[\s\S]*?data-category-free-quantity>0 แผ่น[\s\S]*?data-category-free-value>≈ ฿ 0/);
 });
 
 test('wrong catalog revision, date or per-spec quantity cannot value the current warehouse',()=>{

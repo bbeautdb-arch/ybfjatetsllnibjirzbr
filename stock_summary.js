@@ -1219,6 +1219,18 @@
     [data-aaf-stock-summary] .ss-overview-value{border-top:1px solid #c6d7df;padding-top:7px;display:grid;gap:2px}
     [data-aaf-stock-summary] .ss-overview-value>span{font-size:11px}
     [data-aaf-stock-summary] .ss-overview-value>b{font-size:23px;line-height:1.35;color:#183e56;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+    [data-aaf-stock-summary] .ss-overview-value-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+    [data-aaf-stock-summary] .ss-overview-value-pair .ss-overview-value{min-width:0}
+    [data-aaf-stock-summary] .ss-overview-value-pair .ss-overview-value>b{font-size:20px}
+    [data-aaf-stock-summary] .ss-physical-free-estimate{color:#17623e}
+    [data-aaf-stock-summary] .ss-category-free-summary{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 12px;border-radius:9px;padding:8px 10px;margin-top:7px;background:#edf7ee;color:#17623e;font-size:12px}
+    [data-aaf-stock-summary] .ss-category-free-summary b{font-variant-numeric:tabular-nums}
+    [data-aaf-stock-summary] .ss-category-free-summary>div{display:grid;gap:2px}
+    [data-aaf-stock-summary] .ss-category-free-summary>div>span{font-size:10px}
+    [data-aaf-stock-summary] .ss-category-free-summary>div>b{font-size:13px}
+    [data-aaf-stock-summary] .ss-category-free-value{text-align:right;margin-left:auto}
+    [data-aaf-stock-summary] .ss-category-free-value small{display:block;line-height:1.5;font-weight:500}
+    @media(max-width:520px){[data-aaf-stock-summary] .ss-overview-value-pair{grid-template-columns:1fr;gap:8px}}
     [data-aaf-stock-summary] .ss-overview-breakdown{display:grid;gap:4px}
     [data-aaf-stock-summary] .ss-overview-row{display:flex;justify-content:space-between;align-items:baseline;gap:3px 12px;font-size:11px;flex-wrap:wrap}
     [data-aaf-stock-summary] .ss-overview-row>b{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right;margin-left:auto}

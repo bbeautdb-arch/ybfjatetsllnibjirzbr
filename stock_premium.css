@@ -81,6 +81,9 @@
   body[data-aaf-premium] #stock-summary .ss-overview-quantity small { font-size: 12px; }
   body[data-aaf-premium] #stock-summary .ss-overview-value { border-color: #d1ddce; padding-top: 12px; gap: 4px; }
   body[data-aaf-premium] #stock-summary .ss-overview-value>b { font-size: clamp(22px,2.1vw,29px); color: #264f3e; letter-spacing: -.02em; }
+  body[data-aaf-premium] #stock-summary .ss-overview-value-pair .ss-overview-value>b { font-size: clamp(18px,1.7vw,24px); }
+  body[data-aaf-premium] #stock-summary .ss-physical-free-estimate>b { color: #147147; }
+  body[data-aaf-premium] #stock-summary .ss-category-free-summary { background: #eaf5e9c9; border: 1px solid #d3e5d1; }
   body[data-aaf-premium] #stock-summary .ss-overview-breakdown { gap: 7px; }
   body[data-aaf-premium] #stock-summary .ss-overview-row { font-size: 12px; gap: 4px 14px; }
   body[data-aaf-premium] #stock-summary .ss-overview-row>b { font-size: 13px; }
