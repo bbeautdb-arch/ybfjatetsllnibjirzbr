@@ -68,16 +68,37 @@ test('DTO drops unknown properties and money; pending reason is escaped; rollove
 });
 
 function runtime(){
-  let html='',cardsHTML='',rootWrites=0;const replacements=[],source={textContent:''},status={textContent:'',classList:{add(){}}};
-  const cards={get innerHTML(){return cardsHTML;},set innerHTML(v){cardsHTML=v;},querySelectorAll:()=>[]};
-  const root={classList:{remove(){}},addEventListener(){},querySelectorAll:()=>[],get innerHTML(){return html;},set innerHTML(v){html=v;rootWrites++;},querySelector(selector){
+  let html='',cardsHTML='',rootWrites=0,basisNodes=[],cardNodes=new Map(),editor=null,table=null;const replacements=[],source={textContent:''},status={textContent:'',classList:{add(){}}};
+  const basisPattern=()=>/<small class="(ss-physical-free-basis[^"]*)" role="status">([^<]*)<\/small>/g;
+  const decode=value=>value.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+  const escape=value=>String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const basisValues=markup=>[...markup.matchAll(basisPattern())].map(match=>({className:match[1],textContent:decode(match[2])}));
+  function changeBasis(index,field,value){
+    let current=0;
+    cardsHTML=cardsHTML.replace(basisPattern(),(markup,className,text)=>{
+      if(current++!==index)return markup;
+      return '<small class="'+escape(field==='className'?value:className)+'" role="status">'+(field==='textContent'?escape(value):text)+'</small>';
+    });
+  }
+  const newCard=id=>({get outerHTML(){return card(cardsHTML,id);},replaceWith(value){cardsHTML=cardsHTML.replace(card(cardsHTML,id),value.outerHTML);cardNodes.set(id,newCard(id));replacements.push(id);}});
+  const cards={get innerHTML(){return cardsHTML;},set innerHTML(v){
+    cardsHTML=v;cardNodes=new Map(['physical','sold','reserved','free'].filter(id=>card(v,id)).map(id=>[id,newCard(id)]));
+    basisNodes=basisValues(v).map((unused,index)=>({
+      get textContent(){return basisValues(cardsHTML)[index].textContent;},set textContent(value){changeBasis(index,'textContent',value);},
+      get className(){return basisValues(cardsHTML)[index].className;},set className(value){changeBasis(index,'className',value);}
+    }));
+  },querySelectorAll:selector=>selector==='.ss-physical-free-basis'?basisNodes:[]};
+  const root={classList:{remove(){}},addEventListener(){},querySelectorAll:selector=>selector==='.ss-physical-free-basis'?basisNodes:[],get innerHTML(){return html;},set innerHTML(v){html=v;rootWrites++;editor={value:'synthetic unsaved note',selectionStart:8,selectionEnd:12};table={rows:'synthetic saved-stock rows'};},querySelector(selector){
     if(selector==='.ss-kpis')return cards;if(selector==='.ss-status')return status;if(selector==='.ss-sales-summary-source')return source;if(selector==='.ss-overview-source')return{textContent:''};
-    const match=selector.match(/^\.ss-kpis \[data-stock-card="([^"]+)"\]$/);if(match)return{replaceWith(value){cardsHTML=cardsHTML.replace(card(cardsHTML,match[1]),value.outerHTML);replacements.push(match[1]);}};
+    const match=selector.match(/^\.ss-kpis \[data-stock-card="([^"]+)"\]$/);if(match)return cardNodes.get(match[1])||null;
     if(selector==='.ss-download')return{addEventListener(){}};if(selector==='.ss-sheet')return{remove(){html='';cardsHTML='';}};return null;
   }};
   const window={AAFOrderHeader:api};
-  vm.runInNewContext(fs.readFileSync(new URL('../stock_summary.js',import.meta.url),'utf8'),{window,document:{getElementById:()=>root,createElement:()=>({innerHTML:'',querySelector(selector){const id=selector.match(/data-stock-card="([^"]+)"/)[1];return{outerHTML:card(this.innerHTML,id)};}}),head:{append(){}}},location:{hash:''}});
-  return {summary:window.AAFStockSummary,replacements,source,get cards(){return cardsHTML;},get rootWrites(){return rootWrites;},get html(){return html;}};
+  vm.runInNewContext(fs.readFileSync(new URL('../stock_summary.js',import.meta.url),'utf8'),{window,document:{getElementById:()=>root,createElement:()=>({innerHTML:'',querySelector(selector){
+    if(selector==='.ss-physical-free-basis')return basisValues(this.innerHTML)[0]||null;
+    const match=selector.match(/^\[data-stock-card="([^"]+)"\]$/);return match?{outerHTML:card(this.innerHTML,match[1])}:null;
+  }}),head:{append(){}}},location:{hash:''}});
+  return {summary:window.AAFStockSummary,replacements,source,get cards(){return cardsHTML;},get rootWrites(){return rootWrites;},get html(){return html;},get basisNodes(){return basisNodes;},get physicalNode(){return cardNodes.get('physical');},get editor(){return editor;},get table(){return table;}};
 }
 const calc=r=>({eq:r.qty,price:1,curr:'THB',value:r.qty,freeValue:r.freeQty});
 test('source-only lower provenance cannot promote pending allocation and leaves dated saved Physical/Free distinct',()=>{
@@ -107,6 +128,27 @@ test('normalization and same-revision refresh update three current cards without
   h.summary.setOrderReview(null);assert.match(card(h.cards,'reserved'),/<strong>16.25<\/strong>/,'archive callback does not override current DTO');
   h.summary.invalidateCurrentMonthSold();assert.doesNotMatch(card(h.cards,'sold'),/<strong>/);assert.doesNotMatch(card(h.cards,'reserved'),/<strong>/);assert.match(card(h.cards,'free'),/<strong>68<\/strong>/);assert.match(card(h.cards,'free'),/Free นี้ยังเป็นยอดที่บันทึกไว้/);
   h.summary.showError('logout');h.summary.setCurrentMonthSold(f.sold,next);assert.equal(h.html,'');assert.equal(h.cards,'');
+});
+test('same-revision allocation pending/recovery updates both Physical Free warnings without replacing Physical, tables or a draft editor',()=>{
+  const f=fixture(),h=runtime(),before=JSON.stringify(f.stock);
+  h.summary.update(f.stock,calc);h.summary.setOrderReview(null);
+  const physical=h.physicalNode,editor=h.editor,table=h.table,basis=[...h.basisNodes],writes=h.rootWrites;
+  const withoutBasis=markup=>markup.replace(/<small class="ss-physical-free-basis[^"]*" role="status">[^<]*<\/small>/g,'<small>FREE-BASIS</small>');
+  const originalPhysical=withoutBasis(physical.outerHTML),editorBefore={...editor};
+  assert.equal(basis.length,2,'overview and expanded Physical each contain a basis node');
+  for(const node of basis){assert.equal(node.className,'ss-physical-free-basis');assert.match(node.textContent,/Free ตามแผนที่บันทึก · ไม่ใช่การยืนยันพร้อมโหลด/);}
+  h.summary.setCurrentMonthSold(f.sold,{version:1,status:'pending',month:f.sold.month,reason:'Synthetic allocation cutoff pending'});
+  assert.deepEqual(h.replacements,['sold','reserved','free']);assert.equal(h.rootWrites,writes);assert.equal(h.physicalNode,physical);assert.equal(h.editor,editor);assert.equal(h.table,table);assert.deepEqual(editor,editorBefore);
+  for(let i=0;i<2;i++){
+    assert.equal(h.basisNodes[i],basis[i],'basis node identity remains unchanged');
+    assert.equal(basis[i].className,'ss-physical-free-basis ss-overview-warning');
+    assert.match(basis[i].textContent,/Free ที่บันทึก · ยังรอยืนยันกับยอดขายล่าสุด/);
+  }
+  assert.equal(withoutBasis(physical.outerHTML),originalPhysical,'only basis text/class may change in Physical');
+  h.summary.setCurrentMonthSold(f.sold,f.allocation);
+  assert.deepEqual(h.replacements,['sold','reserved','free','sold','reserved','free']);assert.equal(h.rootWrites,writes);assert.equal(h.physicalNode,physical);assert.equal(h.editor,editor);assert.equal(h.table,table);assert.deepEqual(editor,editorBefore);
+  for(const node of basis){assert.equal(node.className,'ss-physical-free-basis');assert.match(node.textContent,/Free ตามแผนที่บันทึก · ไม่ใช่การยืนยันพร้อมโหลด/);}
+  assert.equal(withoutBasis(physical.outerHTML),originalPhysical);assert.equal(JSON.stringify(f.stock),before,'source evidence remains immutable');
 });
 test('a new stock response without allocation does not retain previous reservation figures',()=>{
   const f=fixture(),h=runtime();h.summary.update(f.stock,calc);h.summary.setOrderReview(null);assert.match(card(h.cards,'reserved'),/<strong>15.25<\/strong>/);

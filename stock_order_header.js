@@ -22,8 +22,8 @@
   function physicalComposition(rows) {
     const pending=()=>({status:'pending',reason:'ยังแยกขนาด/หน่วย/เกรดจากสต๊อกที่บันทึกได้ไม่ครบ'});
     if(!Array.isArray(rows)||!rows.length)return pending();
-    const blank=()=>({quantity:0,eq4x8:0,eq25:0,grades:[],unknownGrade:{quantity:0,eq4x8:0,eq25:0},gradesComplete:true});
-    const groups={normal:blank(),nonstandard:blank(),strip:blank()},maps={normal:new Map(),nonstandard:new Map(),strip:new Map()},seen=new Set();
+    const blank=()=>({quantity:0,eq4x8:0,eq25:0,grades:[],unknownGrade:{quantity:0,eq4x8:0,eq25:0,freeQty:0},gradesComplete:true});
+    const groups={normal:blank(),nonstandard:blank(),strip:blank()},maps={normal:new Map(),nonstandard:new Map(),strip:new Map()},seen=new Set(),savedFreeQuantity=units();
     const dimension=value=>(typeof value==='number'||typeof value==='string'&&/^\d+(?:\.\d+)?$/.test(value))&&Number.isFinite(Number(value))&&Number(value)>0;
     const safe=value=>valid(value)&&value<=Number.MAX_SAFE_INTEGER;
     const accumulate=(target,qty,area,volume)=>{target.quantity+=qty;target.eq4x8+=area;target.eq25+=volume;return [target.quantity,target.eq4x8,target.eq25].every(safe);};
@@ -33,18 +33,29 @@
       const w=Number(row.w),l=Number(row.l),t=Number(row.t),kind=row.unit==='strip'?'strip':(w===1220&&l===2440||w===2440&&l===1220)?'normal':'nonstandard';
       const area=row.qty*w*l/(1220*2440),volume=area*t/2.5,group=groups[kind];
       if(!accumulate(group,row.qty,area,volume))return pending();
-      if(row.qty===0)continue;
+      const savedFree=safe(row.freeQty)?row.freeQty:null;
+      savedFreeQuantity[row.unit]=savedFreeQuantity[row.unit]===null||savedFree===null?null:savedFreeQuantity[row.unit]+savedFree;
+      if(savedFreeQuantity[row.unit]!==null&&!safe(savedFreeQuantity[row.unit]))savedFreeQuantity[row.unit]=null;
       const grade=typeof row.grade==='string'?row.grade.trim():'';
       if(grade.length>100||row.grade!==undefined&&row.grade!==null&&typeof row.grade!=='string')return pending();
-      if(!grade){group.gradesComplete=false;if(!accumulate(group.unknownGrade,row.qty,area,volume))return pending();continue;}
-      if(!maps[kind].has(grade))maps[kind].set(grade,{grade,quantity:0,eq4x8:0,eq25:0});
-      if(!accumulate(maps[kind].get(grade),row.qty,area,volume))return pending();
+      if(!grade){if(row.qty>0)group.gradesComplete=false;if(!accumulate(group.unknownGrade,row.qty,area,volume))return pending();group.unknownGrade.freeQty=group.unknownGrade.freeQty===null||savedFree===null?null:group.unknownGrade.freeQty+savedFree;continue;}
+      if(!maps[kind].has(grade))maps[kind].set(grade,{grade,quantity:0,eq4x8:0,eq25:0,items:[]});
+      const gradeGroup=maps[kind].get(grade);
+      if(!accumulate(gradeGroup,row.qty,area,volume))return pending();
+      // Only exactly reversed edges share a display row. Allocation-only near
+      // sizes, different thicknesses, grades and units never merge here.
+      const edges=[w,l].sort((a,b)=>a-b);
+      let item=gradeGroup.items.find(i=>i.w===edges[0]&&i.l===edges[1]&&i.t===t&&i.unit===row.unit);
+      if(!item){item={w:edges[0],l:edges[1],t,unit:row.unit,quantity:0,freeQty:0,rowCount:0};gradeGroup.items.push(item);}
+      item.quantity+=row.qty;item.rowCount++;
+      item.freeQty=item.freeQty===null||savedFree===null?null:item.freeQty+savedFree;
+      if(item.freeQty!==null&&!safe(item.freeQty))item.freeQty=null;
     }
     const order=['AV','AAA','A','B','F','REJ','C','UN','CTS'],rank=g=>order.includes(g)?order.indexOf(g):order.length;
-    for(const kind of Object.keys(groups))groups[kind].grades=[...maps[kind].values()].sort((a,b)=>rank(a.grade)-rank(b.grade)||a.grade.localeCompare(b.grade,'en'));
+    for(const kind of Object.keys(groups))groups[kind].grades=[...maps[kind].values()].filter(g=>g.quantity>0||g.items.some(i=>i.freeQty>0)).sort((a,b)=>rank(a.grade)-rank(b.grade)||a.grade.localeCompare(b.grade,'en')).map(g=>({...g,items:g.items.sort((a,b)=>a.w-b.w||a.l-b.l||a.t-b.t)}));
     const quantity={sheet:groups.normal.quantity+groups.nonstandard.quantity,strip:groups.strip.quantity},eq4x8=groups.normal.eq4x8+groups.nonstandard.eq4x8+groups.strip.eq4x8,eq25=groups.normal.eq25+groups.nonstandard.eq25+groups.strip.eq25;
     if(![quantity.sheet,quantity.strip,eq4x8,eq25].every(safe))return pending();
-    return {status:'verified-quantities',quantity,eq4x8,eq25,groups,gradesComplete:Object.values(groups).every(g=>g.gradesComplete)};
+    return {status:'verified-quantities',quantity,eq4x8,eq25,savedFreeQuantity,groups,gradesComplete:Object.values(groups).every(g=>g.gradesComplete)};
   }
   const totalTHB = (native, fx) => native && valid(native.THB) && valid(native.USD) && valid(fx) && fx > 0 ? native.THB + native.USD * fx : null;
   const money = value => value === null || !valid(value) ? 'ยังยืนยันไม่ได้' : '≈ ฿ ' + n(value);
@@ -226,7 +237,7 @@
     requireValue(soldRows.length + otherRows.length + waitingRows.length === rows.length, 'แบ่งกลุ่มเดือนที่เลือกไม่ครบ');
     const stockRows = review.stockPools || [];
     requireValue(stockRows.length > 0, 'ยังไม่มีฐานคลังที่ตรวจไว้');
-    const physicalRows = stockRows.map(row => ({...row, qty: row.physical}));
+    const physicalRows = stockRows.map(row => ({...row, qty: row.physical, freeQty: row.free}));
     const freeRows = stockRows.map(row => ({...row, qty: row.free}));
     const value = review.reconciliation?.headerStockValuations || {};
     const fx = financial.metadata.fx;
@@ -291,7 +302,7 @@
       target.knownValueTHB = catalogVerified && (target.complete || target.valuedSpecCount > 0) ? known : null;
       target.value = target.complete ? {equivalentTHB: known} : null;
     }
-    physical.composition=physicalComposition(stock.rows);
+    physical.composition={...physicalComposition(stock.rows),stockReportDate:stock.reportDate,stockRevision:stock.revision};
     return {physical,free,stockReportDate:stock.reportDate,stockRevision:stock.revision,
       catalogRevision:stock.savedCatalog?.catalogRevision ?? null,stockUpdatedAt:stock.updatedAt || '',
       fx:stock.headerExchangeRate || null,source:'current-central-saved-stock',queueApplied:false,
@@ -320,11 +331,37 @@
     if(group.unknownGrade.quantity>0)entries.push(`<span class="ss-physical-grade ss-overview-warning">ยังไม่ระบุเกรด ${physicalNumber(group.unknownGrade[field],field)} ${esc(unit)} · รอตรวจ</span>`);
     return entries.length?`<small class="ss-physical-grades"${field==='quantity'?'':' data-grade-quantity-basis="equivalent"'}>เกรด: ${entries.join(' · ')}</small>`:'';
   };
-  function physicalCompositionHTML(physical){
+  function physicalGradeDetailsHTML(group,unit,freeBound){
+    const entries=group.grades.map(g=>{
+      const items=g.items,close=(a,b)=>valid(a)&&valid(b)&&Math.abs(a-b)<=Math.max(1e-6,Math.abs(b)*1e-12);
+      const complete=Array.isArray(items)&&items.length>0&&items.every(i=>[i.w,i.l,i.t].every(v=>valid(v)&&v>0)&&valid(i.quantity)&&['sheet','strip'].includes(i.unit))&&close(items.reduce((s,i)=>s+i.quantity,0),g.quantity);
+      const label=`${esc(g.grade)} ${physicalNumber(g.quantity,'quantity')} ${esc(unit)}`;
+      if(!complete)return `<div class="ss-physical-grade">${label}<small class="ss-overview-warning"> รายละเอียดรายความหนารอยืนยัน</small></div>`;
+      let previousSize='';
+      const rows=items.map(i=>{
+        const size=i.w+' × '+i.l,heading=size!==previousSize?`<div class="ss-physical-item-size">${esc(size)} มม.</div>`:'';previousSize=size;
+        const knownFree=freeBound&&valid(i.freeQty);
+        return `${heading}<div class="ss-physical-item" data-physical-item="${esc([i.w,i.l,i.t,i.unit].join('|'))}"><span>${esc(i.t)} <small>มม.</small></span><b data-item-physical>${physicalNumber(i.quantity,'quantity')}</b><b class="ss-physical-item-free${knownFree?'':' ss-overview-warning'}" data-item-free>${knownFree?physicalNumber(i.freeQty,'quantity'):'รอยืนยัน'}</b></div>`;
+      }).join('');
+      return `<details class="ss-physical-grade-detail" data-physical-grade="${esc(g.grade)}"><summary aria-label="ดูขนาดและความหนา เกรด ${esc(g.grade)} ${esc(unit)}"><span>${label}</span><small>ดูความหนา</small></summary><div class="ss-physical-items"><div class="ss-physical-item-head"><span>หนา</span><span>สต๊อก · ${esc(unit)}</span><span>Free ที่บันทึก</span></div>${rows}</div></details>`;
+    });
+    if(group.unknownGrade.quantity>0)entries.push(`<small class="ss-overview-warning">ยังไม่ระบุเกรด ${physicalNumber(group.unknownGrade.quantity,'quantity')} ${esc(unit)} · รอตรวจ</small>`);
+    return entries.length?'<div class="ss-physical-grade-list"><small class="ss-physical-grade-hint">เกรด: กดดูขนาด / ความหนา / Free</small>'+entries.join('')+'</div>':'';
+  }
+  function physicalCompositionHTML(physical,current,verified){
     const c=boundPhysicalComposition(physical);
     if(!c)return '<div class="ss-physical-composition"><small class="ss-overview-warning" role="status">รายละเอียดขนาดและเกรดยังรอยืนยัน · ไม่เติมยอดส่วนย่อยเป็น 0</small></div>';
+    const itemFree=units();
+    for(const [kind,g] of Object.entries(c.groups)){
+      const unit=kind==='strip'?'strip':'sheet',values=[g.unknownGrade.freeQty,...g.grades.flatMap(grade=>grade.items?.map(i=>i.freeQty)||[null])];
+      for(const value of values)itemFree[unit]=itemFree[unit]===null||!valid(value)?null:itemFree[unit]+value;
+    }
+    const close=(a,b)=>valid(a)&&valid(b)&&Math.abs(a-b)<=Math.max(1e-6,Math.abs(b)*1e-12);
+    const freeBound=c.stockReportDate===current?.stockReportDate&&c.stockRevision===current?.stockRevision&&['sheet','strip'].every(u=>close(c.savedFreeQuantity?.[u],current?.free?.quantity?.[u])&&close(itemFree[u],c.savedFreeQuantity[u]));
     const definitions=[['normal','แผ่นปกติ 1220×2440 · ในยอดแผ่นรวม','แผ่น'],['nonstandard','ไม่ใช่ขนาดปกติ · ในยอดแผ่นรวม','แผ่น'],['strip','ไม้แถบ · แยกจากยอดแผ่น','ชิ้น']];
-    return '<div class="ss-physical-composition">'+definitions.filter(([id])=>id!=='strip'||c.groups.strip.quantity>0).map(([id,label,unit])=>{const g=c.groups[id];return `<div class="ss-physical-group" data-physical-group="${id}"><div class="ss-physical-group-heading"><span>${esc(label)}</span><b>${physicalNumber(g.quantity,'quantity')} ${esc(unit)}</b></div>${physicalGradesHTML(g,'quantity',unit)}</div>`;}).join('')+'<small class="ss-physical-subset-note">ส่วนย่อยของยอดรวม ไม่บวกเพิ่ม</small></div>';
+    const basis=`รายงาน ${esc(current?.stockReportDate||'รอยืนยัน')}${current?.stockRevision!==undefined?' · รุ่น '+esc(current.stockRevision):''}`;
+    const warning=!freeBound?'Free รายรายการยังรอยืนยันฐานเดียวกับยอดรวม':verified?'Free ตามแผนที่บันทึก · ไม่ใช่การยืนยันพร้อมโหลด':'Free ที่บันทึก · ยังรอยืนยันกับยอดขายล่าสุด';
+    return '<div class="ss-physical-composition">'+definitions.filter(([id])=>id!=='strip'||c.groups.strip.quantity>0||c.groups.strip.grades.length).map(([id,label,unit])=>{const g=c.groups[id];return `<div class="ss-physical-group" data-physical-group="${id}"><div class="ss-physical-group-heading"><span>${esc(label)}</span><b>${physicalNumber(g.quantity,'quantity')} ${esc(unit)}</b></div>${physicalGradeDetailsHTML(g,unit,freeBound)}</div>`;}).join('')+`<small class="ss-physical-subset-note">ส่วนย่อยของยอดรวม ไม่บวกเพิ่ม · ${basis}</small><small class="ss-physical-free-basis${verified&&freeBound?'':' ss-overview-warning'}" role="status">${warning}</small></div>`;
   }
   function physicalEquivalentsHTML(physical){
     const c=boundPhysicalComposition(physical);
@@ -382,7 +419,7 @@
       const coverage = liveWarehouse ? card.data.complete ? `<small>ชุดราคาส่วนกลาง ${esc(current.catalogRevision ?? '—')} · ไม่ใช่ราคาขายจริง</small>` :
         `<small class="ss-overview-warning">${card.data.knownValueTHB === null ? 'รอยืนยันชุดราคาหรือเรทส่วนกลาง' : 'เฉพาะส่วนที่ยืนยันราคาได้'}${card.data.unpricedSpecCount ? ' · รอราคา/เรท '+n(card.data.unpricedSpecCount)+' สเปก ('+qtyText(card.data.unknownQuantity)+')' : ''} · ไม่ใช้ 0 หรือราคาชุดเก่าแทน</small>` : '';
       const stockFx = liveWarehouse && current.fx ? `<small>USD/THB ${n(current.fx.rate)} · ${esc(current.fx.date)}${current.fx.status !== 'current' ? ' · คงเรทที่ยืนยันแล้ว ไม่ใช่เรทสด' : ''}</small>` : '';
-      const content = `<div class="ss-card-overview"><h3>${esc(card.label)}</h3><div class="ss-overview-quantity"><strong>${n(card.data.quantity.sheet)}</strong><span>แผ่น</span>${card.data.quantity.strip&&!(card.id==='physical'&&boundPhysicalComposition(physical)) ? `<small>ไม้แถบ ${n(card.data.quantity.strip)} ชิ้น</small>` : ''}</div>${card.id==='physical'?physicalCompositionHTML(physical):''}<div class="ss-overview-value"><span>${esc(card.moneyLabel)}</span><b>${money(card.money)}${liveWarehouse && !card.data.complete && card.money !== null ? ' · ส่วนที่ยืนยันได้' : ''}</b>${native}${coverage}${stockFx}</div><div class="ss-overview-breakdown">${card.breakdown}</div><small class="ss-overview-basis">${esc(card.basis)}</small>${model?.stale && !['sold','reserved'].includes(card.id) ? `<small class="ss-overview-warning">${liveWarehouse ? 'ยอดคลังส่วนกลางล่าสุด · ต่างจากฐานหัวข้อ02ที่ยังเป็นชุดตรวจย้อนหลัง' : 'วัน/จำนวน/ราคา/เรทต่างหรือยังยืนยันไม่ได้ · ชุดตรวจย้อนหลัง'}</small>` : ''}</div>`;
+      const content = `<div class="ss-card-overview"><h3>${esc(card.label)}</h3><div class="ss-overview-quantity"><strong>${n(card.data.quantity.sheet)}</strong><span>แผ่น</span>${card.data.quantity.strip&&!(card.id==='physical'&&boundPhysicalComposition(physical)) ? `<small>ไม้แถบ ${n(card.data.quantity.strip)} ชิ้น</small>` : ''}</div>${card.id==='physical'?physicalCompositionHTML(physical,current,verified):''}<div class="ss-overview-value"><span>${esc(card.moneyLabel)}</span><b>${money(card.money)}${liveWarehouse && !card.data.complete && card.money !== null ? ' · ส่วนที่ยืนยันได้' : ''}</b>${native}${coverage}${stockFx}</div><div class="ss-overview-breakdown">${card.breakdown}</div><small class="ss-overview-basis">${esc(card.basis)}</small>${model?.stale && !['sold','reserved'].includes(card.id) ? `<small class="ss-overview-warning">${liveWarehouse ? 'ยอดคลังส่วนกลางล่าสุด · ต่างจากฐานหัวข้อ02ที่ยังเป็นชุดตรวจย้อนหลัง' : 'วัน/จำนวน/ราคา/เรทต่างหรือยังยืนยันไม่ได้ · ชุดตรวจย้อนหลัง'}</small>` : ''}</div>`;
       const cardMonth=card.month||model?.month;
       return `<div class="ss-kpi ss-kpi-${card.id}" data-stock-card="${card.id}"${cardMonth ? ` data-order-header-month="${esc(cardMonth)}"` : ''}${liveWarehouse ? ` data-current-stock-revision="${esc(current.stockRevision)}"` : ''}><div class="ss-card-overview-wrap"${open?' hidden':''}>${content}</div><button type="button" class="ss-card-toggle" data-stock-card-toggle="${card.id}" aria-expanded="${open}" aria-controls="ss-card-details-${card.id}" data-html2canvas-ignore>${open?'ซ่อน':'ดู'}รายละเอียด · ${esc(card.label)}</button><div class="ss-card-detail-content" id="ss-card-details-${card.id}"${open?'':' hidden'}>${content}${card.detail || ''}</div></div>`;
     }).join('');

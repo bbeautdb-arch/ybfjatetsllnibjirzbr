@@ -18,6 +18,11 @@
   let latest=null,exporting=false,canvasLoader=null,headerExchangeRate=null,savedStockCatalog=null;
   let orderHeader=null,orderHeaderError='กำลังรอชุดรายงานเดือนที่ตรวจครบ';
   const expandedCards=new Set();
+  const expandedPhysicalGrades=new Set();
+  const physicalGradeKey=node=>JSON.stringify([node.closest('[data-physical-group]')?.dataset.physicalGroup,node.dataset.physicalGrade]);
+  function restorePhysicalGrades(container,opened=expandedPhysicalGrades){
+    container?.querySelectorAll('details.ss-physical-grade-detail').forEach(node=>{node.open=opened.has(physicalGradeKey(node));});
+  }
   const expandedThickness=new Set();
   const expandedThicknessProduction=new Set();
 
@@ -472,6 +477,12 @@
   }
   function overviewClick(event){
     thicknessClick(event);
+    const gradeSummary=event.target.closest?.('details.ss-physical-grade-detail > summary');
+    if(gradeSummary){
+      event.preventDefault();const detail=gradeSummary.parentElement,key=physicalGradeKey(detail);
+      detail.open?expandedPhysicalGrades.delete(key):expandedPhysicalGrades.add(key);
+      restorePhysicalGrades(root);return;
+    }
     const toggle=event.target.closest?.('[data-stock-card-toggle]'),action=event.target.closest?.('[data-stock-overview-action]');
     if(toggle){const id=toggle.dataset.stockCardToggle,open=!expandedCards.has(id);open?expandedCards.add(id):expandedCards.delete(id);setCardView(toggle.closest('[data-stock-card]'),open);}
     if(action){const open=action.dataset.stockOverviewAction==='expand';for(const card of root.querySelectorAll('[data-stock-card]')){open?expandedCards.add(card.dataset.stockCard):expandedCards.delete(card.dataset.stockCard);setCardView(card,open);}}
@@ -555,6 +566,7 @@
       const opened=new Set([...cards.querySelectorAll('[data-stock-gap-group]')].filter(node=>node.open).map(node=>node.dataset.stockGapGroup));
       const receipts=new Set([...cards.querySelectorAll('[data-stock-receipt-details]')].filter(node=>node.open).map(node=>node.dataset.stockReceiptDetails));
       cards.innerHTML=kpiHTML(summary,latest);
+      restorePhysicalGrades(cards);
       cards.querySelectorAll('[data-stock-gap-group]').forEach(node=>{node.open=opened.has(node.dataset.stockGapGroup);});
       cards.querySelectorAll('[data-stock-receipt-details]').forEach(node=>{node.open=receipts.has(node.dataset.stockReceiptDetails);});
     }
@@ -595,6 +607,10 @@
       const card=root?.querySelector('.ss-kpis [data-stock-card="'+id+'"]'),replacement=holder.querySelector('[data-stock-card="'+id+'"]');
       if(card&&replacement)card.replaceWith(replacement);
     }
+    // Refresh only the drilldown basis warning, without rebuilding Physical
+    // or touching any existing note/price editor or disclosure state.
+    const freshBasis=holder.querySelector('.ss-physical-free-basis');
+    if(freshBasis)root?.querySelectorAll('.ss-physical-free-basis').forEach(node=>{node.textContent=freshBasis.textContent;node.className=freshBasis.className;});
     const source=window.AAFOrderHeader.sourceText(orderHeader,warehouse,undefined,undefined,currentMonthSold,currentAllocation);
     for(const selector of ['.ss-sales-summary-source','.ss-overview-source']){const node=root?.querySelector(selector);if(node)node.textContent=source;}
     repaintReadiness();
@@ -979,6 +995,26 @@
     [data-aaf-stock-summary] .ss-physical-group[data-physical-group="nonstandard"] .ss-physical-group-heading{color:#80521e}
     [data-aaf-stock-summary] .ss-physical-grades{display:block;line-height:1.7;font-size:10px;color:#52657a;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
     [data-aaf-stock-summary] .ss-physical-grade{display:inline-block}
+    [data-aaf-stock-summary] .ss-physical-grade-list{display:grid;gap:3px;min-width:0}
+    [data-aaf-stock-summary] .ss-physical-grade-hint{font-size:10px;color:#52657a;margin:3px 0}
+    [data-aaf-stock-summary] .ss-physical-grade-detail{min-width:0;border-radius:7px;border:1px solid transparent}
+    [data-aaf-stock-summary] .ss-physical-grade-detail>summary{display:flex;align-items:center;gap:6px;padding:6px 5px;cursor:pointer;list-style:none;font-size:11px;font-weight:600;color:#254f42;font-variant-numeric:tabular-nums}
+    [data-aaf-stock-summary] .ss-physical-grade-detail>summary::-webkit-details-marker{display:none}
+    [data-aaf-stock-summary] .ss-physical-grade-detail>summary::before{content:'›';font-size:16px;line-height:1;transition:transform .12s}
+    [data-aaf-stock-summary] .ss-physical-grade-detail[open]>summary::before{transform:rotate(90deg)}
+    [data-aaf-stock-summary] .ss-physical-grade-detail>summary>small{margin-left:auto;font-size:9px;font-weight:400;white-space:nowrap;color:#61766b}
+    [data-aaf-stock-summary] .ss-physical-grade-detail>summary:focus-visible{outline:2px solid #27745e;outline-offset:2px;border-radius:6px}
+    [data-aaf-stock-summary] .ss-physical-grade-detail[open]{background:#fffef7;border-color:#d4dfce}
+    [data-aaf-stock-summary] .ss-physical-items{padding:0 7px 7px;min-width:0}
+    [data-aaf-stock-summary] .ss-physical-item-head,[data-aaf-stock-summary] .ss-physical-item{display:grid;grid-template-columns:minmax(42px,.75fr) minmax(0,1fr) minmax(0,1.2fr);gap:5px;align-items:baseline}
+    [data-aaf-stock-summary] .ss-physical-item-head{font-size:9px;color:#52657a;line-height:1.5;padding:5px 0;border-bottom:1px solid #dce5d7}
+    [data-aaf-stock-summary] .ss-physical-item-size{font-size:10px;font-weight:600;color:#52657a;padding:7px 0 2px}
+    [data-aaf-stock-summary] .ss-physical-item{font-size:11px;font-variant-numeric:tabular-nums;padding:5px 0;border-bottom:1px dotted #e0e7dc}
+    [data-aaf-stock-summary] .ss-physical-item:last-child{border-bottom:0}
+    [data-aaf-stock-summary] .ss-physical-item>b,[data-aaf-stock-summary] .ss-physical-item-head>span:not(:first-child){text-align:right;overflow-wrap:anywhere}
+    [data-aaf-stock-summary] .ss-physical-item>span>small{font-size:9px;font-weight:400;color:#52657a}
+    [data-aaf-stock-summary] .ss-physical-item-free{color:#167051}
+    [data-aaf-stock-summary] .ss-physical-free-basis{font-size:10px;line-height:1.5}
     [data-aaf-stock-summary] .ss-physical-subset-note{font-size:10px;color:#52657a}
     [data-aaf-stock-summary] .ss-physical-equivalent-breakdown{display:grid;gap:9px}
     [data-aaf-stock-summary] .ss-physical-equivalent{display:grid;gap:5px}
@@ -1011,6 +1047,7 @@
     preview?.remove();orderPreview?.remove();
     root.innerHTML=`<div class="ss-tools ss-report-intro"><div><h2>สรุปสต๊อกสำหรับส่งรายงาน</h2><p>รายงานยาวครบทุกแถว • ข้อมูลอ่านอย่างเดียว ไม่เปลี่ยนข้อมูลสต๊อก</p><a href="#stock-cash">ดูสต๊อกและเงิน ↓</a></div><button type="button" class="ss-download" ${exporting?'disabled':''}>ดาวน์โหลดภาพยาว PNG</button></div><p class="ss-status" role="status">ภาพรวมจากข้อมูลส่วนกลางที่โหลดล่าสุด — ใช้เฉพาะค่าที่บันทึกสำเร็จจากหน้าสต๊อก</p>${html(m)}${m.cash?`<div class="ss-tools" style="margin-top:28px"><h2>กล่องสต๊อกและเงิน</h2><button type="button" class="cash-download" ${exporting?'disabled':''}>ดาวน์โหลดกล่องสต๊อกและเงิน PNG</button></div>${window.AAFStockCash.render(m.cash)}`:m.cashError?`<p class="ss-error">ยังแสดงกล่องเงินไม่ได้: ${esc(m.cashError)}</p>`:''}`;
     root.querySelector('.ss-download').addEventListener('click',()=>download());root.querySelector('.cash-download')?.addEventListener('click',()=>download('cash'));
+    restorePhysicalGrades(root);
     window.AAFSalesPreview?.attach(root.querySelector('#stock-sales-preview-slot'));
     window.AAFOrderReview?.attach(root.querySelector('#stock-order-review-slot'));
     syncPriceDrafts();
@@ -1023,13 +1060,14 @@
     return canvasLoader;
   }
   async function download(which='stock'){
-    if(!latest||exporting)return;exporting=true;const captured=latest,capturedThickness=new Set(expandedThickness),capturedProduction=new Set(expandedThicknessProduction);let box=null;
+    if(!latest||exporting)return;exporting=true;const captured=latest,capturedThickness=new Set(expandedThickness),capturedProduction=new Set(expandedThicknessProduction),capturedPhysicalGrades=new Set(expandedPhysicalGrades);let box=null;
     const status=text=>{const p=root.querySelector('.ss-status');if(p)p.textContent=text;};
     root.querySelectorAll('.ss-download,.cash-download,.ss-overview-download').forEach(b=>b.disabled=true);status(which==='overview'?'กำลังสร้างภาพรวม 4 กล่อง…':'กำลังสร้างภาพยาวครบทุกแถว กรุณารอสักครู่…');
     try{
       const canvasFn=await loadCanvas();await document.fonts?.ready;
       box=document.createElement('div');box.dataset.aafStockSummary='';box.className='ss-export'+(which==='overview'?' ss-overview-export':'');box.style.cssText='position:absolute;left:-20000px;top:0;width:1440px;box-sizing:border-box;padding:0;background:white;';box.innerHTML=which==='cash'?window.AAFStockCash.render(captured.cash):which==='overview'?dailyOverviewHTML(captured):html(captured,capturedThickness,capturedProduction);document.body.append(box);
       for(const card of box.querySelectorAll('[data-stock-card]'))setCardView(card,which!=='overview');
+      restorePhysicalGrades(box,capturedPhysicalGrades);
       const sheet=which==='overview'?box:box.querySelector(which==='cash'?'.cash-sheet':'.ss-sheet'),width=Math.ceil(sheet.getBoundingClientRect().width),height=Math.ceil(sheet.getBoundingClientRect().height),scale=Math.min(1.5,30000/height,Math.sqrt(48000000/(width*height)));
       if(scale<0.65)throw new Error('ข้อความยาวเกินขนาดภาพที่อ่านได้ในรูปเดียว กรุณาถ่ายภาพเต็มหน้าผ่านเบราว์เซอร์แทน');
       const canvas=await canvasFn(sheet,{backgroundColor:'#ffffff',scale,width,height,windowWidth:1500,windowHeight:1000,scrollX:0,scrollY:0,logging:false});

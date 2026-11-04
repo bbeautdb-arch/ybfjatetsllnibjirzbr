@@ -1,9 +1,62 @@
 <!doctype html>
-<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic Physical composition preview</title><style>body{margin:0;background:#edf2f6;color:#183e56;font:14px/1.5 system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:20px}.notice{padding:10px 20px;background:#fff1cb}#stock-summary .ss-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}@media(max-width:650px){#stock-summary .ss-kpis{grid-template-columns:1fr}}</style></head><body><div class="notice">SYNTHETIC TEST DATA — ตัวเลขสมมติ ไม่ใช่ข้อมูลบริษัท</div><main><div id="stock-summary" data-aaf-stock-summary></div></main>
-<script src="../stock_order_header.js?v=20261104-physical-composition-r1"></script><script src="../stock_summary.js?v=20261104-physical-composition-r1"></script><script>
-// All numbers and identifiers are synthetic. No network or business writes.
-const row=(key,w,l,t,grade,qty,unit='sheet')=>({key,w,l,t,grade,qty,unit,committedQty:0,freeQty:qty,catalogPrice:12,catalogCurrency:'THB',catalogValue:qty*12,catalogFreeValue:qty*12});
-const stock={reportDate:'2030-06-01',revision:1,savedCatalog:{catalogRevision:1},rows:[row('sample-normal',1220,2440,2.5,'AAA',400),row('sample-reversed',2440,1220,1.6,'B',100),row('sample-small',610,1220,3.2,'AAA',80),row('sample-wide',1260,2440,3.2,'B',40),row('sample-near',1200,2400,2.5,'A',15),row('sample-long',1220,3050,6,'F',20),row('sample-strip',20,1000,3.2,'B',1200,'strip')]};
-const warehouse=window.AAFOrderHeader.warehouseProjection(stock);
-const target=document.getElementById('stock-summary');target.innerHTML='<div class="ss-kpis">'+window.AAFOrderHeader.render(null,new Set(),warehouse)+'</div>';
-</script></body></html>
+<html lang="th">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Synthetic Physical grade drilldown preview</title>
+  <link rel="stylesheet" href="../stock_premium.css?v=20261104-premium-r1">
+  <style>
+    .fixture-notice{max-width:1460px;margin:0 auto 20px;padding:17px 21px;border:1px solid #d9c397;border-radius:18px;background:#fff5de;color:#51472e;font:14px/1.7 system-ui,sans-serif}.fixture-notice h1{margin:0;font-size:19px}.fixture-notice p{margin:7px 0}.fixture-actions{display:flex;gap:9px;flex-wrap:wrap}.fixture-actions button{padding:9px 13px;border:1px solid #b4c4aa;border-radius:12px;color:#2e4839;background:#fffdf5;font:inherit;cursor:pointer}.fixture-actions button[aria-pressed="true"]{background:#dfead6;border-color:#688f70}.fixture-actions button:focus-visible{outline:3px solid #276f69;outline-offset:3px}#fixture-status{font-size:12px}#stock-summary .ss-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}@media(max-width:700px){#stock-summary .ss-kpis{grid-template-columns:1fr}.fixture-notice{padding:14px 16px}}
+  </style>
+</head>
+<body data-aaf-premium="ivory">
+  <header class="fixture-notice">
+    <h1>SYNTHETIC — ตัวอย่างกดดูเกรด ไม่ใช่ข้อมูลบริษัท</h1>
+    <p>กดชื่อเกรดในกล่อง Physical เพื่อดูขนาดและความหนา พร้อม Physical / Free ที่บันทึก · ลองใช้ Tab และ Enter หรือ Space · รายละเอียดเริ่มต้นปิดทุกเกรด</p>
+    <p>ตัวอย่างมีสเปกกลับด้าน ทศนิยม ไม้แถบ แถวศูนย์ และ Free ที่ปรับมือมากกว่า Physical · 1200×2400 ไม่รวมกับขนาดปกติในรายละเอียดนี้</p>
+    <div class="fixture-actions"><button id="fixture-known" type="button" aria-pressed="true">ข้อมูล Free ครบ</button><button id="fixture-unknown" type="button" aria-pressed="false">จำลอง Free ขาดบางสเปก</button><button id="fixture-stale" type="button" aria-pressed="false">จำลอง Free ไม่ตรงฐาน</button></div>
+    <p id="fixture-status" role="status"></p>
+  </header>
+  <main class="report-shell"><div id="stock-summary" data-aaf-stock-summary></div></main>
+  <script src="../stock_order_header.js?v=20261104-grade-drilldown-r1"></script>
+  <script src="../stock_summary.js?v=20261104-grade-drilldown-r1"></script>
+  <script>
+    // Pure synthetic saved rows. No fetch, account, storage, or business writes.
+    const row=(key,w,l,t,grade,qty,freeQty,unit='sheet')=>({key,w,l,t,grade,qty,unit,committedQty:0,freeQty,catalogPrice:12,catalogCurrency:'THB',catalogValue:qty*12,catalogFreeValue:freeQty*12});
+    const stock={reportDate:'2030-06-01',revision:7,savedCatalog:{catalogRevision:2},rows:[
+      row('sample-normal-thin',1220,2440,1.6,'AAA',40,22),
+      row('sample-normal',1220,2440,2.5,'AAA',80.5,50.25),
+      row('sample-reversed',2440,1220,2.5,'AAA',12.25,8.5),
+      row('sample-normal-thick',1220,2440,10,'AAA',6,3),
+      row('sample-normal-b',2440,1220,1.6,'B',20,27),
+      row('sample-small',610,1220,2.5,'AAA',16,10),
+      row('sample-small-reversed',1220,610,2.5,'AAA',0.125,0.025),
+      row('sample-wide',1260,2440,3.2,'B',14,9),
+      row('sample-near',1200,2400,2.5,'A',7,4),
+      row('sample-long',1220,3050,6,'F',8.25,2.125),
+      row('sample-strip',25,2000,3.2,'B',1200,900,'strip'),
+      row('sample-strip-reversed',2000,25,3.2,'B',150,100,'strip'),
+      row('sample-free-only',1220,2440,2.5,'CTS',0,3),
+      row('sample-zero-alias',2440,1220,2.5,'AAA',0,4),
+      row('sample-zero-spec',1220,2440,3.2,'AAA',0,0),
+      row('sample-zero-grade',1220,2440,2.5,'UN',0,0)
+    ]};
+    const before=JSON.stringify(stock),target=document.getElementById('stock-summary'),base=window.AAFOrderHeader.warehouseProjection(stock);
+    function show(mode='known'){
+      const model=structuredClone(base),source=structuredClone(stock.rows);
+      if(mode==='unknown')delete source.find(r=>r.key==='sample-small-reversed').freeQty;
+      // Only the local composition scenario differs; original source rows and
+      // every other card remain the unchanged synthetic saved baseline.
+      model.physical.composition={...window.AAFOrderHeader.physicalComposition(source),stockReportDate:model.stockReportDate,stockRevision:model.stockRevision};
+      if(mode==='stale')model.physical.composition.savedFreeQuantity.sheet+=1;
+      target.innerHTML='<div class="ss-kpis">'+window.AAFOrderHeader.render(null,new Set(),model)+'</div>';
+      for(const id of ['known','unknown','stale'])document.getElementById('fixture-'+id).setAttribute('aria-pressed',String(mode===id));
+      const message=mode==='known'?'Free ครบตามฐานสมมติ · แถว Physical 0 แต่ Free > 0 ยังอยู่':mode==='unknown'?'Free ขาดบางสเปก · ต้องแสดง รอยืนยัน ไม่ใช่ 0':'Free รายละเอียดไม่ตรงฐาน · ทุกสเปกต้องรอยืนยัน Free แต่ Physical ยังแสดง';
+      document.getElementById('fixture-status').textContent=message+' · '+(JSON.stringify(stock)===before?'ข้อมูลตั้งต้นคงเดิม':'ผิดพลาด: ข้อมูลตั้งต้นเปลี่ยน')+' · ตัวเลขทุกตัวเป็นข้อมูลสมมติ';
+      document.body.dataset.fixtureReady='true';
+    }
+    for(const mode of ['known','unknown','stale'])document.getElementById('fixture-'+mode).addEventListener('click',()=>show(mode));
+    window.PhysicalDrilldownFixture=Object.freeze({showUnknown:()=>show('unknown'),showKnown:()=>show('known'),showStale:()=>show('stale'),unchanged:()=>JSON.stringify(stock)===before});
+    show();
+  </script>
+</body>
+</html>
