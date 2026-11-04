@@ -350,15 +350,25 @@
       const label=`${esc(g.grade)} ${physicalNumber(g.quantity,'quantity')} ${esc(unit)}`;
       if(!complete)return `<div class="ss-physical-grade">${label}<small class="ss-overview-warning"> รายละเอียดรายความหนารอยืนยัน</small></div>`;
       let previousSize='';
+      // Grade totals are a read-only sum of the same exact displayed items.
+      // Sum unrounded values once; an unknown Free or price stays unknown.
+      const total={physical:0,free:0,value:0,freeKnown:true,valueKnown:true};
       const rows=items.map(i=>{
         const size=i.w+' × '+i.l,heading=size!==previousSize?`<div class="ss-physical-item-size">${esc(size)} มม.</div>`:'';previousSize=size;
         const knownFree=freeBound&&valid(i.freeQty);
         const valuation=freeValuation?.items?.[physicalItemKey(i.w,i.l,i.t,g.grade,i.unit)];
         const knownValue=knownFree&&valueBound&&valuation?.unknownPriceRows===0&&close(valuation.freeQty,i.freeQty)&&close(valuation.valueTHB,valuation.knownValueTHB);
+        total.physical+=i.quantity;
+        if(knownFree)total.free+=i.freeQty;else total.freeKnown=false;
+        if(knownValue)total.value+=valuation.valueTHB;else total.valueKnown=false;
         const valueText=!knownFree?'รอยืนยัน':knownValue?money(valuation.valueTHB):'รอราคา/FX';
         return `${heading}<div class="ss-physical-item" data-physical-item="${esc([i.w,i.l,i.t,i.unit].join('|'))}"><span>${esc(i.t)} <small>มม.</small></span><b data-item-physical>${physicalNumber(i.quantity,'quantity')}</b><b class="ss-physical-item-free${knownFree?'':' ss-overview-warning'}" data-item-free>${knownFree?physicalNumber(i.freeQty,'quantity'):'รอยืนยัน'}</b><b class="ss-physical-item-value${knownValue?'':' ss-overview-warning'}" data-item-free-value>${valueText}</b></div>`;
       }).join('');
-      return `<details class="ss-physical-grade-detail" data-physical-grade="${esc(g.grade)}"><summary aria-label="ดูขนาดและความหนา เกรด ${esc(g.grade)} ${esc(unit)}"><span>${label}</span><small>ดูความหนา</small></summary><div class="ss-physical-items"><div class="ss-physical-item-head"><span>หนา</span><span>สต๊อก · ${esc(unit)}</span><span>Free ที่บันทึก</span><span>มูลค่า Free<br>ประเมิน · บาท</span></div>${rows}<small class="ss-physical-value-note">ราคาสต๊อกที่บันทึก · ไม่ใช่ราคาขายจริง</small></div></details>`;
+      total.freeKnown=total.freeKnown&&valid(total.free);
+      total.valueKnown=total.freeKnown&&total.valueKnown&&valid(total.value);
+      const totalValueText=!total.freeKnown?'รอยืนยัน':total.valueKnown?money(total.value):'รอราคา/FX';
+      const footer=`<div class="ss-physical-item-total" data-physical-grade-total aria-label="รวมเกรด ${esc(g.grade)} ${esc(unit)}"><span>รวม <small>${esc(unit)}</small></span><b data-grade-total-field="physical">${physicalNumber(total.physical,'quantity')}</b><b class="ss-physical-item-free${total.freeKnown?'':' ss-overview-warning'}" data-grade-total-field="free">${total.freeKnown?physicalNumber(total.free,'quantity'):'รอยืนยัน'}</b><b class="ss-physical-item-value${total.valueKnown?'':' ss-overview-warning'}" data-grade-total-field="value">${totalValueText}</b></div>`;
+      return `<details class="ss-physical-grade-detail" data-physical-grade="${esc(g.grade)}"><summary aria-label="ดูขนาดและความหนา เกรด ${esc(g.grade)} ${esc(unit)}"><span>${label}</span><small>ดูความหนา</small></summary><div class="ss-physical-items"><div class="ss-physical-item-head"><span>หนา</span><span>สต๊อก · ${esc(unit)}</span><span>Free ที่บันทึก</span><span>มูลค่า Free<br>ประเมิน · บาท</span></div>${rows}${footer}<small class="ss-physical-value-note">ราคาสต๊อกที่บันทึก · ไม่ใช่ราคาขายจริง</small></div></details>`;
     });
     if(group.unknownGrade.quantity>0)entries.push(`<small class="ss-overview-warning">ยังไม่ระบุเกรด ${physicalNumber(group.unknownGrade.quantity,'quantity')} ${esc(unit)} · รอตรวจ</small>`);
     return entries.length?'<div class="ss-physical-grade-list"><small class="ss-physical-grade-hint">เกรด: กดดูขนาด / ความหนา / Free</small>'+entries.join('')+'</div>':'';

@@ -1008,12 +1008,14 @@
     [data-aaf-stock-summary] .ss-physical-grade-detail>summary:focus-visible{outline:2px solid #27745e;outline-offset:2px;border-radius:6px}
     [data-aaf-stock-summary] .ss-physical-grade-detail[open]{background:#fffef7;border-color:#d4dfce}
     [data-aaf-stock-summary] .ss-physical-items{padding:0 7px 7px;min-width:0}
-    [data-aaf-stock-summary] .ss-physical-item-head,[data-aaf-stock-summary] .ss-physical-item{display:grid;grid-template-columns:minmax(29px,.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.65fr);gap:4px;align-items:baseline}
+    [data-aaf-stock-summary] .ss-physical-item-head,[data-aaf-stock-summary] .ss-physical-item,[data-aaf-stock-summary] .ss-physical-item-total{display:grid;grid-template-columns:minmax(29px,.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.65fr);gap:4px;align-items:baseline}
     [data-aaf-stock-summary] .ss-physical-item-head{font-size:9px;color:#52657a;line-height:1.5;padding:5px 0;border-bottom:1px solid #dce5d7}
     [data-aaf-stock-summary] .ss-physical-item-size{font-size:10px;font-weight:600;color:#52657a;padding:7px 0 2px}
     [data-aaf-stock-summary] .ss-physical-item{font-size:10px;font-variant-numeric:tabular-nums;padding:6px 0;border-bottom:1px dotted #e0e7dc}
     [data-aaf-stock-summary] .ss-physical-item:last-child{border-bottom:0}
-    [data-aaf-stock-summary] .ss-physical-item>b,[data-aaf-stock-summary] .ss-physical-item-head>span:not(:first-child){text-align:right;overflow-wrap:anywhere}
+    [data-aaf-stock-summary] .ss-physical-item>b,[data-aaf-stock-summary] .ss-physical-item-total>b,[data-aaf-stock-summary] .ss-physical-item-head>span:not(:first-child){text-align:right;overflow-wrap:anywhere}
+    [data-aaf-stock-summary] .ss-physical-item-total{margin-top:5px;padding:9px 0 7px;border-top:2px solid #a8c2aa;border-bottom:1px solid #d4dfce;background:#edf4e8;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;color:#254f42}
+    [data-aaf-stock-summary] .ss-physical-item-total>span>small{display:block;font-size:9px;font-weight:400}
     [data-aaf-stock-summary] .ss-physical-item>span>small{font-size:9px;font-weight:400;color:#52657a}
     [data-aaf-stock-summary] .ss-physical-item-free{color:#167051}
     [data-aaf-stock-summary] .ss-physical-item-value{color:#167051;font-size:10px}
