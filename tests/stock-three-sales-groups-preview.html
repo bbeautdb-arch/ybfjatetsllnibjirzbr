@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic three sales groups</title><style>body{margin:0;background:#eef3ed;color:#243e31;font:14px/1.5 system-ui,sans-serif}.fixture{padding:15px 22px;background:#fff5dc;border-bottom:1px solid #d7ba7f}.fixture h1{margin:0;font-size:18px}.fixture p{margin:5px 0}.fixture select,.fixture button{font:inherit;padding:8px;margin:7px 8px 0 0}#review{max-width:1240px;margin:16px auto;padding:0 12px}</style></head>
+<body><header class="fixture"><h1>SYNTHETIC — สรุป 3 กลุ่ม · ไม่ใช่ข้อมูลบริษัท</h1><p>แยกขายแล้ว / เจรจา / Forecast · ยกเลิกและรอจัดกลุ่มอยู่ต่างหาก · ทุกยอดเป็นตัวอย่าง ไม่มีการเชื่อมระบบหรือบันทึก</p><label>เดือน <select id="month"><option value="current">ตัวอย่างเดือนปัจจุบัน</option><option value="archive">ตัวอย่างชุดย้อนหลัง</option></select></label><button id="suspend">ทดสอบชุดขายไม่ตรง</button></header><div id="review"></div>
+<script src="../stock_sales_groups.js?v=20261104-three-sales-groups-r1"></script><script src="../stock_sales_groups_view.js?v=20261104-three-sales-groups-r1"></script><script src="../stock_order_review.js?v=20261104-three-sales-groups-r1"></script><script type="module">
+import {salesOnlyFixture} from './stock-sales-only-fixture.mjs';
+const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit'}).formatToParts(new Date()),current=parts.find(p=>p.type==='year').value+'-'+parts.find(p=>p.type==='month').value;
+const [year,month]=current.split('-').map(Number),prior=new Date(Date.UTC(year,month-2,15)).toISOString().slice(0,7);
+const make=(period,historical=false)=>{
+  const f=salesOnlyFixture(period),rr=f.review.rows;
+  rr[0].etd='02/'+period.slice(5)+'/'+period.slice(0,4);rr[1].etd='12/'+period.slice(5)+'/'+period.slice(0,4);rr[2].etd='05/'+period.slice(5)+'/'+period.slice(0,4);rr[3].etd='31/02/'+period.slice(0,4);
+  rr[4].sourceStatus='Forecast';rr[4].payment='มัดจำแล้ว';
+  const negotiation={...rr[3],id:'synthetic-negotiation',orderId:'synthetic-negotiation-order',customer:'ลูกค้าตัวอย่างเจรจา',ref:'SYNTH-NEG',qty:7,sourceQty:7,sourceStatus:'เจรจา',sourceType:'เจรจา',soldGroup:'notSold',queue:{...rr[3].queue,group:4},etd:'—'};
+  rr.push(negotiation,{...negotiation,id:'synthetic-unknown',orderId:'synthetic-unknown-order',customer:'ลูกค้าตัวอย่างรอจัดกลุ่ม',ref:'SYNTH-UNKNOWN',qty:3,sourceQty:3,sourceStatus:'สถานะต้องตรวจ',sourceType:'',etd:'—'});
+  f.review.metadata.sourceSalesReadLabel='ชุดสังเคราะห์สำหรับตรวจ UI · ไม่ใช่ต้นทางบริษัท';
+  if(historical){f.readModel={kind:'dated-order-review',selectedMonth:period,historical:true,sourceCapturedAt:f.review.metadata.sourceSalesCapturedAt,stale:true,sourceIsLive:false};}
+  return {...f.review,readModel:f.readModel};
+};
+const reviews={current:make(current),archive:make(prior,true)},selector=document.getElementById('month');
+const view=window.AAFOrderReviewUI.mount(document.getElementById('review'),reviews.current,{compactChrome:true});
+selector.addEventListener('change',()=>view.update(reviews[selector.value]));document.getElementById('suspend').addEventListener('click',()=>view.suspendSales('ตัวอย่าง: ชุดข้อมูลยังไม่ตรงเดือนที่เลือก · รอตรวจ ไม่แสดงยอดเก่าแทน'));
+</script></body></html>

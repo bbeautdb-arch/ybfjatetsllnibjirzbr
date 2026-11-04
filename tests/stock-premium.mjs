@@ -60,9 +60,9 @@ test('both entries opt in to the same theme and refresh only the matching presen
     const text=read('../'+name);
     assert.equal((text.match(/data-aaf-premium="ivory"/g)||[]).length,1);
     assert.equal((text.match(/stock_premium\.css\?v=20261104-factory-glass-r1/g)||[]).length,1);
-    assert.equal((text.match(/stock_order_review\.js\?v=20261104-factory-glass-r1/g)||[]).length,1);
+    assert.equal((text.match(/stock_order_review\.js\?v=20261104-three-sales-groups-r1/g)||[]).length,1);
   }
-  assert.match(read('../stock_order_review.js'),/stock_order_review\.css\?v=20261104-factory-glass-r1/);
+  assert.match(read('../stock_order_review.js'),/stock_order_review\.css\?v=20261104-three-sales-groups-r1/);
 });
 
 test('synthetic full summary covers exact sizes, separate units, zero stock and saved manual Free without mutation',()=>{

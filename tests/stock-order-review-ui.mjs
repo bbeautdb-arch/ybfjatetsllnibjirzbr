@@ -6,6 +6,8 @@ import {salesOnlyFixture} from './stock-sales-only-fixture.mjs';
 
 const source = fs.readFileSync(new URL('../stock_order_review.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../stock_order_review.css', import.meta.url), 'utf8');
+const salesGroupsSource = fs.readFileSync(new URL('../stock_sales_groups.js', import.meta.url), 'utf8');
+const salesGroupsViewSource = fs.readFileSync(new URL('../stock_sales_groups_view.js', import.meta.url), 'utf8');
 const copy = value => JSON.parse(JSON.stringify(value));
 const key = '2|A|100|200|sheet';
 const money = (THB = 0, USD = 0) => ({ THB, USD });
@@ -86,6 +88,8 @@ function harness(services = {}) {
   const document = { currentScript: { src: 'https://example.test/stock_order_review.js' }, createElement: tag => new Element(tag) };
   const host = { ownerDocument: document, shadowRoot: null, attachShadow() { this.shadowRoot = shadow; return shadow; } };
   const context = { window: { document,addEventListener:(type,fn)=>globalEvents.set(type,fn),removeEventListener:type=>globalEvents.delete(type) }, URL, Intl, Map, Set, console };
+  vm.runInNewContext(salesGroupsSource, context, { filename: 'stock_sales_groups.js' });
+  vm.runInNewContext(salesGroupsViewSource, context, { filename: 'stock_sales_groups_view.js' });
   vm.runInNewContext(source, context, { filename: 'stock_order_review.js' });
   const data = fixture(), before = JSON.stringify(data);
   const api = context.window.AAFOrderReviewUI.mount(host, data, services);
@@ -212,28 +216,30 @@ test('exact raw registry tracking and shared note save remain one raw tracking c
   const inputs=h.nodes.get('stock-table').querySelectorAll('[data-stock-note]');inputs[1].value='Synthetic canonical change';await inputs[1].dispatch('input');const follow=h.followups().find(input=>input.dataset.followupEdit==='w200_l100_t2_gA');follow.value='Synthetic exact tracking';await follow.dispatch('input');await h.nodes.get('changes-stage').click();await h.nodes.get('notes-confirm').click();
   assert.equal(writes.length,1);assert.equal(writes[0].notesChanges.length,1);assert.equal(writes[0].notesChanges[0].key,key);assert.equal(writes[0].followupChanges.length,1);assert.equal(writes[0].followupChanges[0].rawKey,'w200_l100_t2_gA');assert.equal(h.api.hasDirty(),false);assert.equal(h.followups().find(input=>input.dataset.followupEdit==='w100_l200_t2_gA').value,'Synthetic tracking w100_l200_t2_gA');h.api.destroy();
 });
-test('selected-month dashboard uses complete month sold partition with separate units and does not follow thickness filter',()=>{
+test('selected-month dashboard uses three whole-month source groups without changing upper sold partition or thickness independence',()=>{
   const h=harness(),f=salesOnlyFixture(),before=JSON.stringify(f);h.api.update({...f.review,readModel:f.readModel});const html=h.nodes.get('month-dashboard').innerHTML;
-  const card=id=>html.match(new RegExp('data-month-metric="'+id+'">([\\s\\S]*?)<\\/div>'))[1];
-  assert.match(html,/ยอดขาย · .*2030-12/);assert.match(html,/ทุกความหนา · ไม่ตามตัวกรอง/);assert.match(card('sold'),/30 <small>แผ่น/);assert.match(card('sold'),/5 <small>ชิ้นไม้แถบ/);assert.match(card('loaded'),/10 <small>แผ่น/);assert.match(card('waiting'),/20 <small>แผ่น/);assert.match(card('waiting'),/5 <small>ชิ้นไม้แถบ/);assert.match(card('records'),/7 <small>ใบขาย/);assert.match(card('records'),/7 <small>บรรทัด/);
-  assert.doesNotMatch(html,/฿|US\$|35 <small>แผ่น|ขายแล้วเดือนนี้/);assert.match(html,/ข้อมูล ณ/);assert.match(html,/ไม่ใช่ฟีดสด/);
+  const card=id=>html.split('data-sales-group="'+id+'">')[1].split('<div class="sg-card-details">')[0];
+  assert.match(html,/ยอดขาย · .*2030-12/);assert.match(html,/ทุกความหนา · ไม่ตามตัวกรอง/);assert.match(card('confirmed'),/50 <small>แผ่น/);assert.match(card('confirmed'),/5 <small>ชิ้นไม้แถบ/);assert.match(card('confirmed'),/โหลดแล้ว/);assert.match(card('confirmed'),/10 <small>แผ่น/);assert.match(card('confirmed'),/รอโหลด/);assert.match(card('confirmed'),/40 <small>แผ่น/);assert.match(card('forecast'),/15 <small>ชิ้นไม้แถบ/);assert.match(html,/เก็บรายการต้นทาง 7 บรรทัด/);
+  assert.deepEqual(f.currentMonthSold.quantity,{sheet:30,strip:5},'upper current-month sold policy is unchanged while lower groups include confirmed PI');
+  assert.doesNotMatch(html,/฿|US\$|35 <small>แผ่น|ขายแล้วเดือนนี้/);assert.match(html,/ข้อมูลหน้า 09 ที่อ่านเมื่อ/);assert.match(html,/ไม่ใช่ข้อมูลสด/);assert.match(html,new RegExp(f.readModel.source.capturedAt));
+  assert.match(h.shadow.children[1].innerHTML,/<details class="allocation-review" id="allocation-review"><summary>รายละเอียดคิวจัดสรรเดิม/);assert.match(h.nodes.get('table-help').textContent,/ไม่ใช่กลุ่มขาย 1–3/);
   h.api.setView('2.5');assert.equal(h.nodes.get('month-dashboard').innerHTML,html);assert.match(h.nodes.get('metrics').innerHTML,/ความหนาที่เลือก/);assert.equal(JSON.stringify(f),before);h.api.destroy();
 });
-test('dated historical dashboard shows reliable loaded quantity but does not guess sold or waiting from group3',()=>{
+test('dated historical dashboard retains unresolved source records without deriving groups from old queue numbers',()=>{
   const h=harness(),data=copy(h.data);data.readModel={kind:'dated-order-review',historical:true,selectedMonth:'2000-01',sourceCapturedAt:'2000-01-22T07:00:00Z',stale:true,sourceIsLive:false};const before=JSON.stringify(data);h.api.update(data);const html=h.nodes.get('month-dashboard').innerHTML;
-  const card=id=>html.match(new RegExp('data-month-metric="'+id+'">([\\s\\S]*?)<\\/div>'))[1];
   assert.match(html,/ยอดขาย · .*2000-01/);assert.match(html,/ชุดตรวจย้อนหลัง · ไม่ใช่ยอดปิดเดือน/);assert.match(html,/22/);assert.match(html,/ฐานสต๊อก\/ราคาปัจจุบันอาจต่าง/);
-  for(const id of ['sold','waiting']){assert.match(card(id),/ยังไม่ยืนยัน/);assert.doesNotMatch(card(id),/\d+ <small>/);}
-  assert.match(card('loaded'),/10 <small>แผ่น/);assert.match(card('records'),/4 <small>ใบขาย/);assert.match(html,/ไม่ใช้กลุ่มจองทั้งหมดแทน/);assert.doesNotMatch(h.nodes.get('table-title').textContent,/เดือนนี้/);assert.equal(JSON.stringify(data),before);h.api.destroy();
+  assert.match(html,/data-sales-exception="unclassified"/);assert.match(html,/ยังจัดกลุ่มไม่ได้ · ไม่รวมในยอด 3 กลุ่ม/);assert.match(html,/4 รายการต้นทาง · 4 บรรทัดสินค้า/);assert.match(html,/สถานะขายต้นทางไม่ครบ/);
+  const confirmed=html.split('data-sales-group="confirmed">')[1].split('<div class="sg-card-details">')[0];assert.doesNotMatch(confirmed,/10 <small>แผ่น|40 <small>แผ่น/);assert.match(confirmed,/0 <small>แผ่น/);
+  assert.doesNotMatch(h.nodes.get('table-title').textContent,/เดือนนี้/);assert.equal(JSON.stringify(data),before);h.api.destroy();
 });
-test('historical dashboard may use explicit verified soldGroup partition without changing dated list/finance/stock semantics',()=>{
-  const h=harness(),f=salesOnlyFixture('2030-10'),data={...f.review,metadata:{...f.review.metadata,title:'Synthetic dated review'},readModel:{kind:'dated-order-review',selectedMonth:'2030-10',historical:true,sourceCapturedAt:'2030-10-22T01:00:00Z',stale:true}};h.api.update(data);const html=h.nodes.get('month-dashboard').innerHTML;
-  assert.match(html,/ยอดขาย · .*2030-10/);assert.match(html,/30 <small>แผ่น/);assert.match(html,/5 <small>ชิ้นไม้แถบ/);assert.match(html,/ชุดตรวจย้อนหลัง/);assert.doesNotMatch(html,/ยังไม่มีหลักฐานแยกขายแล้ว/);assert.match(h.nodes.get('source-warning').textContent,/ต้องตรวจเทียบ/);assert.equal(h.nodes.get('source-warning').hidden,false);assert.match(h.nodes.get('table-area').innerHTML,/ตัวอย่างจัดสรร|รอตรวจ/);h.api.destroy();
+test('historical source statuses may form dated groups without changing existing list finance or stock semantics',()=>{
+  const h=harness(),f=salesOnlyFixture('2030-10'),data={...f.review,metadata:{...f.review.metadata,title:'Synthetic dated review',sourceSalesCapturedAt:'2030-10-22T01:00:00Z'},readModel:{kind:'dated-order-review',selectedMonth:'2030-10',historical:true,sourceCapturedAt:'2030-10-22T01:00:00Z',stale:true}};h.api.update(data);const html=h.nodes.get('month-dashboard').innerHTML;
+  assert.match(html,/ยอดขาย · .*2030-10/);assert.match(html,/50 <small>แผ่น/);assert.match(html,/5 <small>ชิ้นไม้แถบ/);assert.match(html,/ชุดตรวจย้อนหลัง/);assert.match(html,/data-sales-captured-at="2030-10-22T01:00:00Z"/);assert.match(h.nodes.get('source-warning').textContent,/ต้องตรวจเทียบ/);assert.equal(h.nodes.get('source-warning').hidden,false);assert.match(h.nodes.get('table-area').innerHTML,/ตัวอย่างจัดสรร|รอตรวจ/);h.api.destroy();
 });
-test('selected-month dashboard fails closed on mismatched period, malformed quantities or incomplete partition',()=>{
-  const mutate=[f=>f.readModel.selectedMonth='2030-11',f=>f.readModel.source.month='2030-11',f=>f.review.rows[0].qty=null,f=>f.review.rows[0].unit='box',f=>f.review.rows[0].queue.group=null];
-  for(const apply of mutate){const h=harness(),f=salesOnlyFixture();apply(f);h.api.update({...f.review,readModel:f.readModel});const html=h.nodes.get('month-dashboard').innerHTML;assert.equal((html.match(/class="month-dashboard-unknown"/g)||[]).length,4);assert.doesNotMatch(html,/class="month-dashboard-quantity">\d/);h.api.destroy();}
-  const h=harness(),f=salesOnlyFixture();delete f.review.rows[2].soldGroup;h.api.update({...f.review,readModel:f.readModel});assert.match(h.nodes.get('month-dashboard').innerHTML,/ยังไม่มีหลักฐานแยกขายแล้ว\/ยังไม่โหลดครบ/);assert.match(h.nodes.get('month-dashboard').innerHTML,/data-month-metric="sold"><span>ขายแล้วตามเกณฑ์<\/span><strong><span class="month-dashboard-unknown">ยังไม่ยืนยัน/);h.api.destroy();
+test('three-group dashboard fails closed on wrong provenance or quantities but never uses old queue/soldGroup as classifier',()=>{
+  for(const apply of [f=>f.readModel.selectedMonth='2030-11',f=>f.readModel.source.month='2030-11']){const h=harness(),f=salesOnlyFixture();apply(f);h.api.update({...f.review,readModel:f.readModel});const html=h.nodes.get('month-dashboard').innerHTML;assert.match(html,/เดือนที่เลือกกับเดือนของหลักฐานขายไม่ตรงกัน/);assert.doesNotMatch(html,/class="sg-quantity" data-sales-unit="(?:sheet|strip)">\d/);h.api.destroy();}
+  for(const apply of [f=>f.review.rows[0].qty=null,f=>f.review.rows[0].unit='box']){const h=harness(),f=salesOnlyFixture();apply(f);h.api.update({...f.review,readModel:f.readModel});const html=h.nodes.get('month-dashboard').innerHTML,confirmed=html.split('data-sales-group="confirmed">')[1].split('<div class="sg-card-details">')[0];assert.match(confirmed,/ยังไม่ยืนยัน/);assert.match(html,/ยังมีข้อมูลที่ต้องตรวจ/);h.api.destroy();}
+  const h=harness(),f=salesOnlyFixture();h.api.update({...f.review,readModel:f.readModel});const before=h.nodes.get('month-dashboard').innerHTML;delete f.review.rows[2].soldGroup;f.review.rows[2].queue.group=null;h.api.update({...f.review,readModel:f.readModel});assert.equal(h.nodes.get('month-dashboard').innerHTML,before,'source grouping is independent of stock queue and sold-payment partition');h.api.destroy();
 });
 test('selected-month dashboard suspension and month replacement retain registry drafts without changing stock identity',async()=>{
   const h=harness(),f=salesOnlyFixture(),s=registrySnapshot();h.api.update({...f.review,readModel:f.readModel});h.api.setStockIdentity({revision:s.revision,reportDate:s.reportDate});h.api.applyNotesSnapshot(s);const input=h.input();input.value='Synthetic month-switch draft';input.focus();input.setSelectionRange(2,6,'forward');await input.dispatch('input');
