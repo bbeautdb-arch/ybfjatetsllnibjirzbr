@@ -34,6 +34,15 @@ function upperHost(h){
 const notes=root=>root.querySelectorAll('[data-stock-note]');
 const follows=root=>root.querySelectorAll('[data-followup-edit]');
 
+test('managed unlock gates upper and lower shared editors and preserves their drafts when capability expires',async()=>{
+  let access={unlocked:false,eligible:true,expiresAt:null};const remote=registrySnapshot(),h=harness({getAnnotationAccess:()=>access,readNotes:async()=>clone(remote),unlockAnnotations:async()=>{access={unlocked:true,eligible:true,expiresAt:'2099-01-01T00:00:00Z'};return {access,snapshot:clone(remote)};},lockAnnotations:()=>{access={unlocked:false,eligible:true,expiresAt:null};}}),target=upperHost(h);await tick();h.api.attachFreeSurface(target,identity(remote));
+  assert.equal(notes(target)[0].disabled,true);assert.equal(follows(target)[0].disabled,true);assert.equal(target.querySelector('[data-upper-free-stage]').hidden,true);
+  await h.nodes.get('annotations-unlock').click();h.nodes.get('annotations-code').value='SYNTHETIC';await h.nodes.get('annotations-unlock-form').dispatch('submit');
+  assert.equal(notes(target)[0].disabled,false);assert.equal(follows(target)[0].disabled,false);
+  const input=notes(target)[0];input.value='upper managed draft';await input.dispatch('input');assert.equal(h.input().value,'upper managed draft');assert.equal(target.querySelector('[data-upper-free-stage]').hidden,false);
+  access={...access,expiresAt:'2000-01-01T00:00:00Z'};await target.querySelector('[data-upper-free-stage]').click();assert.equal(h.nodes.get('notes-confirmation').hidden,true);assert.equal(input.disabled,true);assert.equal(h.input().disabled,true);assert.equal(h.api.hasDirty(),true);h.api.destroy();
+});
+
 test('upper Free uses only matching saved registry, real saved Free, separate unit totals and full-month-independent list',async()=>{
   const remote=registrySnapshot(),before=JSON.stringify(remote),h=harness({readNotes:async()=>clone(remote)}),target=upperHost(h);
   h.api.attachFreeSurface(target,identity(remote));assert.match(target.innerHTML,/รออ่านทะเบียนส่วนกลาง/);assert.equal(notes(target).length,0);

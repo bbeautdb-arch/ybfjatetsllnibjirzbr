@@ -106,7 +106,7 @@
     }
     const readAt = new Date(now).toISOString();
     const savedStockRegistry = {revision:stock.revision,reportDate:stock.report.reportDate,readAt,rows:savedRows};
-    return { snapshot: { rows, notesBySpec, legacyNotesByThickness, savedStockRegistry, revision: stock.revision, catalogRevision: catalog.catalogRevision, reportDate: stock.report.reportDate, readAt, canSave: catalog.permissions?.pricesAndNotes === true, canEditFollowup: stock.permissions?.followup === true }, catalog: clone(catalog), stock: clone(stock) };
+    return { snapshot: { rows, notesBySpec, legacyNotesByThickness, savedStockRegistry, revision: stock.revision, catalogRevision: catalog.catalogRevision, reportDate: stock.report.reportDate, readAt, canSave: (Object.hasOwn(catalog.permissions||{},'annotations') ? catalog.permissions.annotations : catalog.permissions?.pricesAndNotes) === true, canEditFollowup: stock.permissions?.followup === true }, catalog: clone(catalog), stock: clone(stock) };
   }
   function validChanges(changes, snapshot) {
     if (!Array.isArray(changes) || !changes.length || changes.length > 2000 || !snapshot.canSave) fail('invalid-request');

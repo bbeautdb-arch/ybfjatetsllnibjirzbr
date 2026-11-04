@@ -210,6 +210,18 @@ main{background:var(--bg);color:var(--text)}
     .month-dashboard, .queue-metrics .metric, .table-shell, .controls, .sectionbar, .basis > summary, .basis-content, .changes-toolbar { background: Canvas; color: CanvasText; box-shadow: none; border-color: CanvasText; -webkit-backdrop-filter: none; backdrop-filter: none; }
     button:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible { outline-color: Highlight; }
   }
+  .annotation-tools { padding: 0; background: transparent; border: 0; box-shadow: none; }
+  .annotation-tools > .stock-notes-actions { gap: 8px; margin: 0 0 12px; flex-wrap: wrap; }
+  .annotation-unlock-form { max-width: 520px; margin: 12px 0; padding: 14px; border: 1px solid #cedbce; border-radius: 14px; background: rgba(255,255,249,.86); }
+  .annotation-unlock-form > label { display: block; margin-bottom: 8px; font-weight: 650; }
+  .annotation-unlock-form input { min-width: 130px; flex: 1; min-height: 42px; padding: 8px 12px; border: 1px solid #a9bba9; border-radius: 9px; font: inherit; color: #203d2f; background: #fff; }
+  .annotation-unlock-form input:focus-visible { outline: 3px solid #8db8a0; outline-offset: 2px; }
+  .annotation-tools #notes-import-preview:empty { display: none; }
+  .annotation-tools #notes-import-preview { margin: 12px 0; }
+  .annotation-tools #notes-import-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .annotation-tools #notes-import-preview td small { display: block; font-size: 11px; opacity: .7; }
+  .annotation-tools #notes-import-preview > button { margin: 8px 8px 0 0; }
+  [data-managed-annotations="true"] .notes-draft-warning { display: none; }
   @media (prefers-reduced-motion: reduce) {
     .plainbutton, .expand { transition: none; }
   }

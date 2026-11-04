@@ -53,6 +53,7 @@ jobs:
           node --test tests/stock-order-controller.mjs tests/stock-order-review-ui.mjs tests/stock-order-header.mjs
           node --test tests/stock-sales-groups.mjs tests/stock-sales-groups-view.mjs
           node --test tests/stock-free-composition.mjs tests/stock-upper-free-notes.mjs tests/stock-free-surface-lifecycle.mjs
+          node --test tests/stock-annotations-import.mjs tests/stock-annotation-unlock-controller.mjs tests/stock-annotation-unlock-ui.mjs
       - name: Stage public files only
         run: |
           mkdir _site

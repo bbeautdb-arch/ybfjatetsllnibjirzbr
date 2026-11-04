@@ -78,6 +78,13 @@ function binding(month='2026-01',digit='a'){
 }
 function browser(){let token='synthetic-auth',clock=Date.parse('2026-01-15T00:00:00Z');const calls=[],summaries=[],mounted=[],responses=[],soldInvalidations=[],created=[];const win={Date:{now:()=>clock},document:{createElement:()=>{const n=new Node();created.push(n);return n;}},AAFStockAccess:{token:()=>token},AAFStockNotesCore:core,AAFStockSummary:{setOrderReview:(...args)=>summaries.push(args),invalidateCurrentMonthSold:()=>soldInvalidations.push(true)},AAFOrderReviewUI:{mount:(host,review,services)=>{const v={dirty:false,destroyed:false,suspensions:[],hasDirty(){return this.dirty;},update(r){this.review=r;},suspendSales(message){this.suspensions.push(message);},destroy(){this.destroyed=true;}};mounted.push({host,review,services,v});return v;}},addEventListener(){},async fetch(url,options){calls.push({url,options});const value=await responses.shift();return{status:value.status||200,ok:!value.status,json:async()=>value};}};const api=boot(win),setAccess=api.setAccess;api.setAccess=next=>setAccess({...binding(),...next});return{api,win,calls,summaries,mounted,responses,soldInvalidations,created,setToken:v=>token=v,setClock:v=>clock=Date.parse(v)};}
 const report=(b=binding())=>({ok:true,revision:b.revision,stockReportDate:b.reportDate,availableMonths:[b.currentMonthSold.month],selectedMonth:b.currentMonthSold.month,review:{metadata:{month:b.currentMonthSold.month},rows:[]},readModel:{kind:'current-month-order-review',status:'verified',sourceIsLive:false,queueApplied:false,source:{...b.currentMonthSold.source,month:b.currentMonthSold.month},stock:{...b.currentAllocation.stock},warning:'verified captured source, not live'}});
+async function unlockBrowser(h){
+  const f=fixture(),annotationAccess={eligible:true,unlocked:true,expiresAt:'2026-01-15T00:30:00Z',message:''};
+  f.stock.permissions={followup:true};f.catalog.permissions.annotations=true;f.stock.annotationAccess=annotationAccess;f.catalog.annotationAccess=annotationAccess;
+  h.responses.push({ok:true,unlockToken:'synthetic-grant-not-a-real-secret',annotationAccess},f.stock,f.catalog);
+  await h.mounted[0].services.unlockAnnotations('synthetic-code-not-a-real-secret');
+  assert.equal(h.mounted[0].services.getAnnotationAccess().unlocked,true);
+}
 test('authorized overview is GET only, same month and no-store; reattach preserves drafts',async()=>{
   const h=browser();h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push(report());await h.api.attach(new Node());assert.equal(h.mounted.length,1);assert.equal(h.calls[0].options.method,'GET');assert.equal(h.calls[0].options.cache,'no-store');assert.equal(h.calls[0].options.headers.Authorization,'Bearer synthetic-auth');assert(!h.calls[0].url.includes('synthetic-auth'));h.mounted[0].v.dirty=true;await h.api.attach(new Node());assert.equal(h.mounted.length,1);assert(h.api.isDirty());assert.equal(h.api.selectMonth('2026-02'),false);
 });
@@ -111,6 +118,7 @@ test('auth failures, account changes and logout clear the independent current so
 test('403 POST and same-credential 401 retain dirty UI; no automatic repeat or prior-account restoration',async()=>{
   for(const status of [403,401]){
     const h=browser();h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push(report());await h.api.attach(new Node());h.mounted[0].v.dirty=true;
+    await unlockBrowser(h);
     const f=fixture();f.stock.permissions={followup:true};h.responses.push(f.stock,f.catalog,{status,ok:false});
     await assert.rejects(h.mounted[0].services.saveChanges({notesChanges:changes,followupChanges}));assert.equal(h.mounted[0].v.destroyed,false);assert(h.api.isDirty());if(status===403)assert(!h.api.isSaving());
     const calls=h.calls.length;if(status===401){await assert.rejects(h.mounted[0].services.readNotes());assert.equal(h.calls.length,calls);}
@@ -120,9 +128,10 @@ test('403 POST and same-credential 401 retain dirty UI; no automatic repeat or p
 test('401 on preflight or post-write readback retains drafts but actual logout destroys them',async()=>{
   for(const phase of ['preflight','readback']){
     const h=browser();h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push(report());await h.api.attach(new Node());h.mounted[0].v.dirty=true;
+    await unlockBrowser(h);
     const f=fixture();f.stock.permissions={followup:true};
     if(phase==='preflight')h.responses.push({status:401,ok:false});else h.responses.push(f.stock,f.catalog,{ok:true,revision:2,catalogRevision:3,updatedAt:'2026-01-01T01:00:00Z',savedNoteCount:1,savedFollowupCount:1},{status:401,ok:false});
-    await assert.rejects(h.mounted[0].services.saveChanges({notesChanges:changes,followupChanges}));assert.equal(h.mounted[0].v.destroyed,false);assert(h.api.isDirty());assert.equal(h.calls.filter(c=>c.options.method==='POST').length,phase==='preflight'?0:1);
+    await assert.rejects(h.mounted[0].services.saveChanges({notesChanges:changes,followupChanges}));assert.equal(h.mounted[0].v.destroyed,false);assert(h.api.isDirty());assert.equal(h.calls.filter(c=>c.options.method==='POST'&&JSON.parse(c.options.body).action!=='unlockSalesAnnotations').length,phase==='preflight'?0:1);
     h.setToken('');h.api.invalidate('logout');assert.equal(h.mounted[0].v.destroyed,true);assert(!h.api.isDirty());
   }
 });

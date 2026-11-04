@@ -2,7 +2,7 @@
 (function (global) {
 'use strict';
 const assetBase = global.document.currentScript && global.document.currentScript.src;
-const stylesheetURL = assetBase ? new URL('stock_order_review.css?v=20261104-three-sales-groups-r1', assetBase).href : 'stock_order_review.css?v=20261104-three-sales-groups-r1';
+const stylesheetURL = assetBase ? new URL('stock_order_review.css?v=20261105-annotation-unlock-r1', assetBase).href : 'stock_order_review.css?v=20261105-annotation-unlock-r1';
 const STATIC_HTML = "<main>\n<header class=\"top\"><div><h1 id=\"review-title\">ภาพรวมรายการขาย</h1><p class=\"muted\">เรียงกลุ่มและวัน ETD · รายการต้นทางครบ · ตรวจคิวก่อนยืนยันของที่ขาด</p><p class=\"small muted\" id=\"visible-source-date\"></p><span class=\"queue-method-label\" id=\"queue-method\" hidden>คิวตามกติกาในชุดข้อมูล</span></div><span class=\"readonly\">ยอดอ่านอย่างเดียว · หมายเหตุ / ติดตามตามสิทธิ์</span></header>\n<section class=\"changes-toolbar\" aria-label=\"บันทึกการเปลี่ยนแปลง\"><button type=\"button\" class=\"plainbutton changes-save\" id=\"changes-stage\" disabled>บันทึกการเปลี่ยนแปลง</button><span id=\"changes-count\" class=\"small\" role=\"status\" aria-live=\"polite\">ไม่มีการเปลี่ยนแปลง</span><span id=\"changes-permission\" class=\"small muted\"></span></section><section id=\"notes-confirmation\" class=\"notes-confirmation\" hidden></section><section class=\"controls\" aria-label=\"เลือกความหนา\"><label for=\"thickness\">ความหนา</label><select id=\"thickness\"></select><button type=\"button\" class=\"plainbutton\" id=\"back\" hidden>← ภาพรวมทุกความหนา</button><div class=\"facts small muted\" id=\"scope-label\"></div></section>\n<p class=\"callout\" id=\"source-warning\" role=\"note\" hidden></p><section class=\"overview\" id=\"metrics\" aria-label=\"ภาพรวมสินค้าและมูลค่า\"></section>\n<p class=\"money-source-note\" id=\"money-source-note\" hidden></p><section class=\"free-detail-panel\" id=\"free-detail-panel\" aria-label=\"รายละเอียด Free Stock\" hidden></section>\n<details class=\"basis reconciliation\"><summary>ตรวจเทียบกับภาพรวมสต๊อก</summary><div id=\"reconciliation\"></div></details>\n<div class=\"sectionbar\"><h2 id=\"table-title\"></h2><button type=\"button\" id=\"collapse\" class=\"plainbutton\" hidden>ย่อรายละเอียดทั้งหมด</button><span class=\"small muted\" id=\"table-help\"></span></div><div id=\"table-area\"></div>\n<div class=\"help-row\" id=\"allocation-legend\"></div><p class=\"callout\" id=\"unreserved-note\" hidden></p><p class=\"callout\" id=\"pending-note\" hidden></p>\n<details class=\"basis\" id=\"stock-basis\"><summary id=\"stock-title\">ทะเบียนสต๊อกทุกเกรดและขนาด · ติดตามและหมายเหตุ</summary><div class=\"basis-content\">\n<section class=\"stock-notes-tools\" aria-label=\"หมายเหตุร่วมกับ Free Stock\"><strong>หมายเหตุรายสินค้า · ใช้รายการเดียวกับ Free Stock</strong><p class=\"small muted\">จับคู่ความหนา เกรด ขนาดจริง และหน่วย · กรอกได้แม้ Free เป็น 0 · ไม่เปลี่ยนยอดหรือราคา</p>\n<div class=\"stock-notes-actions\"><button type=\"button\" id=\"notes-connect\" hidden></button><button type=\"button\" class=\"plainbutton\" id=\"notes-refresh\">โหลดหมายเหตุล่าสุด</button><button type=\"button\" class=\"plainbutton\" id=\"notes-stage\" disabled>ตรวจและบันทึกการเปลี่ยนแปลง</button></div><details class=\"notes-import\" id=\"notes-import\"><summary>นำเข้าหมายเหตุจาก Excel</summary><p class=\"small muted\">อ่านเฉพาะหมายเหตุ จับคู่สินค้า ไม่เปลี่ยนยอดหรือราคา · ต้องตรวจรายการก่อนบันทึก</p><div class=\"stock-notes-actions\"><label>คอลัมน์ <select id=\"notes-file-column\"><option value=\"AD\">AD · หมายเหตุ</option><option value=\"AE\">AE · เลือกเองหลังตรวจหัวตาราง</option></select></label><label>วิธีเติม <select id=\"notes-file-mode\"><option value=\"append\">ต่อท้ายของเดิม</option><option value=\"replace\">แทนข้อความเดิม · ต้องตรวจทุกแถว</option></select></label><label class=\"plainbutton\">เลือก Excel <input id=\"notes-file\" type=\"file\" accept=\".xlsx,.xls\" aria-label=\"เลือกไฟล์ Excel หมายเหตุ\"></label></div><p class=\"small muted\">AE อาจเป็นคอลัมน์ผู้บันทึกหรือข้อมูลอื่น ต้องตรวจชื่อหัวคอลัมน์ก่อนใช้ · ช่องว่างข้าม ไม่ลบหมายเหตุเดิม</p><div id=\"notes-import-preview\" role=\"status\" aria-live=\"polite\"></div></details><p id=\"notes-status\" class=\"notes-status\" role=\"status\" aria-live=\"polite\"></p><p class=\"notes-draft-warning\">ร่างอยู่ในแท็บนี้จนกว่าจะบันทึกและอ่านกลับ · ช่องว่างไม่ลบหมายเหตุเดิม · การรีโหลดหน้าจะทำให้ร่างที่ยังไม่เซฟหาย</p></section>\n<div id=\"stock-table\"></div><div id=\"stock-legacy\"></div><p class=\"small muted\">ข้อมูลคลังตามวันที่ระบุ แยกจากผลจัดสรรคิวใหม่ · หมายเหตุใช้ขนาดจริง กลับด้านได้ แต่ไม่รวมขนาดใกล้เคียงหรือต่างเกรด/หน่วย</p></div></details>\n<details class=\"basis\" hidden><summary>วันที่ข้อมูล ขอบเขต และวิธีอ่าน</summary><div class=\"basis-content small\"><p id=\"source-sales\"></p><p id=\"source-stock\"></p><p id=\"source-allocation\"></p><p id=\"queue-order-description\"></p><p>โหลดแล้วไม่หักสต๊อกซ้ำ · รายการยังไม่ยืนยันจำนวนไม่ใช่ศูนย์ · คงต้นทางที่ยกเลิกหรือรอเงื่อนไขไว้ตรวจสอบ</p><p>ยอดเงินสินค้าใช้ราคาขายจริงในใบขาย ส่วน Free ใช้ราคาประเมินสต๊อก ไม่สลับกัน · วันที่ ETD ไม่ใช่วันรับเงิน</p><p>หน่วยแผ่นและชิ้นแยกกัน เทียบ 4×8 หนา 2.5 มม. ใช้ปริมาตรตามขนาดจริง ไม่เปลี่ยนจำนวนสต๊อก</p></div></details><footer hidden>ข้อมูลบริษัทจากชุดที่บัญชีนี้มีสิทธิ์อ่าน · หน้านี้ไม่เปลี่ยนยอดสต๊อก ยอดจอง ราคา หรือสถานะต้นทาง</footer><div id=\"announcement\" hidden role=\"status\" aria-live=\"polite\" class=\"small muted\"></div></main>";
 function mount(host, review, services = {}) {
   if (!host || typeof host.attachShadow !== 'function') throw new TypeError('A host element is required');
@@ -17,9 +17,29 @@ function mount(host, review, services = {}) {
   };
   const CSS = global.CSS || {escape:value=>String(value).replace(/[^a-zA-Z0-9_-]/g, character=>'\\'+character)};
   const compactChrome=services.compactChrome===true;
+  // The controller owns the authenticated, short-lived editing capability.
+  // This view never stores the unlock code or creates a second annotation ledger.
+  const managedAnnotations=typeof services.getAnnotationAccess==='function';
+  const annotationAccess=()=>{
+    if(!managedAnnotations)return {unlocked:true,eligible:true,expiresAt:null,message:''};
+    try{
+      const value=services.getAnnotationAccess()||{};
+      const expired=value.expiresAt&&(!Number.isFinite(Date.parse(value.expiresAt))||Date.parse(value.expiresAt)<=Date.now());
+      return {...value,unlocked:value.unlocked===true&&value.eligible===true&&!expired,eligible:value.eligible===true};
+    }catch{return {unlocked:false,eligible:false,expiresAt:null,message:'กรุณาเข้าสู่ระบบบัญชี AAF ที่มีสิทธิ์'};}
+  };
+  const annotationsUnlocked=()=>annotationAccess().unlocked;
+  const annotationControls=`<section class="stock-notes-tools annotation-tools" aria-label="แก้ไขติดตามการขายและหมายเหตุ">
+    <div class="stock-notes-actions"><button type="button" class="plainbutton" id="annotations-unlock">ปลดล็อกแก้ไข</button><button type="button" class="plainbutton" id="annotations-upload" disabled>อัปโหลด Excel</button><button type="button" class="plainbutton" id="notes-stage" hidden disabled>ตรวจและบันทึก</button><button type="button" id="notes-connect" hidden></button><button type="button" class="plainbutton" id="notes-refresh" hidden>ลองโหลดล่าสุดอีกครั้ง</button></div>
+    <form id="annotations-unlock-form" class="annotation-unlock-form" hidden><label for="annotations-code">รหัสแก้ไขติดตามการขายและหมายเหตุ</label><div class="stock-notes-actions"><input id="annotations-code" type="password" autocomplete="off" maxlength="128" aria-label="รหัสปลดล็อกแก้ไข"><button type="submit" class="plainbutton" id="annotations-submit">ปลดล็อก</button><button type="button" class="plainbutton" id="annotations-cancel">ยกเลิก</button></div></form>
+    <p id="annotations-access-status" class="notes-status" role="status" aria-live="polite" hidden></p>
+    <input id="notes-file" type="file" accept=".xlsx,.xls" aria-label="อัปโหลด Excel ติดตามการขายและหมายเหตุ" hidden>
+    <select id="notes-file-column" hidden><option value="AD">AD</option></select><select id="notes-file-mode" hidden><option value="replace">replace</option></select>
+    <div id="notes-import-preview" role="status" aria-live="polite"></div><p id="notes-status" class="notes-status" role="status" aria-live="polite" hidden></p>
+  </section>`;
   const uiState = {thickness:'all',month:null,freePanelOpen:false};
   const notesState = {connected:false,canSave:false,canEditFollowup:false,loaded:false,liveRows:new Map(),rawRecords:new Map(),notes:new Map(),legacy:new Map(),drafts:new Map(),followupDrafts:new Map(),conflicts:new Map(),followupConflicts:new Map(),pending:null,retryBlocked:false,revision:null,catalogRevision:null,readAt:'',reportDate:'',status:'ยังไม่โหลดหมายเหตุส่วนกลาง · ช่องว่างไม่ใช่หลักฐานว่าไม่มีหมายเหตุ',tone:''};
-  let destroyed=false, notesBusy=false, generation=0, queuedReview=null, currentReview=review, instance, salesSuspended='',expectedStockIdentity=null;
+  let destroyed=false, notesBusy=false, generation=0, queuedReview=null, currentReview=review, instance, salesSuspended='',expectedStockIdentity=null,annotationExpiryTimer=null;
   // One annotation state serves the registry and the upper Free card. The
   // external host never owns credentials, a second draft, or a write service.
   let externalFreeHost=null,externalFreeIdentity=null,lastExternalFreeMarkup=null;
@@ -49,7 +69,10 @@ function mount(host, review, services = {}) {
     shadow.replaceChildren();
     const link=ownerDocument.createElement('link');link.rel='stylesheet';link.href=stylesheetURL;shadow.append(link);
     const frame=ownerDocument.createElement('div');frame.className=compactChrome?'compact-chrome':'';
+    if(managedAnnotations)frame.setAttribute('data-managed-annotations','true');
     frame.innerHTML=STATIC_HTML
+      .replace(/<section class="stock-notes-tools"[\s\S]*?<\/section>/,match=>managedAnnotations?annotationControls:match)
+      .replace('<p class="small muted">ข้อมูลคลังตามวันที่ระบุ',managedAnnotations?'<p class="small muted" hidden>ข้อมูลคลังตามวันที่ระบุ':'<p class="small muted">ข้อมูลคลังตามวันที่ระบุ')
       .replace('<section class="controls"','<section class="month-dashboard" id="month-dashboard" aria-label="สรุปยอดขาย 3 กลุ่มของเดือนที่เลือก"></section><section class="controls"')
       // Owner Nov5 retired this duplicate allocation summary. Keep its render
       // targets inert for compatibility, without a visible disclosure or label.
@@ -417,7 +440,7 @@ function mount(host, review, services = {}) {
   };
   const trackingFields = p => {
     const key=noteKey(p),records=workbookTrackingRecords(p),allLive=notesState.liveRows.get(key)?.records||[],live=p.rawKey?allLive.filter(record=>record.rawKey===p.rawKey):allLive;
-    const editable=notesState.loaded&&notesState.canEditFollowup&&!notesBusy&&!notesState.pending;
+    const editable=annotationsUnlocked()&&notesState.loaded&&notesState.canEditFollowup&&!notesBusy&&!notesState.pending;
     const suggestion=allLive.length===1&&live.length===1&&records.length===1?String(records[0].followup||''):'';
     const history=records.length?'<details class="tracking-history"><summary>ข้อมูลจาก Excel เดิม · ไม่ใช่ข้อมูลส่วนกลางล่าสุด</summary>'+records.map(record=>'<p>'+esc(record.followup||'(ไม่มีข้อความ)')+'<small class="tracking-source">'+esc(record.followupBy||'ไม่ระบุผู้ติดตาม')+' · '+esc(trackingDate(record.followupAt))+'</small></p>').join('')+'</details>':'';
     const fields=live.map(record=>{
@@ -434,22 +457,45 @@ function mount(host, review, services = {}) {
     const payload=currentChanges(),total=payload.notesChanges.length+payload.followupChanges.length;
     const transport=typeof services.saveChanges==='function'||(!payload.followupChanges.length&&typeof services.saveNotes==='function');
     const denied=payload.notesChanges.length&&!notesState.canSave||payload.followupChanges.length&&!notesState.canEditFollowup;
-    const blocked=notesBusy||!notesState.loaded||notesState.retryBlocked||notesState.conflicts.size>0||notesState.followupConflicts.size>0||!total||!transport||!!denied;
+    const access=annotationAccess();
+    const conciseStatus=notesState.tone==='error'?notesState.status:notesState.conflicts.size+notesState.followupConflicts.size?'ข้อมูลส่วนกลางเปลี่ยน · กรุณาตรวจข้อความก่อนบันทึก':notesBusy?'กำลังดำเนินการ…':total?'ร่างยังไม่บันทึก '+total+' รายการ':'';
+    const blocked=!access.unlocked||notesBusy||!notesState.loaded||notesState.retryBlocked||notesState.conflicts.size>0||notesState.followupConflicts.size>0||!total||!transport||!!denied;
     document.getElementById('notes-connect').hidden=true;
     document.getElementById('notes-refresh').disabled=notesBusy||typeof services.readNotes!=='function';
     document.getElementById('notes-stage').disabled=blocked;
+    if(managedAnnotations){
+      document.getElementById('notes-stage').hidden=!total;
+      document.getElementById('notes-refresh').hidden=notesState.tone!=='error'&&!notesState.retryBlocked;
+      const unlock=document.getElementById('annotations-unlock');unlock.textContent=access.unlocked?'ล็อกการแก้ไข':'ปลดล็อกแก้ไข';unlock.disabled=notesBusy;
+      const status=document.getElementById('annotations-access-status');
+      if(!access.eligible){status.hidden=false;status.textContent=access.message||'กรุณาเข้าสู่ระบบบัญชี AAF ที่มีสิทธิ์';}
+      else if(access.unlocked){status.hidden=true;status.textContent='';}
+      document.getElementById('annotations-submit').disabled=notesBusy;
+      document.getElementById('annotations-code').disabled=notesBusy;
+      if(annotationExpiryTimer&&typeof global.clearTimeout==='function')global.clearTimeout(annotationExpiryTimer);
+      annotationExpiryTimer=null;
+      if(access.unlocked&&access.expiresAt&&typeof global.setTimeout==='function')annotationExpiryTimer=global.setTimeout(()=>{
+        annotationExpiryTimer=null;if(!isCurrent())return;
+        const field=document.getElementById('annotations-code');if(field)field.value='';
+        const message=document.getElementById('annotations-access-status');message.hidden=false;message.textContent='หมดเวลาปลดล็อก · กรอกรหัสอีกครั้งเพื่อแก้ไขต่อ';
+        updateNotesControls();
+      },Math.max(1,Date.parse(access.expiresAt)-Date.now()+20));
+    }
     document.getElementById('changes-stage').disabled=blocked;
     const needsAction=notesBusy||notesState.drafts.size>0||notesState.followupDrafts.size>0||!!notesState.pending||notesState.retryBlocked||notesState.conflicts.size>0||notesState.followupConflicts.size>0||notesState.tone==='error'||importReviewPending||!document.getElementById('notes-confirmation').hidden;
     frame.setAttribute('data-changes-active',String(needsAction));
     document.getElementById('changes-count').textContent=(compactChrome&&notesState.tone==='error'?notesState.status+' · ':'')+(importReviewPending?'มีร่างนำเข้ารอตรวจ · ':'')+'ยังไม่บันทึก: หมายเหตุ '+notesState.drafts.size+' สเปก · ติดตาม '+notesState.followupDrafts.size+' แถว'+(notesBusy?' · กำลังทำรายการ':'');
     document.getElementById('changes-permission').textContent=notesState.loaded&&!notesState.canEditFollowup?'การติดตามดูอย่างเดียว · เข้าสู่ระบบบัญชีที่มีสิทธิ์เพื่อแก้ไข':'ผู้ติดตามและเวลาให้ระบบบันทึกหลังเซฟ';
-    for(const id of ['notes-file','notes-file-column','notes-file-mode'])document.getElementById(id).disabled=notesBusy||!notesState.canSave||notesState.retryBlocked||!!notesState.drafts.size||!!notesState.followupDrafts.size||typeof services.prepareNotesFile!=='function';
-    const freeSave=document.getElementById('free-notes-stage');if(freeSave)freeSave.disabled=blocked;
-    const upperSave=externalFreeHost?.querySelector('[data-upper-free-stage]');if(upperSave)upperSave.disabled=blocked||!externalFreeReady();
-    const upperStatus=externalFreeHost?.querySelector('[data-upper-free-status]');if(upperStatus)upperStatus.textContent=notesState.status+(total?' · ร่างร่วมกัน '+total+' รายการ ยังไม่บันทึก':'');
+    const importBlocked=!access.unlocked||notesBusy||!(notesState.canSave||managedAnnotations&&notesState.canEditFollowup)||notesState.retryBlocked||!!notesState.drafts.size||!!notesState.followupDrafts.size||(managedAnnotations?typeof services.prepareAnnotationsFile!=='function':typeof services.prepareNotesFile!=='function');
+    for(const id of ['notes-file','notes-file-column','notes-file-mode'])document.getElementById(id).disabled=importBlocked;
+    if(managedAnnotations)document.getElementById('annotations-upload').disabled=importBlocked;
+    const freeSave=document.getElementById('free-notes-stage');if(freeSave){freeSave.disabled=blocked;if(managedAnnotations)freeSave.hidden=!total;}
+    const upperSave=externalFreeHost?.querySelector('[data-upper-free-stage]');if(upperSave){upperSave.disabled=blocked||!externalFreeReady();if(managedAnnotations)upperSave.hidden=!total;}
+    const upperStatus=externalFreeHost?.querySelector('[data-upper-free-status]');if(upperStatus){upperStatus.textContent=managedAnnotations?conciseStatus:notesState.status+(total?' · ร่างร่วมกัน '+total+' รายการ ยังไม่บันทึก':'');if(managedAnnotations)upperStatus.hidden=notesState.tone!=='error'&&!notesBusy&&!total&&!notesState.retryBlocked;}
     syncNoteEditorPermissions();
     const status=document.getElementById('notes-status');status.className='notes-status '+notesState.tone;
     status.textContent=notesState.status+(notesState.drafts.size||notesState.followupDrafts.size?' · ยังมีร่างที่ไม่เซฟ':'')+(notesState.conflicts.size+notesState.followupConflicts.size?' · ต้องทวนข้อความ '+(notesState.conflicts.size+notesState.followupConflicts.size)+' รายการ':'');
+    if(managedAnnotations){status.textContent=conciseStatus;status.hidden=notesState.tone!=='error'&&!notesBusy&&!total&&!notesState.retryBlocked;}
   };
   const notesField = (p,surface='stock') => {
     const key=noteKey(p);const draft=notesState.drafts.get(key);const file=workbookBySpec.get(key);const fileNote=(file?.legacyNotes||[]).join('\n');const value=draft?draft.after:notesState.loaded?(notesState.notes.get(key)||''):fileNote;
@@ -463,8 +509,8 @@ function mount(host, review, services = {}) {
   function noteEditorContainers(){return [document.getElementById('stock-table'),document.getElementById('free-detail-panel'),externalFreeHost].filter(Boolean);}
   function syncNoteEditorPermissions(){
     for(const root of noteEditorContainers()){
-      for(const input of root.querySelectorAll('[data-stock-note]'))input.disabled=notesBusy||!!notesState.pending||root===externalFreeHost&&!externalFreeReady()||notesState.loaded&&(!notesState.canSave||!notesState.liveRows.has(input.dataset.stockNote));
-      for(const input of root.querySelectorAll('[data-followup-edit]'))input.disabled=notesBusy||!!notesState.pending||!notesState.loaded||!notesState.canEditFollowup||!notesState.rawRecords.has(input.dataset.followupEdit)||root===externalFreeHost&&!externalFreeReady();
+      for(const input of root.querySelectorAll('[data-stock-note]'))input.disabled=!annotationsUnlocked()||notesBusy||!!notesState.pending||root===externalFreeHost&&!externalFreeReady()||notesState.loaded&&(!notesState.canSave||!notesState.liveRows.has(input.dataset.stockNote));
+      for(const input of root.querySelectorAll('[data-followup-edit]'))input.disabled=!annotationsUnlocked()||notesBusy||!!notesState.pending||!notesState.loaded||!notesState.canEditFollowup||!notesState.rawRecords.has(input.dataset.followupEdit)||root===externalFreeHost&&!externalFreeReady();
     }
   }
   function syncNoteEditors(key,sourceInput){
@@ -477,7 +523,7 @@ function mount(host, review, services = {}) {
   }
   function editNote(input){
     const key=input.dataset.stockNote;
-    if(input.disabled||notesBusy||notesState.pending||notesState.loaded&&(!notesState.canSave||!notesState.liveRows.has(key)))return;
+    if(!annotationsUnlocked()||input.disabled||notesBusy||notesState.pending||notesState.loaded&&(!notesState.canSave||!notesState.liveRows.has(key))){syncNoteEditorPermissions();return;}
     const existing=notesState.drafts.get(key),before=existing?existing.before:notesState.loaded?(notesState.notes.get(key)||''):null;
     if(notesState.loaded&&input.value===(notesState.notes.get(key)||'')){notesState.drafts.delete(key);notesState.conflicts.delete(key);}
     else notesState.drafts.set(key,{before,after:input.value});
@@ -489,7 +535,7 @@ function mount(host, review, services = {}) {
       const key=button.dataset.noteUseRemote;notesState.drafts.delete(key);notesState.conflicts.delete(key);renderStock(select.value);refreshFreeStockPanel();
     }));
     root.querySelectorAll('[data-note-keep-draft]').forEach(button=>button.addEventListener('click',()=>{
-      const key=button.dataset.noteKeepDraft,draft=notesState.drafts.get(key);if(!draft||!notesState.canSave||!notesState.liveRows.has(key)||notesState.pending)return;
+      const key=button.dataset.noteKeepDraft,draft=notesState.drafts.get(key);if(!annotationsUnlocked()||!draft||!notesState.canSave||!notesState.liveRows.has(key)||notesState.pending)return;
       draft.before=notesState.notes.get(key)||'';notesState.conflicts.delete(key);renderStock(select.value);refreshFreeStockPanel();
     }));
   }
@@ -513,7 +559,10 @@ function mount(host, review, services = {}) {
     const manualFree=saved&&selected.some(p=>p.freeAt||p.committed!==null&&Math.abs(p.free-Math.max(0,p.physical-p.committed))>1e-6);
     const basis=saved?(ready?`สต๊อกที่บันทึก · รายงาน ${registry.reportDate} · Rev ${registry.revision} · อ่าน ${trackingDate(registry.readAt)} · รวมภาระในแผนที่บันทึก ไม่ใช่ผลจัดสรรยอดขายล่าสุด`:`รออ่านสต๊อกที่บันทึกให้ตรงชุดส่วนกลาง${expectedStockIdentity?' · Rev '+expectedStockIdentity.revision+' / รายงาน '+expectedStockIdentity.reportDate:''} · เก็บทะเบียนและร่างหมายเหตุไว้ ไม่ใช้ยอดเก่าแทน`):metadata.stockPoolWarning||(currentSavedLedger?'Physical / จัดให้เดือนนี้ / ภาระเดือนอื่น / Free จากส่วนกลางชุดเดียวกัน · หน้านี้ไม่เปลี่ยนยอด':'ตัวเลขจัดสรร / Free เป็นฐานเดิม ไม่ใช่ยอดว่างล่าสุด และไม่ได้คืนจองหรือจัดสรรใหม่');
     const markup=`<p class="stock-basis-warning"${saved?' data-saved-stock-basis':''}>${esc(basis)}${ready&&manualFree?' · Free มีค่าปรับหรือไม่ตรงสูตรจอง: แสดงค่าที่บันทึกไว้ ไม่คำนวณทับ':''}</p><p class="stock-catalog-count">แสดงทุกความหนา ${selected.length} ${saved?'แถวทะเบียนแยกตามรหัสจริง':'สเปก'} รวม Physical = 0 และ Free = 0 · ไม่ตามตัวกรองยอดขาย · กลับด้านกว้าง×ยาวใช้หมายเหตุเดียวกัน</p><p class="tracking-import-note">${esc(workbookTracking.description||'ข้อมูลติดตามตามสเปกที่ตรงกัน · ไม่ใช้ยอดหรือราคาในไฟล์ · ไม่เติมชื่อหรือเวลาแทนช่องว่าง')}</p><div class="table-scroll" role="region" aria-label="ทะเบียนสต๊อกครบทุกเกรดขนาดและหมายเหตุ"><table class="basis-table with-notes with-tracking"${saved?' data-saved-stock-registry':''}><thead><tr><th>หนา / ขนาด / เกรด</th><th class="number">Physical<br>${stockLabels.physical}</th><th class="number">${stockLabels.month}</th><th class="number">${stockLabels.other}</th><th class="number">${stockLabels.free}</th><th>ติดตามการขาย<small class="tracking-source">ส่วนกลาง · แก้ไขตามสิทธิ์</small></th><th>ผู้ติดตาม<small class="tracking-source">ระบบบันทึก</small></th><th>เวลาติดตาม<small class="tracking-source">เวลาไทย · ระบบบันทึก</small></th><th>หมายเหตุเดิม · ร่วมกับ Free Stock</th></tr></thead><tbody>${selected.map(p=>`<tr data-stock-key="${esc(noteKey(p))}"${p.rawKey?' data-stock-raw-key="'+esc(p.rawKey)+'"':''}><td>${esc(thick(p.t))} มม. · ${esc(dimensions(p))} · ${esc(p.grade)}<span class="subqty">${esc(unitLabel(p.unit))}</span>${p.pending?`<span class="pool-pending">${stockLabels.pending}</span>`:''}${p.historicalMissing?'<span class="stock-external-label">ทะเบียนส่วนกลางที่เพิ่มภายหลัง · ไม่เติม 0 ลงฐานเก่า</span>':''}</td>${quantityFields.map((k,i)=>quantity(p,k,i===1?'ready-val':'')).join('')}${trackingFields(p)}${notesField(p)}</tr>`).join('')}</tbody><tfoot>${Object.entries(totals).map(([u,t])=>`<tr><th>${stockLabels.total} · ${esc(unitLabel(u))}</th>${quantityFields.map(k=>quantity(t,k)).join('')}<td colspan="4">ข้อมูลติดตามและหมายเหตุไม่เปลี่ยนยอด</td></tr>`).join('')}</tfoot></table></div>`;
-    if(lastStockMarkup!==markup){lastStockMarkup=markup;stock.innerHTML=markup;
+    const registryMarkup=managedAnnotations?markup
+      .replace(/<p class="stock-basis-warning"[^>]*>[\s\S]*?<\/p>/,saved&&ready?'':'<p class="stock-basis-warning" role="status">ยังไม่ยืนยันยอดสต๊อกล่าสุด</p>')
+      .replace(/<p class="(?:stock-catalog-count|tracking-import-note)"[^>]*>[\s\S]*?<\/p>/g,''):markup;
+    if(lastStockMarkup!==registryMarkup){lastStockMarkup=registryMarkup;stock.innerHTML=registryMarkup;
     bindNoteEditors(stock);
     bindFollowupEditors(stock);
     }
@@ -532,10 +581,10 @@ function mount(host, review, services = {}) {
       editFollowup(button.dataset.followupSuggest,String(records[0].followup||''));renderStock(select.value);
     }));
     container.querySelectorAll('[data-followup-use-remote]').forEach(button=>button.addEventListener('click',()=>{notesState.followupDrafts.delete(button.dataset.followupUseRemote);notesState.followupConflicts.delete(button.dataset.followupUseRemote);renderStock(select.value);}));
-    container.querySelectorAll('[data-followup-keep-draft]').forEach(button=>button.addEventListener('click',()=>{const rawKey=button.dataset.followupKeepDraft,draft=notesState.followupDrafts.get(rawKey),record=notesState.rawRecords.get(rawKey);if(draft&&record&&notesState.canEditFollowup){draft.before=record.followup;notesState.followupConflicts.delete(rawKey);renderStock(select.value);}}));
+    container.querySelectorAll('[data-followup-keep-draft]').forEach(button=>button.addEventListener('click',()=>{const rawKey=button.dataset.followupKeepDraft,draft=notesState.followupDrafts.get(rawKey),record=notesState.rawRecords.get(rawKey);if(annotationsUnlocked()&&draft&&record&&notesState.canEditFollowup){draft.before=record.followup;notesState.followupConflicts.delete(rawKey);renderStock(select.value);}}));
   }
   function editFollowup(rawKey,after,sourceInput){
-    const record=notesState.rawRecords.get(rawKey);if(!record||!notesState.canEditFollowup||notesBusy||notesState.pending)return;
+    const record=notesState.rawRecords.get(rawKey);if(!annotationsUnlocked()||!record||!notesState.canEditFollowup||notesBusy||notesState.pending){syncNoteEditorPermissions();return;}
     if(after===record.followup){notesState.followupDrafts.delete(rawKey);notesState.followupConflicts.delete(rawKey);}
     else notesState.followupDrafts.set(rawKey,{before:notesState.followupDrafts.get(rawKey)?.before??record.followup,after});
     const draft=notesState.followupDrafts.get(rawKey),value=draft?draft.after:record.followup;
@@ -824,7 +873,7 @@ function mount(host, review, services = {}) {
   }
   function stageNotes() {
     const payload=currentChanges(),count=payload.notesChanges.length+payload.followupChanges.length;
-    if(notesBusy||notesState.retryBlocked||notesState.conflicts.size||notesState.followupConflicts.size||!count||payload.notesChanges.length&&!notesState.canSave||payload.followupChanges.length&&!notesState.canEditFollowup)return;
+    if(!annotationsUnlocked()||notesBusy||notesState.retryBlocked||notesState.conflicts.size||notesState.followupConflicts.size||!count||payload.notesChanges.length&&!notesState.canSave||payload.followupChanges.length&&!notesState.canEditFollowup){updateNotesControls();return;}
     const root=document.getElementById('notes-confirmation');root.hidden=false;
     const previewRows=[...payload.notesChanges.map(change=>({...change,identity:change.key,label:'หมายเหตุสินค้า'})),...payload.followupChanges.map(change=>({...change,identity:change.rawKey,label:'ติดตามการขาย'}))];
     root.innerHTML='<h3>ตรวจการเปลี่ยนแปลงก่อนบันทึก</h3><p>หมายเหตุ '+payload.notesChanges.length+' สเปก · ติดตาม '+payload.followupChanges.length+' แถว</p><p class="small">เปลี่ยนเฉพาะข้อความที่แสดง ไม่แตะยอดสต๊อก ยอดจอง หรือราคา · ผู้ติดตามและเวลาให้ระบบบันทึก</p><div class="table-scroll"><table><thead><tr><th>ข้อมูล / สินค้า</th><th>ข้อความเดิม</th><th>ข้อความใหม่</th></tr></thead><tbody>'+previewRows.map(change=>'<tr><td>'+esc(change.label)+'<small class="tracking-source">'+esc(change.identity)+'</small></td><td><pre>'+esc(change.before||'(ว่าง)')+'</pre></td><td><pre>'+esc(change.after||'ล้างข้อความเดิม · ยืนยันให้ว่าง')+'</pre></td></tr>').join('')+'</tbody></table></div><div class="stock-notes-actions"><button class="plainbutton" type="button" id="notes-confirm">ยืนยันบันทึกการเปลี่ยนแปลง</button><button class="plainbutton" type="button" id="notes-cancel">กลับไปแก้</button></div>';
@@ -832,7 +881,72 @@ function mount(host, review, services = {}) {
     document.getElementById('notes-cancel').addEventListener('click',()=>{root.hidden=true;});
     if(typeof root.scrollIntoView==='function')root.scrollIntoView({block:'nearest'});
   }
+  async function toggleAnnotationUnlock(){
+    if(notesBusy||!isCurrent())return;
+    const form=document.getElementById('annotations-unlock-form'),field=document.getElementById('annotations-code'),message=document.getElementById('annotations-access-status');
+    field.value='';
+    if(annotationsUnlocked()){
+      try{await services.lockAnnotations?.();}catch{message.hidden=false;message.textContent='ล็อกไม่สำเร็จ กรุณาลองอีกครั้ง';}
+      form.hidden=true;document.getElementById('notes-confirmation').hidden=true;updateNotesControls();return;
+    }
+    if(!annotationAccess().eligible){message.hidden=false;message.textContent='กรุณาเข้าสู่ระบบบัญชี AAF ที่มีสิทธิ์ก่อน';return;}
+    form.hidden=!form.hidden;message.hidden=true;if(!form.hidden)field.focus();
+  }
+  async function unlockAnnotationEditors(event){
+    event?.preventDefault?.();
+    const field=document.getElementById('annotations-code');let code=field.value;field.value='';
+    if(notesBusy||!isCurrent()||!code||!annotationAccess().eligible||typeof services.unlockAnnotations!=='function'){code='';return;}
+    const message=document.getElementById('annotations-access-status');message.hidden=true;notesBusy=true;updateNotesControls();
+    try{
+      const request=services.unlockAnnotations(code);code='';
+      const result=await request;if(!isCurrent())return;
+      if(!result?.snapshot||!annotationsUnlocked())throw Error('unlock denied');
+      applyNotesSnapshot(result.snapshot);
+      document.getElementById('annotations-unlock-form').hidden=true;message.hidden=true;
+      notesState.status='';notesState.tone='';
+    }catch{
+      try{await services.lockAnnotations?.();}catch{}
+      if(isCurrent()){message.hidden=false;message.textContent='ปลดล็อกไม่สำเร็จ ตรวจรหัสและสิทธิ์บัญชีแล้วลองใหม่';}
+    }finally{
+      code='';field.value='';notesBusy=false;if(isCurrent()){renderStock();updateNotesControls();}flushQueued();
+    }
+  }
+  async function prepareAnnotationsFile(file){
+    if(!file||notesBusy||!isCurrent()||!annotationsUnlocked())return;
+    if(notesState.drafts.size||notesState.followupDrafts.size||notesState.conflicts.size||notesState.followupConflicts.size||notesState.retryBlocked){setNotesStatus('มีร่างค้าง กรุณาตรวจให้จบก่อนอัปโหลด','error');return;}
+    if(typeof services.prepareAnnotationsFile!=='function'){setNotesStatus('ยังอัปโหลดไม่ได้ กรุณาลองใหม่','error');return;}
+    const preview=document.getElementById('notes-import-preview');preview.textContent='กำลังตรวจไฟล์…';importReviewPending=false;notesBusy=true;updateNotesControls();
+    try{
+      const plan=await services.prepareAnnotationsFile(file);if(!isCurrent())return;
+      if(!annotationsUnlocked())throw Error('หมดเวลาปลดล็อก กรุณากรอกรหัสอีกครั้ง');
+      if(!plan?.snapshot)throw Error('ยังอ่านข้อมูลล่าสุดไม่ได้ กรุณาลองใหม่');
+      applyNotesSnapshot(plan.snapshot);
+      const notes=Array.isArray(plan.notesChanges)?plan.notesChanges:[],followups=Array.isArray(plan.followupChanges)?plan.followupChanges:[],issues=Array.isArray(plan.issues)?plan.issues:[];
+      const revision=notesState.revision,catalogRevision=notesState.catalogRevision,uniqueNotes=new Set(),uniqueFollowups=new Set();
+      const validNotes=notes.length<=5000&&notes.every(change=>{
+        if(!change||!notesState.liveRows.has(change.key)||uniqueNotes.has(change.key)||typeof change.before!=='string'||typeof change.after!=='string'||!change.after.trim()||change.after.length>4000||change.before===change.after||change.before!==(notesState.notes.get(change.key)||''))return false;
+        uniqueNotes.add(change.key);return true;
+      });
+      const validFollowups=followups.length<=5000&&followups.every(change=>{
+        if(!change||!notesState.rawRecords.has(change.rawKey)||uniqueFollowups.has(change.rawKey)||typeof change.before!=='string'||typeof change.after!=='string'||!change.after.trim()||change.after.length>4000||change.before===change.after||change.before!==notesState.rawRecords.get(change.rawKey).followup)return false;
+        uniqueFollowups.add(change.rawKey);return true;
+      });
+      const ready=plan.canApply===true&&validNotes&&validFollowups&&(notes.length+followups.length)>0&&(!notes.length||notesState.canSave)&&(!followups.length||notesState.canEditFollowup)&&!notesState.drafts.size&&!notesState.followupDrafts.size;
+      const previewRows=[...notes.map(change=>({...change,label:'หมายเหตุ',identity:change.key})),...followups.map(change=>({...change,label:'ติดตามการขาย',identity:change.rawKey}))];
+      importReviewPending=true;
+      preview.innerHTML='<p><strong>หมายเหตุ '+fmt(notes.length)+' รายการ · ติดตามการขาย '+fmt(followups.length)+' รายการ</strong></p>'+issues.map(issue=>'<p class="money-unverified">'+esc(typeof issue==='string'?issue:issue.message||issue.label||issue.code||'ตรวจรายการในไฟล์')+'</p>').join('')+(ready?'<div class="table-scroll"><table><thead><tr><th>ช่อง / รายการ</th><th>เดิม</th><th>ใหม่</th></tr></thead><tbody>'+previewRows.map(change=>'<tr><td>'+esc(change.label)+'<small>'+esc(change.identity)+'</small></td><td><pre>'+esc(change.before||'(ว่าง)')+'</pre></td><td><pre>'+esc(change.after)+'</pre></td></tr>').join('')+'</tbody></table></div><button type="button" class="plainbutton" id="notes-file-stage">ใช้รายการนี้เป็นร่าง</button>':'<p class="money-unverified">ยังใช้ไฟล์นี้ไม่ได้ กรุณาตรวจรายการที่แจ้ง</p>')+'<button type="button" class="plainbutton" id="annotations-import-cancel">ยกเลิกนำเข้า</button>';
+      document.getElementById('annotations-import-cancel').addEventListener('click',()=>{importReviewPending=false;preview.innerHTML='';updateNotesControls();});
+      if(ready)document.getElementById('notes-file-stage').addEventListener('click',()=>{
+        if(notesBusy||notesState.drafts.size||notesState.followupDrafts.size||notesState.retryBlocked||!annotationsUnlocked()||revision!==notesState.revision||catalogRevision!==notesState.catalogRevision||notes.some(change=>!notesState.liveRows.has(change.key)||change.before!==(notesState.notes.get(change.key)||''))||followups.some(change=>change.before!==notesState.rawRecords.get(change.rawKey)?.followup)||notes.length&&!notesState.canSave||followups.length&&!notesState.canEditFollowup){setNotesStatus('ข้อมูลหรือสิทธิ์เปลี่ยน กรุณาปลดล็อกและอัปโหลดตรวจใหม่','error');return;}
+        for(const change of notes)notesState.drafts.set(change.key,{before:change.before,after:change.after});
+        for(const change of followups)notesState.followupDrafts.set(change.rawKey,{before:change.before,after:change.after});
+        importReviewPending=false;preview.innerHTML='';renderStock();refreshFreeStockPanel();stageNotes();
+      });
+    }catch(error){if(isCurrent()){preview.textContent=error?.message||'ตรวจไฟล์ไม่สำเร็จ';setNotesStatus('ยังไม่บันทึกไฟล์ กรุณาตรวจข้อผิดพลาด','error');}}
+    finally{notesBusy=false;if(isCurrent()){document.getElementById('notes-file').value='';updateNotesControls();}flushQueued();}
+  }
   async function prepareNotesFile(file) {
+    if(managedAnnotations)return prepareAnnotationsFile(file);
     if(!file||notesBusy||!isCurrent())return;
     if(notesState.drafts.size||notesState.followupDrafts.size||notesState.conflicts.size||notesState.followupConflicts.size||notesState.retryBlocked){setNotesStatus('มีร่างหรือผลบันทึกค้าง · กรุณาตรวจให้จบก่อนนำเข้าไฟล์','error');return;}
     if(typeof services.prepareNotesFile!=='function'||typeof services.readNotes!=='function'){setNotesStatus('ยังไม่มีช่องทางนำเข้าหมายเหตุที่ยืนยันสิทธิ์','error');return;}
@@ -859,7 +973,7 @@ function mount(host, review, services = {}) {
   }
   async function saveChanges(payload) {
     const transport=typeof services.saveChanges==='function'?services.saveChanges:!payload.followupChanges.length&&typeof services.saveNotes==='function'?value=>services.saveNotes(value.notesChanges):null;
-    if(notesBusy||!isCurrent()||!transport||notesState.retryBlocked||notesState.conflicts.size||notesState.followupConflicts.size||payload.notesChanges.length&&!notesState.canSave||payload.followupChanges.length&&!notesState.canEditFollowup)return;
+    if(!annotationsUnlocked()||notesBusy||!isCurrent()||!transport||notesState.retryBlocked||notesState.conflicts.size||notesState.followupConflicts.size||payload.notesChanges.length&&!notesState.canSave||payload.followupChanges.length&&!notesState.canEditFollowup){updateNotesControls();return;}
     if(JSON.stringify(payload)!==JSON.stringify(currentChanges())){document.getElementById('notes-confirmation').hidden=true;setNotesStatus('ร่างเปลี่ยนจากชุดที่ตรวจ กรุณากดตรวจอีกครั้ง','error');return;}
     let savedVerified=false;
     notesBusy=true;notesState.pending={...payload};document.getElementById('notes-confirmation').hidden=true;renderStock(select.value);
@@ -897,6 +1011,12 @@ function mount(host, review, services = {}) {
   document.getElementById('notes-stage').addEventListener('click',stageNotes);
   document.getElementById('changes-stage').addEventListener('click',stageNotes);
   document.getElementById('notes-file').addEventListener('change',event=>prepareNotesFile(event.target.files?.[0]));
+  if(managedAnnotations){
+    document.getElementById('annotations-unlock').addEventListener('click',toggleAnnotationUnlock);
+    document.getElementById('annotations-unlock-form').addEventListener('submit',unlockAnnotationEditors);
+    document.getElementById('annotations-cancel').addEventListener('click',()=>{document.getElementById('annotations-code').value='';document.getElementById('annotations-unlock-form').hidden=true;});
+    document.getElementById('annotations-upload').addEventListener('click',()=>{if(!document.getElementById('annotations-upload').disabled&&annotationsUnlocked())document.getElementById('notes-file').click();});
+  }
   render();
   updateNotesControls();
   instance={refreshNotes,stageNotes,render,renderStock,renderExternalFree,select,setView(value){if([...select.options].some(option=>option.value===String(value))){select.value=String(value);render();}},applyNotesSnapshot,suspendEditing(message){notesState.canSave=false;notesState.canEditFollowup=false;notesState.stockInvalidated=true;document.getElementById('notes-confirmation').hidden=true;setNotesStatus(message||'สิทธิ์ยังไม่ยืนยัน · เก็บร่างไว้ กรุณาเข้าสู่ระบบบัญชีเดิมแล้วโหลดล่าสุด','error');renderStock();}};
@@ -909,7 +1029,7 @@ function mount(host, review, services = {}) {
   return {
     update(value){if(destroyed)return;if(notesBusy){queuedReview=value;return;}salesSuspended='';rebuild(value||{});},
     suspendSales(message){if(destroyed)return;salesSuspended=message||'รอข้อมูลขายเดือนที่เลือก · เก็บร่างหมายเหตุไว้ ไม่ใช้เดือนอื่นแทน';queuedReview=null;applySalesSuspension();},
-    destroy(){if(destroyed)return;destroyed=true;generation++;if(typeof global.removeEventListener==='function')global.removeEventListener('beforeunload',unloadGuard);shadow.replaceChildren();externalFreeHost?.replaceChildren();externalFreeHost=null;externalFreeIdentity=null;lastExternalFreeMarkup=null;notesState.drafts.clear();notesState.followupDrafts.clear();notesState.notes.clear();notesState.liveRows.clear();notesState.rawRecords.clear();notesState.legacy.clear();notesState.conflicts.clear();notesState.followupConflicts.clear();notesState.pending=null;queuedReview=null;currentReview=null;instance=null;},
+    destroy(){if(destroyed)return;destroyed=true;generation++;if(annotationExpiryTimer&&typeof global.clearTimeout==='function')global.clearTimeout(annotationExpiryTimer);annotationExpiryTimer=null;if(typeof global.removeEventListener==='function')global.removeEventListener('beforeunload',unloadGuard);shadow.replaceChildren();externalFreeHost?.replaceChildren();externalFreeHost=null;externalFreeIdentity=null;lastExternalFreeMarkup=null;notesState.drafts.clear();notesState.followupDrafts.clear();notesState.notes.clear();notesState.liveRows.clear();notesState.rawRecords.clear();notesState.legacy.clear();notesState.conflicts.clear();notesState.followupConflicts.clear();notesState.pending=null;queuedReview=null;currentReview=null;instance=null;},
     hasDirty,
     refreshNotes(){return !destroyed?instance.refreshNotes():Promise.resolve();},
     setView(value){if(!destroyed)instance.setView(value?.thickness??value);},
