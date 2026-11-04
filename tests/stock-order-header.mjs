@@ -39,8 +39,8 @@ test('archived other-reservation money stays in the review model and never subst
   const model=api.build(fixture()),before=JSON.stringify(model),html=api.render(model);
   const reserved=html.slice(html.indexOf('class="ss-kpi ss-kpi-reserved"'),html.indexOf('class="ss-kpi ss-kpi-free"'));
   assert.equal(model.reserved.money.sale.USD,36);
-  assert.match(reserved,/จองอื่นๆ · ไม่ซ้ำขายแล้ว/);
-  assert.match(reserved,/รอยืนยันยอดจองเดือนนี้/);
+  assert.match(reserved,/จองอื่นๆ · เจรจา 80%\+/);
+  assert.match(reserved,/รอชุดหน้า 09 เดือนปัจจุบัน/);
   assert.doesNotMatch(reserved,/USD 36|฿ 700|<strong>/);
   assert.equal(JSON.stringify(model),before,'label-only correction must not alter any value or classification');
 });
@@ -72,7 +72,7 @@ test('legacy summary callbacks cannot replace new monthly header; clear never fa
   vm.runInNewContext(fs.readFileSync(new URL('../stock_summary.js',import.meta.url),'utf8'),{window,document:{getElementById:()=>null,createElement:()=>({}),head:{append(){}}}});
   const summary=window.AAFStockSummary;
   summary.setOrderReview(fixture(),{selectedMonth:'2026-04'});const html=summary.renderKpis({sold:{byUnit:{sheet:987654}}},null);
-  assert.doesNotMatch(html,/data-order-header-month="2026-04"|987,654/);assert.match(html,/รอยืนยันยอดจองเดือนนี้/);
+  assert.doesNotMatch(html,/data-order-header-month="2026-04"|987,654/);assert.match(html,/รอชุดหน้า 09 เดือนปัจจุบัน/);
   summary.setSalesSummary({sold:{byUnit:{sheet:987654}}});assert.equal(summary.renderKpis({},null),html);
   summary.setOrderReview(null,null);assert.doesNotMatch(summary.renderKpis({sold:{byUnit:{sheet:987654}}},null),/987,654|data-order-header-month="2026-04"/);
 });
@@ -111,7 +111,7 @@ test('current warehouse cards and table use the same catalog, units and saved Fr
   assert.match(cardSection(html,'physical'),/<strong>73<\/strong>/);assert.match(cardSection(html,'physical'),/4,420/);
   assert.doesNotMatch(cardSection(html,'physical'),/<strong>100<\/strong>|4,000|999/);
   assert.match(cardSection(html,'free'),/<strong>29<\/strong>/);assert.match(cardSection(html,'free'),/1,755/);
-  assert.match(cardSection(html,'sold'),/ขายแล้วเดือนนี้/);assert.match(cardSection(html,'sold'),/รอข้อมูลขายเดือน/);assert.doesNotMatch(cardSection(html,'sold'),/USD 148|ชุดตรวจย้อนหลัง/);
+  assert.match(cardSection(html,'sold'),/ขายแล้วเดือนนี้/);assert.match(cardSection(html,'sold'),/รอชุดหน้า 09 เดือนปัจจุบัน/);assert.doesNotMatch(cardSection(html,'sold'),/USD 148|ชุดตรวจย้อนหลัง/);
   assert.match(api.sourceText(monthly,current),/2026-04-04 · รุ่น 8/);assert.match(api.sourceText(monthly,current),/ไม่ใช้เดือนก่อนแทน/);assert.doesNotMatch(api.sourceText(monthly,current),/Synthetic month/);
   assert.equal(JSON.stringify({stock,catalog}),before);
 });
@@ -120,7 +120,7 @@ test('current stock is visible before the monthly review or price catalog arrive
   const {stock}=currentStockFixture(),current=api.warehouseProjection(stock),html=api.render(null,new Set(),current,'รอตรวจเดือนใหม่');
   assert.equal(current.physical.knownValueTHB,null);assert.equal(current.free.knownValueTHB,null);
   assert.match(cardSection(html,'physical'),/<strong>73<\/strong>/);assert.match(cardSection(html,'free'),/<strong>29<\/strong>/);
-  assert.match(cardSection(html,'sold'),/รอข้อมูลขายเดือน/);assert.match(cardSection(html,'reserved'),/รอยืนยันยอดจองเดือนนี้/);
+  assert.match(cardSection(html,'sold'),/รอชุดหน้า 09 เดือนปัจจุบัน/);assert.match(cardSection(html,'reserved'),/รอชุดหน้า 09 เดือนปัจจุบัน/);
   const physical=cardSection(html,'physical');
   assert.match(physical,/รอยืนยันชุดราคาหรือเรทส่วนกลาง/);
   // Positive warehouse totals must stay unknown, but a verified empty size

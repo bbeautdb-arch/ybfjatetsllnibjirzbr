@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Synthetic current-month shared sales cards</title>
+<link rel="stylesheet" href="../stock_premium.css">
+<style>
+  body{margin:0;padding:24px;background:#edf3ed;color:#233e32;font:14px/1.6 system-ui,sans-serif}.fixture-banner{max-width:1450px;margin:0 auto 22px;padding:20px;background:#fff5d9;border:1px solid #d8bf85;border-radius:18px}.fixture-banner h1{font-size:20px;margin:0 0 8px}.fixture-banner p{margin:5px 0}.fixture-controls{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}.fixture-controls select{font:inherit;padding:7px;border:1px solid #92a398;border-radius:8px;background:white}.fixture-main{max-width:1450px;margin:auto}.fixture-main h2{font-size:18px}.fixture-status{padding:10px 14px;background:#f2f8ef;border:1px solid #abc8ad;border-radius:10px}.fixture-status[data-result="fail"]{background:#fff0df;border-color:#db9460}#stock-summary .ss-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px}#stock-summary .ss-kpi{min-width:0}#lower{display:block;margin:16px 0 32px}#stock-summary [data-free-followup-panel]{display:none}@media(max-width:1050px){#stock-summary .ss-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){body{padding:12px}#stock-summary .ss-kpis{grid-template-columns:1fr}}
+</style></head><body>
+<header class="fixture-banner"><h1>SYNTHETIC — กล่องบนและหัวข้อ 02 ใช้กลุ่มขายเดียวกัน</h1><p>ข้อมูลสมมติทั้งหมด · นาฬิกาทดสอบ 5 พฤศจิกายน 2573 · ไม่เชื่อมบัญชี ไม่อ่านข้อมูลบริษัท และไม่บันทึกข้อมูล</p><p>กล่องบนยึดเดือนปัจจุบันเสมอ ส่วนข้างล่างเลือกเดือนย้อนหลังได้ · ยอดคลังและ Free ไม่เปลี่ยนตามกลุ่มเจรจา</p>
+<div class="fixture-controls"><label>เดือนหัวข้อ 02 <select id="month"><option value="2030-11" selected>พฤศจิกายน 2573 · ปัจจุบัน</option><option value="2030-10">ตุลาคม 2573 · ชุดย้อนหลัง</option></select></label><label>หลักฐาน <select id="scenario"><option value="verified">ครบ · กล่องบนตรงหัวข้อ 02</option><option value="missing-money">เงินขาดหลักฐาน · จำนวนยังตรง</option><option value="source-mismatch">Checksum ไม่ตรง · ห้ามใช้ยอดเก่า</option></select></label></div></header>
+<main class="fixture-main"><p class="fixture-status" id="status" role="status"></p><h2>ภาพรวมเดือนปัจจุบัน</h2><div id="stock-summary" data-aaf-stock-summary><div class="ss-kpis" id="upper"></div></div><h2>หัวข้อ 02 · เดือนที่เลือก</h2><div id="lower"></div></main>
+<script>
+  // Fixed clock and invented evidence only. No acquisition or writes.
+  const RealDate=Date,fixtureNow=RealDate.parse('2030-11-05T05:00:00Z');
+  window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[fixtureNow]));}static now(){return fixtureNow;}};
+</script>
+<script src="../stock_sales_groups.js"></script><script src="../stock_sales_receipts.js"></script><script src="../stock_sales_groups_view.js"></script><script src="../stock_current_sales_groups.js"></script><script src="../stock_order_header.js"></script><script src="../stock_summary.js"></script>
+<script>
+  'use strict';
+  const clone=value=>JSON.parse(JSON.stringify(value)),sha=letter=>'sha256:'+letter.repeat(64),capture='2030-11-04T01:00:00Z',month='2030-11';
+  const row=(id,status,qty,extra={})=>({id,orderId:'SYNTH-'+id,ref:'SYNTH-'+id,customer:'ลูกค้าสมมติ '+id,w:1220,l:2440,t:2.5,grade:'AAA',unit:'sheet',qty,sourceStatus:status,productStatus:'พร้อมโหลด',term:'TT',payment:'รอรับ',receiptDateText:'—',etd:'12/11/30',...extra});
+  const source={page:9,month,capturedAt:capture,sourceIsLive:false,checksum:sha('a'),orderCount:5,lineCount:5};
+  const readModel={kind:'current-month-order-review',status:'verified-sales-only',selectedMonth:month,sourceIsLive:false,queueApplied:false,source};
+  const currentMonthSold={version:1,status:'verified-quantities',month,source:clone(source),quantity:{sheet:1200,strip:0},loaded:{sheet:1200,strip:0},paidOrDeposit:{sheet:0,strip:0},lcETD:{sheet:0,strip:0},orderCount:1,lineCount:1};
+  const rows=[row('loaded','ออก INV',1200),row('pi','เปิด PI',1800),row('strip','เปิด PI',500,{unit:'strip',w:25,l:2000}),row('neg','เจรจา',700),row('forecast','Forecast',900)];
+  const event=(orderId,extra={})=>({eventId:'event-'+orderId,orderKey:orderId,sourceOrderMonth:month,sourceFingerprint:sha('d'),installment:'single',state:'expected',amount:10000,currency:'THB',date:'2030-11-08',month,datePrecision:'day',dateBasis:'planned-source',proof:'synthetic exact evidence',hasError:false,issues:[],...extra});
+  const review={metadata:{month,sourceSalesCapturedAt:capture},readModel,rows,receiptSummary:{version:1,status:'verified-payment-source',month,reviewSource:{page:9,capturedAt:capture,checksum:sha('a'),rowsChecksum:sha('b')},financialSource:{page:9,checkedAt:'2030-11-05T01:00:00Z',asOf:'2030-11-05',checksum:sha('c'),rawRowsChecksum:sha('e'),orderCount:5,lineCount:5},orders:rows.map(r=>({...r,rowIds:[r.id],sourceFullRowChecksum:sha('f'),sourceFingerprint:sha('d'),cancelled:false,exactAmount:null,currency:null,events:[event(r.orderId)]}))}};
+  review.receiptSummary.orders[0].events=[event(rows[0].orderId,{state:'received',amount:12000,date:'2030-10-28',month:'2030-10',dateBasis:'actual-source'})];
+  review.receiptSummary.orders[1].events=[event(rows[1].orderId,{eventId:'deposit',installment:'deposit',state:'received',amount:6000,date:'2030-11-02',dateBasis:'actual-source'}),event(rows[1].orderId,{eventId:'balance',installment:'balance',amount:9000})];
+  const savedStock={revision:8,reportDate:'2030-11-03',rows:[{key:'synthetic-sheet',w:1220,l:2440,t:2.5,grade:'AAA',unit:'sheet',qty:9000,freeQty:4000,committedQty:5000,baseQty:9000,d90:9000,d180:0,d270:0,d360:0,dOver:0},{key:'synthetic-strip',w:25,l:2000,t:3.2,grade:'B',unit:'strip',qty:900,freeQty:800,committedQty:100,baseQty:900,d90:900,d180:0,d270:0,d360:0,dOver:0}]};
+  const original=JSON.stringify({review,currentMonthSold,savedStock});
+  const lowerHost=document.getElementById('lower').attachShadow({mode:'open'}),style=document.createElement('link'),lower=document.createElement('div');style.rel='stylesheet';style.href='../stock_order_review.css';lowerHost.append(style,lower);
+  function withMoney(data){const model=AAFSalesGroups.build(data),money=AAFSalesReceipts.build(data,model);return {...model,groups:model.groups.map(group=>({...group,money:money[group.id]}))};}
+  function render(){
+    const scenario=document.getElementById('scenario').value,current=clone(review),selected=document.getElementById('month').value;
+    if(scenario==='missing-money')delete current.receiptSummary;
+    if(scenario==='source-mismatch')current.readModel.source.checksum=sha('b');
+    const projection=AAFCurrentSalesGroups.build(current,current.readModel,currentMonthSold),warehouse=AAFOrderHeader.warehouseProjection(savedStock);
+    const upperHTML=AAFOrderHeader.render(null,new Set(),warehouse,'รอชุด',currentMonthSold,undefined,projection);document.getElementById('upper').innerHTML=upperHTML;
+    const data=clone(current);if(selected!==month){data.metadata.month=selected;data.metadata.sourceSalesCapturedAt='2030-10-24T01:00:00Z';data.readModel={kind:'dated-order-review',selectedMonth:selected,sourceCapturedAt:data.metadata.sourceSalesCapturedAt,historical:true,stale:true};data.rows=[row('old','ออก INV',777),row('old-neg','เจรจา',88,{sourceType:'negotiation'})];delete data.receiptSummary;}
+    const lowerModel=withMoney(data);lower.innerHTML=AAFSalesGroupsView.render(lowerModel,{monthLabel:selected==='2030-11'?'พฤศจิกายน 2573 · ปัจจุบัน':'ตุลาคม 2573',historical:selected!==month,stale:selected!==month});
+    const unchanged=original===JSON.stringify({review,currentMonthSold,savedStock}),expected=withMoney(current),same=projection.status==='verified'&&JSON.stringify(projection.groups)===JSON.stringify(expected.groups);
+    const upperUnchangedOnHistory=upperHTML===AAFOrderHeader.render({month:'2030-10'},new Set(),warehouse,'รอชุด',currentMonthSold,undefined,projection);
+    const ok=unchanged&&upperUnchangedOnHistory&&(scenario==='source-mismatch'?projection.status==='pending':same),status=document.getElementById('status');
+    status.dataset.result=ok?'pass':'fail';status.textContent=(ok?'ผ่าน':'ต้องตรวจ')+' · '+(selected===month?'กล่องบนใช้กลุ่มและเงินชุดเดียวกับหัวข้อ 02':'เลือกย้อนหลังแล้ว กล่องบนยังคงพฤศจิกายน')+' · '+(projection.status==='verified'?'ขายยืนยัน 3,000 แผ่น + 500 ชิ้นไม้แถบ / เจรจา 700 แผ่น':'แหล่งไม่ตรง: กล่องบนรอตรวจ ไม่แสดงยอดเก่า')+' · สต๊อกและ Free คงเดิม';
+    document.body.dataset.fixtureReady='true';document.body.dataset.fixturePassed=String(ok);
+  }
+  document.getElementById('month').addEventListener('change',render);document.getElementById('scenario').addEventListener('change',render);
+  document.getElementById('upper').addEventListener('click',event=>{const button=event.target.closest('[data-stock-card-toggle]');if(!button)return;const item=button.closest('[data-stock-card]'),content=item.querySelector('.ss-card-detail-content'),overview=item.querySelector('.ss-card-overview-wrap'),open=button.getAttribute('aria-expanded')==='true';button.setAttribute('aria-expanded',String(!open));content.hidden=open;overview.hidden=!open;});
+  window.CurrentSalesGroupsFixture=Object.freeze({render,unchanged:()=>original===JSON.stringify({review,currentMonthSold,savedStock})});render();
+</script></body></html>

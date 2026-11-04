@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {createRequire} from 'node:module';
+import {salesOnlyFixture} from './stock-sales-only-fixture.mjs';
 const require=createRequire(import.meta.url),api=require('../stock_order_header.js');
+const currentGroups=require('../stock_current_sales_groups.js');
 const clone=v=>JSON.parse(JSON.stringify(v));
 // Synthetic quantities and provenance only; never real company data.
 function dto(month=api.currentBangkokMonth(),capturedAt=new Date().toISOString()){
@@ -41,16 +43,15 @@ test('quantity DTO is guarded and copied without prices, receipts, unknown units
   }
 });
 test('current-month cards never use archive selection as quantity or money',()=>{
-  const review=archive(),model=api.build(review,{stale:true}),input=dto(),before=JSON.stringify({review,input});
-  const html=api.render(model,new Set(),undefined,'selected-month pending',input),card=soldCard(html);
-  assert.match(card,/<h3>ขายแล้วเดือนนี้<\/h3>/);assert.match(card,/<strong>30<\/strong>/);assert.match(card,/ไม้แถบ 5 ชิ้น/);
+  const review=archive(),model=api.build(review,{stale:true}),f=salesOnlyFixture(api.currentBangkokMonth()),input=f.currentMonthSold,before=JSON.stringify({review,input});
+  const projection=currentGroups.build(f.review,f.readModel,input),html=api.render(model,new Set(),undefined,'selected-month pending',input,undefined,projection),card=soldCard(html);
+  assert.match(card,/<h3>ขายแล้วเดือนนี้<\/h3>/);assert.match(card,/<strong>50<\/strong>/);assert.match(card,/ไม้แถบ 5 ชิ้น/);
   assert.match(card,new RegExp('data-order-header-month="'+api.currentBangkokMonth()+'"'));
-  assert.match(card,/โหลดแล้ว/);assert.match(card,/รับเงิน\/มัดจำ · ยังไม่โหลด/);assert.match(card,/LCมีETD/);
-  assert.match(card,/ยังไม่มีหลักฐานราคาขาย\/รับเงินตรงชุดนี้/);assert.doesNotMatch(card,/USD 999|฿ 0|<strong>35<\/strong>|<strong>99<\/strong>|2000-10|ชุดตรวจย้อนหลัง/);
-  assert.doesNotMatch(reservedCard(html),/data-order-header-month="2000-10"|<strong>/);
-  const source=api.sourceText(model,undefined,undefined,undefined,input);
-  assert.match(source,/ขายแล้วเดือนนี้:/);assert.match(source,/รายละเอียดหัวข้อ02 เดือนนี้: รอชุดเดือนปัจจุบัน/);assert.doesNotMatch(source,/Archived synthetic month/);
-  assert.doesNotMatch(source,/ชุดเดียวกับหัวข้อ02|เดือนขายเดียวกัน/);
+  assert.match(card,/โหลดแล้ว/);assert.match(card,/รอโหลด/);assert.match(card,/รับแล้ว|รอรับ/);
+  assert.match(card,/ยังไม่ยืนยัน|ขาด/);assert.doesNotMatch(card,/USD 999|฿ 0|<strong>35<\/strong>|<strong>99<\/strong>|2000-10|ชุดตรวจย้อนหลัง/);
+  assert.doesNotMatch(reservedCard(html),/data-order-header-month="2000-10"|<strong>9<\/strong>/);assert.match(reservedCard(html),/<strong>0<\/strong>/);
+  const source=api.sourceText(model,undefined,undefined,undefined,input,undefined,projection);
+  assert.match(source,/ขายแล้ว\/ออเดอร์ยืนยัน/);assert.match(source,/หัวข้อ02/);assert.doesNotMatch(source,/Archived synthetic month|2000-10/);
   assert.equal(JSON.stringify({review,input}),before);
 });
 test('pending, missing, or wrong-month source does not fall back to a complete archived sale',()=>{
@@ -69,40 +70,41 @@ function runtime(){
   const root={classList:{remove(){}},addEventListener(){},querySelectorAll:()=>[],
     set innerHTML(value){html=value;rootWrites++;},get innerHTML(){return html;},querySelector(selector){
       if(selector==='.ss-kpis')return cards;if(selector==='.ss-status')return status;
-      if(selector==='.ss-kpis [data-stock-card="sold"]')return{replaceWith(value){const current=cardHTML||html;cardHTML=current.replace(soldCard(current),value.outerHTML);soldReplacements++;}};
+      if(selector==='.ss-kpis [data-stock-card="sold"]'||selector==='.ss-kpis [data-stock-card="reserved"]')return{replaceWith(value){const current=cardHTML||html,getCard=selector.includes('"sold"')?soldCard:reservedCard;cardHTML=current.replace(getCard(current),value.outerHTML);if(selector.includes('"sold"'))soldReplacements++;}};
       if(selector==='.ss-overview-source'||selector==='.ss-sales-summary-source')return source;
       if(selector==='.ss-download')return{addEventListener(){}};
       if(selector==='.ss-sheet')return{remove(){html='';cardHTML='';}};return null;
     }};
-  const window={AAFOrderHeader:api};
-  vm.runInNewContext(fs.readFileSync(new URL('../stock_summary.js',import.meta.url),'utf8'),{window,document:{getElementById:()=>root,createElement:()=>({innerHTML:'',querySelector(){return{outerHTML:soldCard(this.innerHTML)};}}),head:{append(){}}},location:{hash:''}});
+  const window={AAFOrderHeader:api,AAFCurrentSalesGroups:currentGroups};
+  vm.runInNewContext(fs.readFileSync(new URL('../stock_summary.js',import.meta.url),'utf8'),{window,document:{getElementById:()=>root,createElement:()=>({innerHTML:'',querySelector(selector){return selector==='[data-stock-card="sold"]'?{outerHTML:soldCard(this.innerHTML)}:selector==='[data-stock-card="reserved"]'?{outerHTML:reservedCard(this.innerHTML)}:null;}}),head:{append(){}}},location:{hash:''}});
   return {summary:window.AAFStockSummary,get html(){return html;},get cards(){return cardHTML;},get rootWrites(){return rootWrites;},get soldReplacements(){return soldReplacements;},source};
 }
-const stock=()=>({report:{reportDate:'2000-10-20',sourceRowCount:1},revision:1,exchangeRate:30,currentMonthSold:dto(),
+const stock=(currentMonthSold=dto())=>({report:{reportDate:'2000-10-20',sourceRowCount:1},revision:1,exchangeRate:30,currentMonthSold,
   rows:[{key:'synthetic',w:1220,l:2440,t:2.5,grade:'B',unit:'sheet',qty:10,baseQty:10,committedQty:5,freeQty:5,d90:10,d180:0,d270:0,d360:0,dOver:0}]});
 const calc=r=>({eq:r.qty,price:1,curr:'THB',value:r.qty,freeValue:r.freeQty});
 test('summary normalization preserves the separate DTO; archive callbacks cannot overwrite or restore it after auth clear',()=>{
-  const h=runtime(),data=stock(),before=JSON.stringify(data),m=h.summary.buildModel(data,calc);
+  const h=runtime(),f=salesOnlyFixture(api.currentBangkokMonth()),data=stock(f.currentMonthSold),before=JSON.stringify(data),m=h.summary.buildModel(data,calc);
   assert.equal(m.currentMonthSold.status,'verified-quantities');assert.equal(m.currentMonthSold.quantity.sheet,30);assert.equal(JSON.stringify(data),before);
-  h.summary.update(data,calc);assert.match(soldCard(h.html),/<strong>30<\/strong>/);
-  h.summary.setOrderReview(archive(),{stale:true});assert.match(soldCard(h.cards),/<strong>30<\/strong>/);
-  h.summary.setSalesSummary({sold:{byUnit:{sheet:999}}});assert.match(soldCard(h.cards),/<strong>30<\/strong>/);
+  h.summary.update(data,calc);assert.doesNotMatch(soldCard(h.html),/<strong>/,'source DTO alone cannot restore the old sold definition');
+  h.summary.setOrderReview(f.review,f.readModel);assert.match(soldCard(h.cards),/<strong>50<\/strong>/);
+  h.summary.setSalesSummary({sold:{byUnit:{sheet:999}}});assert.match(soldCard(h.cards),/<strong>50<\/strong>/);
   h.summary.invalidateCurrentMonthSold();assert.doesNotMatch(soldCard(h.cards),/<strong>|999/);
   h.summary.setOrderReview(archive(),{stale:true});assert.doesNotMatch(soldCard(h.cards),/<strong>|999/);
-  h.summary.update(data,calc);h.summary.setOrderReview(archive(),{stale:true});assert.match(soldCard(h.cards),/<strong>30<\/strong>/);
+  h.summary.update(data,calc);h.summary.setOrderReview(f.review,f.readModel);assert.match(soldCard(h.cards),/<strong>50<\/strong>/);
   h.summary.showError('Synthetic logout');assert.equal(h.html,'');
   h.summary.setOrderReview(archive(),{stale:true});assert.doesNotMatch(soldCard(h.cards),/<strong>|999/);
 });
 test('a later stock response without the DTO clears it instead of retaining a previous account or response',()=>{
-  const h=runtime(),data=stock();h.summary.update(data,calc);h.summary.setOrderReview(archive(),{stale:true});assert.match(soldCard(h.cards),/<strong>30<\/strong>/);
+  const h=runtime(),f=salesOnlyFixture(api.currentBangkokMonth()),data=stock(f.currentMonthSold);h.summary.update(data,calc);h.summary.setOrderReview(f.review,f.readModel);assert.match(soldCard(h.cards),/<strong>50<\/strong>/);
   const missing=clone(data);delete missing.currentMonthSold;h.summary.update(missing,calc);h.summary.setOrderReview(archive(),{stale:true});
-  assert.doesNotMatch(soldCard(h.cards),/<strong>|999/);assert.match(soldCard(h.cards),/รอข้อมูลขายเดือน/);
+  assert.doesNotMatch(soldCard(h.cards),/<strong>|999/);assert.match(soldCard(h.cards),/รอ|ยัง/);
 });
-test('same-revision sold refresh does not rebuild the whole report while allocation remains pending',()=>{
-  const h=runtime(),data=stock();h.summary.update(data,calc);h.summary.setOrderReview(archive(),{stale:true});
-  const writes=h.rootWrites,other=reservedCard(h.cards),fresh=dto();fresh.loaded.sheet=11;fresh.quantity.sheet=31;
-  h.summary.setCurrentMonthSold(fresh);assert.match(soldCard(h.cards),/<strong>31<\/strong>/);assert.equal(h.rootWrites,writes);assert.equal(h.soldReplacements,1);assert.equal(reservedCard(h.cards),other);
+test('same-revision source refresh invalidates shared cards without rebuilding report; reverified review restores both',()=>{
+  const h=runtime(),f=salesOnlyFixture(api.currentBangkokMonth()),data=stock(f.currentMonthSold);h.summary.update(data,calc);h.summary.setOrderReview(f.review,f.readModel);
+  const writes=h.rootWrites,fresh=clone(f.currentMonthSold);fresh.source.checksum='sha256:'+'b'.repeat(64);
+  h.summary.setCurrentMonthSold(fresh);assert.doesNotMatch(soldCard(h.cards),/<strong>/);assert.equal(h.rootWrites,writes);assert.equal(h.soldReplacements,1);assert.doesNotMatch(reservedCard(h.cards),/<strong>/);
   h.summary.setCurrentMonthSold(fresh);assert.equal(h.soldReplacements,1,'identical poll does not repaint');
-  h.summary.setCurrentMonthSold({...fresh,month:'2000-10'});assert.doesNotMatch(soldCard(h.cards),/<strong>/);assert.equal(h.rootWrites,writes);assert.equal(reservedCard(h.cards),other);
+  const freshReview=salesOnlyFixture(api.currentBangkokMonth(),'b');h.summary.setOrderReview(freshReview.review,freshReview.readModel);assert.match(soldCard(h.cards),/<strong>50<\/strong>/);assert.match(reservedCard(h.cards),/<strong>0<\/strong>/);assert.equal(h.rootWrites,writes);
+  h.summary.setCurrentMonthSold({...fresh,month:'2000-10'});assert.doesNotMatch(soldCard(h.cards),/<strong>/);assert.equal(h.rootWrites,writes);assert.doesNotMatch(reservedCard(h.cards),/<strong>/);
   h.summary.showError('logout');h.summary.setCurrentMonthSold(fresh);assert.equal(h.html,'');assert.doesNotMatch(soldCard(h.cards),/<strong>/);
 });

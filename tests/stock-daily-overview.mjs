@@ -63,7 +63,7 @@ test('overview hides only the central timestamp/spec subtitle, preserving source
   assert.match(header,/<h3>ภาพรวมสต๊อกและยอดขาย<\/h3>/);
   assert.equal((header.match(/\bhidden\b/g)||[]).length,1);
   assert.equal(element(html,'class="ss-kpis"'),`<div class="ss-kpis">${api.renderKpis(m.salesSummary,m)}</div>`);
-  assert.match(html,/class="ss-overview-footer">สต๊อก \/ จอง \/ Free/);
+  assert.match(html,/class="ss-overview-footer">สต๊อกและ Free ใช้ราคาสต๊อก · กลุ่มขาย\/เจรจาใช้หลักฐานเงินหน้า 09/);
   assert.equal(JSON.stringify(m),before);
 });
 

@@ -53,6 +53,7 @@ jobs:
           node --test tests/stock-order-controller.mjs tests/stock-order-review-ui.mjs tests/stock-order-header.mjs
           node --test tests/stock-sales-groups.mjs tests/stock-sales-groups-view.mjs
           node --test tests/stock-sales-receipts.mjs
+          node --test tests/stock-current-sales-groups.mjs tests/stock-current-month-sold.mjs tests/stock-current-allocation.mjs tests/stock-sales-only-contract.mjs
           node --test tests/stock-free-composition.mjs tests/stock-upper-free-notes.mjs tests/stock-free-surface-lifecycle.mjs
           node --test tests/stock-annotations-import.mjs tests/stock-annotation-unlock-controller.mjs tests/stock-annotation-unlock-ui.mjs
           node --test tests/stock-admin-annotations.mjs

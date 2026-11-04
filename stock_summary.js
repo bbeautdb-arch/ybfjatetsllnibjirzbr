@@ -16,7 +16,7 @@
   const blank=()=>({qty:0,baseQty:0,freeQty:0,committedQty:0,reservedInStockQty:0,reservedProductionQty:0,stripEq4x8:0,stripEq:0,eq4x8:0,eq:0,value:0,freeValue:0,freeEq4x8:0,freeEq:0,reservedEq4x8:0,reservedEq:0,reservedValue:0,reservedUnpricedQty:0,agingBaseQty:0,aging90:0,aging180:0,agingOver180:0,count:0,byUnit:{sheet:blankUnit(),strip:blankUnit()}});
   const add=(s,r)=>{for(const k of ['qty','baseQty','freeQty','committedQty','reservedInStockQty','reservedProductionQty','stripEq4x8','stripEq','eq4x8','eq','value','freeValue','freeEq4x8','freeEq','reservedEq4x8','reservedEq','reservedValue','reservedUnpricedQty','agingBaseQty','aging90','aging180','agingOver180'])s[k]+=r[k];s.count++;const unit=s.byUnit[r.unit];if(unit){for(const k of Object.keys(unit).filter(k=>k!=='count'))unit[k]+=r[k];unit.count++;}return s;};
   let latest=null,exporting=false,canvasLoader=null,headerExchangeRate=null,savedStockCatalog=null;
-  let orderHeader=null,orderHeaderError='กำลังรอชุดรายงานเดือนที่ตรวจครบ';
+  let orderHeader=null,orderHeaderError='กำลังรอชุดรายงานเดือนที่ตรวจครบ',currentSalesGroups=null;
   const expandedCards=new Set();
   const expandedPhysicalGrades=new Set();
   const physicalGradeKey=node=>JSON.stringify([node.closest('[data-physical-group]')?.dataset.physicalGroup,node.dataset.physicalGrade]);
@@ -688,7 +688,7 @@
     // Legacy whole-ledger callbacks remain active for catalog/export services,
     // but must never overwrite it or leak an old month after a failed reload.
     if(window.AAFOrderHeader){
-      return window.AAFOrderHeader.render(orderHeader,expandedCards,currentWarehouse(m),orderHeaderError,m?.currentMonthSold,m?.currentAllocation);
+      return window.AAFOrderHeader.render(orderHeader,expandedCards,currentWarehouse(m),orderHeaderError,m?.currentMonthSold,m?.currentAllocation,currentSalesGroups);
     }
     if(!summary){const basic=basicStockKpis(m);if(basic)return basic;}
     if(summary?.version>=2)return partitionKpiHTML(summary,m);
@@ -720,12 +720,12 @@
       restoreFreeSurface(freeSurface);
     }
     paintExchangeRate();
-    const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=window.AAFOrderHeader?window.AAFOrderHeader.sourceText(orderHeader,currentWarehouse(latest),undefined,undefined,latest?.currentMonthSold,latest?.currentAllocation):summarySourceText(summary,latest);
+    const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=window.AAFOrderHeader?window.AAFOrderHeader.sourceText(orderHeader,currentWarehouse(latest),undefined,undefined,latest?.currentMonthSold,latest?.currentAllocation,currentSalesGroups):summarySourceText(summary,latest);
     const dailySource=root?.querySelector('.ss-overview-source');if(dailySource)dailySource.textContent=overviewSourceText(latest);
     syncPriceDrafts();
   }
   function setOrderReview(review,readModel){
-    orderHeader=null;orderHeaderError='รอภาพรวมขายเดือนปัจจุบันที่ตรวจครบ · ไม่แสดงเดือนอื่นแทน';
+    orderHeader=null;currentSalesGroups=null;orderHeaderError='รอภาพรวมขายเดือนปัจจุบันที่ตรวจครบ · ไม่แสดงเดือนอื่นแทน';
     const api=window.AAFOrderHeader,month=api?.currentBangkokMonth(),sold=api?.currentMonthSoldView(latest?.currentMonthSold),allocation=api?.currentAllocationView(latest?.currentAllocation,currentWarehouse(latest),latest?.currentMonthSold);
     if(review&&readModel?.kind==='current-month-order-review'&&readModel.status==='verified'&&review.metadata?.month===month&&
       (!review.financial||review.financial.metadata?.month===month)&&sold?.status==='verified-quantities'&&allocation?.status==='verified-allocation'&&
@@ -740,6 +740,10 @@
       // Source-only provenance never grants allocation/readiness or reuses cash.
       orderHeader={month,monthLabel:sold.monthLabel,sourceCapturedAt:sold.source.capturedAt,sourceChecksum:sold.source.checksum,salesOnly:true,stale:false,fx:null};orderHeaderError='';
     }
+    // Nov5 owner: both upper sales cards mirror the exact Section02 grouping
+    // and receipt builders. The original quantity/allocation DTOs above still
+    // protect the warehouse identity; they are not reclassified or written.
+    if(orderHeader)currentSalesGroups=window.AAFCurrentSalesGroups?.build(review,readModel,sold)||null;
     if(latest)latest={...latest,orderHeader};
     setSalesSummary(latest?.salesSummary||null);
   }
@@ -750,9 +754,10 @@
     const productionLoading=allocationValue?.productionLoading||null;
     if(JSON.stringify(currentMonthSold)===JSON.stringify(latest.currentMonthSold)&&JSON.stringify(currentAllocation)===JSON.stringify(latest.currentAllocation)&&JSON.stringify(productionLoading)===JSON.stringify(latest.productionLoading))return;
     latest={...latest,currentMonthSold,currentAllocation,productionLoading};
+    currentSalesGroups=window.AAFCurrentSalesGroups?.view(currentSalesGroups,currentMonthSold)||null;
     // Reuse authenticated polls. Do not rebuild Physical, tables or editors.
     const holder=document.createElement('div');
-    holder.innerHTML=window.AAFOrderHeader.render(null,expandedCards,warehouse,'',currentMonthSold,currentAllocation);
+    holder.innerHTML=window.AAFOrderHeader.render(null,expandedCards,warehouse,'',currentMonthSold,currentAllocation,currentSalesGroups);
     const freeSurface=retainFreeSurface();
     for(const id of ['sold','reserved','free']){
       const card=root?.querySelector('.ss-kpis [data-stock-card="'+id+'"]'),replacement=holder.querySelector('[data-stock-card="'+id+'"]');
@@ -764,7 +769,7 @@
     // or touching any existing note/price editor or disclosure state.
     const freshBasis=holder.querySelector('.ss-physical-free-basis');
     if(freshBasis)root?.querySelectorAll('.ss-physical-free-basis').forEach(node=>{node.textContent=freshBasis.textContent;node.className=freshBasis.className;});
-    const source=window.AAFOrderHeader.sourceText(orderHeader,warehouse,undefined,undefined,currentMonthSold,currentAllocation);
+    const source=window.AAFOrderHeader.sourceText(orderHeader,warehouse,undefined,undefined,currentMonthSold,currentAllocation,currentSalesGroups);
     for(const selector of ['.ss-sales-summary-source','.ss-overview-source']){const node=root?.querySelector(selector);if(node)node.textContent=source;}
     repaintReadiness();
     repaintThicknessProductionWarnings();
@@ -825,13 +830,13 @@
   root?.addEventListener('input',editGapPrice);root?.addEventListener('change',editGapPrice);root?.addEventListener('click',saveGapPrices);root?.addEventListener('click',overviewClick);
   root?.addEventListener('input',editProductionSetting);root?.addEventListener('change',editProductionSetting);
   function overviewSourceText(m){
-    if(window.AAFOrderHeader)return window.AAFOrderHeader.sourceText(orderHeader,currentWarehouse(m),undefined,undefined,m?.currentMonthSold,m?.currentAllocation);
+    if(window.AAFOrderHeader)return window.AAFOrderHeader.sourceText(orderHeader,currentWarehouse(m),undefined,undefined,m?.currentMonthSold,m?.currentAllocation,currentSalesGroups);
     const e=m?.salesSummary?.evidence,fx=exchangeRateDisplay(m?.salesSummary,m?.headerExchangeRate);
     const sales=e?.salesReportDate?'ขายอ้างอิง '+e.salesReportDate+(e.needsSalesRefresh?' · ยังไม่ได้อ่านยอดขายใหม่':' · ชุดข้อมูลที่บันทึกไว้'):'ยังไม่ยืนยันวันที่ชุดยอดขาย';
     return 'สต๊อก '+(m?.reportDate||'รอยืนยัน')+' · '+sales+(fx.rate!==null?' · USD/THB '+number(fx.rate,4)+' ('+fx.status+')':' · ยังไม่ยืนยันเรท USD')+' · ใช้ภายในบริษัท';
   }
   function dailyOverviewHTML(m){
-    return `<section class="ss-daily-overview" aria-label="ภาพรวมรายวัน 4 กล่อง"><header class="ss-overview-header"><div><span>AAF · DAILY OVERVIEW</span><h3>ภาพรวมสต๊อกและยอดขาย</h3><small hidden>ข้อมูลส่วนกลาง ${esc(when(m.updatedAt))} · ${number(m.rows.length)} สเปก</small></div><div class="ss-overview-actions" data-html2canvas-ignore><button type="button" data-stock-overview-action="collapse">ย่อทั้ง 4 กล่อง</button><button type="button" data-stock-overview-action="expand">ดูรายละเอียดทั้งหมด</button><button type="button" class="ss-overview-download" ${exporting?'disabled':''}>ดาวน์โหลดภาพ 4 กล่อง</button></div></header><p class="ss-overview-source" hidden>${esc(overviewSourceText(m))}</p><div class="ss-kpis">${kpiHTML(m.salesSummary,m)}</div><p class="ss-overview-footer">สต๊อก / จอง / Free ใช้ราคาประเมิน · ยอดขายใช้ราคาขายจริง · ห้ามบวกทั้ง 4 กล่องเข้าด้วยกันเพราะมีส่วนซ้อนกัน</p></section>`;
+    return `<section class="ss-daily-overview" aria-label="ภาพรวมรายวัน 4 กล่อง"><header class="ss-overview-header"><div><span>AAF · DAILY OVERVIEW</span><h3>ภาพรวมสต๊อกและยอดขาย</h3><small hidden>ข้อมูลส่วนกลาง ${esc(when(m.updatedAt))} · ${number(m.rows.length)} สเปก</small></div><div class="ss-overview-actions" data-html2canvas-ignore><button type="button" data-stock-overview-action="collapse">ย่อทั้ง 4 กล่อง</button><button type="button" data-stock-overview-action="expand">ดูรายละเอียดทั้งหมด</button><button type="button" class="ss-overview-download" ${exporting?'disabled':''}>ดาวน์โหลดภาพ 4 กล่อง</button></div></header><p class="ss-overview-source" hidden>${esc(overviewSourceText(m))}</p><div class="ss-kpis">${kpiHTML(m.salesSummary,m)}</div><p class="ss-overview-footer">สต๊อกและ Free ใช้ราคาสต๊อก · กลุ่มขาย/เจรจาใช้หลักฐานเงินหน้า 09 · ห้ามบวกทั้ง 4 กล่องเข้าด้วยกันเพราะมีส่วนซ้อนกัน</p></section>`;
   }
   function html(m,thicknessOpen=expandedThickness,productionOpen=expandedThicknessProduction,productionContext={}){
     const t=m.total,overrides=m.rows.filter(r=>r.physicalAt||r.freeAt).length,followed=m.rows.filter(r=>String(r.followup).trim()).length;
@@ -1314,7 +1319,7 @@
     [data-aaf-stock-summary].ss-overview-export .ss-overview-actions,[data-aaf-stock-summary].ss-export .ss-card-toggle{display:none}
     @media(max-width:650px){[data-aaf-stock-summary]:not(.ss-export) .ss-daily-overview .ss-kpis{grid-template-columns:1fr}[data-aaf-stock-summary]:not(.ss-export) .ss-card-detail-content{grid-template-columns:1fr}}
   `;document.head.append(style);
-  function showError(message){orderHeader=null;orderHeaderError='รอโหลดรายงานเดือนที่ตรวจครบใหม่';latest=null;if(!root)return;const n=root.querySelector('.ss-status')||root;n.textContent=message;n.classList.add('ss-error');root.querySelectorAll('.ss-download,.cash-download,.ss-overview-download').forEach(b=>b.disabled=true);root.querySelector('.ss-sheet')?.remove();root.querySelector('.cash-sheet')?.remove();}
+  function showError(message){orderHeader=null;currentSalesGroups=null;orderHeaderError='รอโหลดรายงานเดือนที่ตรวจครบใหม่';latest=null;if(!root)return;const n=root.querySelector('.ss-status')||root;n.textContent=message;n.classList.add('ss-error');root.querySelectorAll('.ss-download,.cash-download,.ss-overview-download').forEach(b=>b.disabled=true);root.querySelector('.ss-sheet')?.remove();root.querySelector('.cash-sheet')?.remove();}
   let jumpedToCash=false;
   function update(data,calculate){
     if(!root)return;let m=model(data,calculate);m.salesSummary=window.AAFSalesPreview?.getReportSummary?.()||null;
