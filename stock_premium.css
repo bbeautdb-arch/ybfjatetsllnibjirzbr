@@ -11,7 +11,13 @@
     margin: 0;
     padding: clamp(12px, 2.1vw, 32px);
     color: var(--aaf-ink);
-    background: radial-gradient(ellipse at 0 0, #c6d5ca 0, transparent 47%), radial-gradient(ellipse at 100% 10%, #e4dac4 0, transparent 42%), #eaf0e9;
+    /* The photograph is decorative. Only individual cards are frosted;
+       text, quantities and controls never inherit opacity or a content filter. */
+    background-color: #e1eee7;
+    background-image: linear-gradient(125deg, rgba(237,249,247,.33), rgba(245,249,238,.23) 55%, rgba(222,241,233,.36)), url('./assets/aaf-factory-background.webp');
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
     background-attachment: fixed;
     color-scheme: light;
   }
@@ -24,9 +30,29 @@
   body[data-aaf-premium] #stock-report-downloads button { background: #245c4c; color: #fffef8; padding: 12px 21px; }
   body[data-aaf-premium] #stock-excel-status { color: var(--aaf-muted); }
   body[data-aaf-premium] #stock-excel-status[data-error="true"] { color: #a52d24; }
+  /* Loose live captions need their own readable surface over the photograph.
+     Styling only: existing hidden captions/statuses are never made visible. */
+  body[data-aaf-premium] .report-nav,
+  body[data-aaf-premium] #stock-excel-status:not(:empty):not([hidden]),
+  body[data-aaf-premium] #report-status:not(:empty):not([hidden]),
+  body[data-aaf-premium] #stock-summary>.ss-tools:not([hidden]),
+  body[data-aaf-premium] #stock-summary>.ss-status:not([hidden]),
+  body[data-aaf-premium] #stock-summary>p:not(:empty):not([hidden]),
+  body[data-aaf-premium] #stock-summary .ss-content>.ss-context:not([hidden]),
+  body[data-aaf-premium] #stock-summary .ss-content>.ss-sales-summary-source:not([hidden]) {
+    padding: 10px 15px;
+    border: 1px solid #fffffff0;
+    border-radius: 14px;
+    background: rgba(255,254,248,.96);
+    color: #435c4c;
+    box-shadow: 0 4px 16px #173c3210;
+  }
+  body[data-aaf-premium] .report-nav { padding: 15px 18px; color: #213e30; }
+  body[data-aaf-premium] #stock-summary>.ss-error:not([hidden]),
+  body[data-aaf-premium] #stock-excel-status[data-error="true"] { background: #fff3e8; border-color: #e3bd9e; color: #a52d24; }
   body[data-aaf-premium] #stock-summary { max-width: 1500px; margin: 0 auto; width: 100%; min-width: 0; color: var(--aaf-ink); line-height: 1.65; }
-  body[data-aaf-premium] #stock-summary .ss-sheet { border: 1px solid #ffffffb3; border-radius: 28px; background: #fdfcf7f5; box-shadow: 0 24px 70px #304c3420, 0 2px 7px #304c3408; }
-  body[data-aaf-premium] #stock-summary .ss-hero { padding: 32px 34px; background: linear-gradient(115deg,#fdfcf7 10%,#e6eee3); border-bottom: 1px solid #d6e0d3; color: var(--aaf-ink); align-items: center; gap: 24px; }
+  body[data-aaf-premium] #stock-summary .ss-sheet { border: 0; border-radius: 28px; background: transparent; box-shadow: none; }
+  body[data-aaf-premium] #stock-summary .ss-hero { padding: 32px 34px; background: linear-gradient(115deg,rgba(255,254,248,.88) 10%,rgba(235,247,240,.82)); border: 1px solid #ffffffe6; border-radius: 24px; color: var(--aaf-ink); align-items: center; gap: 24px; box-shadow: 0 14px 45px #193e3620,inset 0 1px 0 #fff; }
   body[data-aaf-premium] #stock-summary .ss-eyebrow { color: #486b58; font-size: 11px; letter-spacing: .19em; }
   body[data-aaf-premium] #stock-summary .ss-hero h2 { color: #1c3027; font-size: clamp(24px,2.4vw,34px); letter-spacing: -.035em; line-height: 1.45; margin: 9px 0; }
   body[data-aaf-premium] #stock-summary .ss-hero p { color: #52675c; font-size: 14px; }
@@ -34,20 +60,20 @@
   body[data-aaf-premium] #stock-summary .ss-exchange { background: #fffef8bc; color: #53685d; border: 1px solid #cfdccd; border-radius: 18px; padding: 15px 20px; text-align: left; box-shadow: 0 3px 10px #27452b04; }
   body[data-aaf-premium] #stock-summary .ss-stamp b,
   body[data-aaf-premium] #stock-summary .ss-exchange b { color: #294d40; font-variant-numeric: tabular-nums; }
-  body[data-aaf-premium] #stock-summary .ss-content { padding: 28px 32px 36px; }
+  body[data-aaf-premium] #stock-summary .ss-content { padding: 24px 0 36px; background: transparent; }
   body[data-aaf-premium] #stock-summary .ss-daily-overview { background: transparent; }
-  body[data-aaf-premium] #stock-summary .ss-overview-header { border: 0; padding: 0 0 17px; gap: 14px; }
+  body[data-aaf-premium] #stock-summary .ss-overview-header { border: 1px solid #ffffffd9; border-radius: 18px; background: rgba(255,254,248,.86); padding: 15px 20px; margin-bottom: 16px; gap: 14px; box-shadow: 0 5px 22px #1a3e3510; }
   body[data-aaf-premium] #stock-summary .ss-overview-header span { color: #5b7163; letter-spacing: .15em; }
   body[data-aaf-premium] #stock-summary .ss-overview-header h3 { color: #243c30; font-size: 22px; letter-spacing: -.02em; }
   body[data-aaf-premium] #stock-summary .ss-overview-actions { gap: 7px; }
   body[data-aaf-premium] #stock-summary .ss-overview-actions button { background: #fafbf6; border: 1px solid #c9d6ca; border-radius: 11px; padding: 10px 13px; color: #345440; min-height: 40px; }
   body[data-aaf-premium] #stock-summary .ss-overview-actions .ss-overview-download { background: #245c4c; color: #fff; border-color: #245c4c; }
   body[data-aaf-premium] #stock-summary .ss-kpis { gap: 18px; }
-  body[data-aaf-premium] #stock-summary .ss-kpi[data-stock-card] { padding: 24px; border-radius: 22px; border: 1px solid #cedbcd; box-shadow: 0 6px 20px #31563708; gap: 15px; position: relative; }
-  body[data-aaf-premium] #stock-summary .ss-kpi-physical { background: linear-gradient(145deg,#f4f7ef,#edf3e8); color: #243c30; }
-  body[data-aaf-premium] #stock-summary .ss-kpi-sold { background: linear-gradient(145deg,#f4f9f7,#eaf4ef); color: #245648; border-color: #c9ded2; }
-  body[data-aaf-premium] #stock-summary .ss-kpi-reserved { background: linear-gradient(145deg,#fcf8ee,#f8efdf); color: #74501c; border-color: #e1d5bc; }
-  body[data-aaf-premium] #stock-summary .ss-kpi-free { background: linear-gradient(145deg,#f0f7ef,#e2f0e6); color: #205d40; border-color: #bcd7c3; }
+  body[data-aaf-premium] #stock-summary .ss-kpi[data-stock-card] { padding: 24px; border-radius: 22px; border: 1px solid #ffffffe6; box-shadow: 0 12px 35px #163b3220,inset 0 1px 0 #ffffff; gap: 15px; position: relative; }
+  body[data-aaf-premium] #stock-summary .ss-kpi-physical { background: linear-gradient(145deg,rgba(255,254,249,.88),rgba(242,249,243,.82)); color: #243c30; }
+  body[data-aaf-premium] #stock-summary .ss-kpi-sold { background: linear-gradient(145deg,rgba(249,254,255,.89),rgba(233,246,247,.84)); color: #245648; border-color: #efffff; }
+  body[data-aaf-premium] #stock-summary .ss-kpi-reserved { background: linear-gradient(145deg,rgba(255,253,246,.90),rgba(252,241,220,.85)); color: #74501c; border-color: #fff7e9; }
+  body[data-aaf-premium] #stock-summary .ss-kpi-free { background: linear-gradient(145deg,rgba(248,255,247,.89),rgba(227,245,234,.84)); color: #205d40; border-color: #effff0; }
   body[data-aaf-premium] #stock-summary .ss-kpi h3 { font-size: 15px; line-height: 1.6; }
   body[data-aaf-premium] #stock-summary .ss-card-overview { gap: 11px; }
   body[data-aaf-premium] #stock-summary .ss-overview-quantity strong { color: #20392d; font-size: clamp(32px,3.1vw,46px); line-height: 1.25; letter-spacing: -.045em; }
@@ -70,8 +96,8 @@
   body[data-aaf-premium] #stock-summary .ss-card-overview .ss-overview-basis { border-color: #cddbcc; padding-top: 10px; }
   body[data-aaf-premium] #stock-summary .ss-card-overview .ss-overview-warning { color: #963a24; background: #fff0df; border-radius: 8px; padding: 8px 10px; font-size: 11px; }
   body[data-aaf-premium] #stock-summary button.ss-card-toggle { padding: 10px 14px; border: 1px solid #b8cdbb; border-radius: 10px; background: #fffef8c9; color: #34543e; font-size: 11px; min-height: 40px; }
-  body[data-aaf-premium] #stock-summary .ss-overview-footer { color: #586a5d; padding: 6px 0; font-size: 11px; }
-  body[data-aaf-premium] #stock-summary .ss-readiness { background: #f4f6ee; border: 1px solid #d5dfcf; border-radius: 22px; margin: 26px 0; }
+  body[data-aaf-premium] #stock-summary .ss-overview-footer { color: #435c4c; padding: 9px 14px; border-radius: 12px; background: rgba(255,254,248,.89); font-size: 11px; }
+  body[data-aaf-premium] #stock-summary .ss-readiness { background: rgba(249,252,244,.90); border: 1px solid #ffffffdf; border-radius: 22px; margin: 26px 0; box-shadow: 0 12px 34px #183c3215; }
   body[data-aaf-premium] #stock-summary .ss-readiness-inner { padding: 24px; }
   body[data-aaf-premium] #stock-summary .ss-readiness-heading h3 { color: #294936; }
   body[data-aaf-premium] #stock-summary .ss-readiness-heading span { color: #52705d; }
@@ -80,11 +106,11 @@
   body[data-aaf-premium] #stock-summary .ss-readiness-free { background: #eaf5e9; border-color: #bfd8c2; }
   body[data-aaf-premium] #stock-summary .ss-readiness-need,
   body[data-aaf-premium] #stock-summary .ss-readiness-pending { background: #fff1da; color: #795019; border-color: #e5ceab; }
-  body[data-aaf-premium] #stock-summary .ss-section-title { margin: 36px 0 18px; border-color: #d8dfd3; padding-bottom: 15px; gap: 12px; }
+  body[data-aaf-premium] #stock-summary .ss-section-title { margin: 32px 0 18px; border: 1px solid #ffffffde; border-radius: 18px; background: rgba(255,254,248,.89); padding: 15px 18px; gap: 12px; box-shadow: 0 5px 22px #1a3e3510; }
   body[data-aaf-premium] #stock-summary .ss-section-title>span { background: #e6eddf; border: 1px solid #d0dcc8; color: #3f614b; border-radius: 9px; font-size: 12px; padding: 7px 10px; }
   body[data-aaf-premium] #stock-summary .ss-section-title h3 { color: #243c30; font-size: 21px; letter-spacing: -.02em; }
-  body[data-aaf-premium] #stock-summary .ss-group { background: #fffefa; border: 1px solid #d5dfcf; border-radius: 18px; box-shadow: 0 4px 16px #31483105; }
-  body[data-aaf-premium] #stock-summary .ss-group-heading { background: #edf2e7; padding: 16px 18px; color: #2d4735; border-bottom: 1px solid #d5dfcf; }
+  body[data-aaf-premium] #stock-summary .ss-group { background: rgba(255,254,250,.96); border: 1px solid #fffffff2; border-radius: 22px; box-shadow: 0 12px 34px #163a321a; }
+  body[data-aaf-premium] #stock-summary .ss-group-heading { background: rgba(237,246,238,.94); padding: 16px 18px; color: #2d4735; border-bottom: 1px solid #d5dfcf; }
   body[data-aaf-premium] #stock-summary .ss-group h3 { font-size: 16px; }
   body[data-aaf-premium] #stock-summary .ss-group-heading small { font-size: 10px; color: #586a5d; }
   body[data-aaf-premium] #stock-summary .ss-thickness-help { padding: 9px 15px; margin: 0; color: #586a5d; }
@@ -103,7 +129,7 @@
   body[data-aaf-premium] #stock-summary .ss-group tfoot { background: #eaf0e3; border-color: #bfcdb6; }
   body[data-aaf-premium] #stock-summary .ss-combined-total th,
   body[data-aaf-premium] #stock-summary .ss-combined-total td { background: #e6eddf !important; border-top-color: #b8cbb0; color: #3e5b3f; }
-  body[data-aaf-premium] #stock-summary .ss-aging { border-radius: 18px; padding: 20px; background: #fcf8eb; border-color: #e1d7b9; margin-top: 22px; }
+  body[data-aaf-premium] #stock-summary .ss-aging { border-radius: 22px; padding: 20px; background: rgba(255,250,237,.92); border-color: #fff9e9; margin-top: 22px; box-shadow: 0 9px 30px #193a3115; }
   body[data-aaf-premium] #stock-summary .ss-aging-chart { border-radius: 12px; padding: 13px; background: #fffdf7; }
   body[data-aaf-premium] #stock-summary .ss-thickness-toggle { color: #365b3f; }
   body[data-aaf-premium] #stock-summary .ss-thickness-grades th { background: #f1f5eb; color: #405c3f; border-left-color: #b4c9a5; }
@@ -111,7 +137,18 @@
   body[data-aaf-premium] #stock-summary .ss-thickness-production { border-radius: 12px; background: #fffdf7; }
   body[data-aaf-premium] #stock-summary .ss-production-grade h5,
   body[data-aaf-premium] #stock-summary .ss-production-total { background: #edf2e7; color: #37513b; }
-  body[data-aaf-premium] #stock-summary .ss-footer { border-color: #d6dfd1; background: #edf2e7; color: #53685d; }
+  body[data-aaf-premium] #stock-summary .ss-footer { border: 1px solid #ffffffd9; border-radius: 18px; background: rgba(246,251,239,.91); color: #53685d; }
+  body[data-aaf-premium] #stock-summary .stock-order-toolbar { padding: 12px 16px; border: 1px solid #ffffffdf; border-radius: 16px; background: rgba(255,254,248,.91); color: #294d40; }
+  body[data-aaf-premium] #stock-summary #stock-order-review-host>p[role="status"] { padding: 12px 16px; border: 1px solid #e0bb81; border-radius: 13px; background: #fff4e2; color: #74421b; }
+  @supports ((backdrop-filter: blur(14px)) or (-webkit-backdrop-filter: blur(14px))) {
+    body[data-aaf-premium] #stock-summary :is(.ss-hero,.ss-overview-header,.ss-kpi[data-stock-card],.ss-readiness,.ss-section-title,.stock-order-toolbar,.ss-aging,.ss-footer) {
+      -webkit-backdrop-filter: blur(14px) saturate(1.12);
+      backdrop-filter: blur(14px) saturate(1.12);
+    }
+  }
+  @supports not ((backdrop-filter: blur(14px)) or (-webkit-backdrop-filter: blur(14px))) {
+    body[data-aaf-premium] #stock-summary :is(.ss-hero,.ss-overview-header,.ss-kpi[data-stock-card],.ss-readiness,.ss-section-title,.stock-order-toolbar,.ss-aging,.ss-footer) { background: #fdfcf7; }
+  }
   body[data-aaf-premium] :is(button,a,select,input,textarea,summary):focus-visible { outline: 3px solid #277959; outline-offset: 3px; }
   body[data-aaf-premium] #stock-summary :is(button,a,select,input,textarea,summary):focus-visible { outline: 3px solid #277959; outline-offset: 3px; }
   body[data-aaf-premium] #stock-summary button:not(:disabled):hover { filter: brightness(.97); }
@@ -120,22 +157,33 @@
   body[data-aaf-premium] [hidden] { display: none !important; }
   @media (max-width: 900px) {
     body[data-aaf-premium] #stock-summary .ss-hero { padding: 24px; }
-    body[data-aaf-premium] #stock-summary .ss-content { padding: 22px; }
+    body[data-aaf-premium] #stock-summary .ss-content { padding: 20px 0 28px; }
     body[data-aaf-premium] #stock-summary .ss-kpi[data-stock-card] { padding: 20px; }
   }
   @media (max-width: 650px) {
-    body[data-aaf-premium="ivory"] { padding: 10px; }
+    body[data-aaf-premium="ivory"] { padding: 10px; background-attachment: scroll; }
     body[data-aaf-premium] #stock-summary .ss-sheet { border-radius: 20px; }
     body[data-aaf-premium] #stock-summary .ss-hero { padding: 22px 18px; gap: 17px; }
     body[data-aaf-premium] #stock-summary .ss-hero h2 { font-size: 25px; }
     body[data-aaf-premium] #stock-summary .ss-hero-meta { width: 100%; gap: 8px; }
     body[data-aaf-premium] #stock-summary .ss-stamp,
     body[data-aaf-premium] #stock-summary .ss-exchange { flex: 1 1 130px; padding: 12px; border-radius: 13px; }
-    body[data-aaf-premium] #stock-summary .ss-content { padding: 18px 12px; }
+    body[data-aaf-premium] #stock-summary .ss-content { padding: 16px 0 24px; }
     body[data-aaf-premium] #stock-summary .ss-kpis { gap: 14px; }
     body[data-aaf-premium] #stock-summary .ss-kpi[data-stock-card] { padding: 18px; border-radius: 18px; }
     body[data-aaf-premium] #stock-summary .ss-overview-header h3 { font-size: 20px; }
     body[data-aaf-premium] #stock-summary .ss-section-title h3 { font-size: 18px; }
     body[data-aaf-premium] #stock-summary .ss-readiness-inner { padding: 17px; }
+    body[data-aaf-premium] #stock-summary :is(.ss-hero,.ss-overview-header,.ss-kpi[data-stock-card],.ss-readiness,.ss-section-title,.stock-order-toolbar,.ss-aging,.ss-footer) { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(255,254,248,.96); }
+    body[data-aaf-premium] #stock-summary .ss-overview-header { padding: 13px 15px; }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    body[data-aaf-premium="ivory"] { background-image: none; background-color: #e8f0eb; }
+    body[data-aaf-premium] #stock-summary :is(.ss-hero,.ss-overview-header,.ss-kpi[data-stock-card],.ss-readiness,.ss-section-title,.stock-order-toolbar,.ss-aging,.ss-footer,.ss-overview-footer,.ss-group) { background: #fdfcf7; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  }
+  @media (forced-colors: active) {
+    body[data-aaf-premium="ivory"] { background: Canvas; color: CanvasText; }
+    body[data-aaf-premium] #stock-summary :is(.ss-hero,.ss-overview-header,.ss-kpi[data-stock-card],.ss-readiness,.ss-section-title,.stock-order-toolbar,.ss-aging,.ss-footer,.ss-overview-footer,.ss-group) { background: Canvas; color: CanvasText; border-color: CanvasText; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    body[data-aaf-premium] :is(button,a,select,input,textarea,summary):focus-visible { outline-color: Highlight; }
   }
 }

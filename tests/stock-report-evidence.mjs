@@ -21,7 +21,7 @@ test('both report entry points cache-bust the current sold renderer and auth con
     const html=fs.readFileSync(new URL('../'+page+'.html',import.meta.url),'utf8');
     assert.ok(html.includes('stock_sales_preview.js?v=20261019-notes-only'));assert.ok(html.includes('stock_sales_controller.js?v=20261019-notes-only'));
     for(const file of ['stock_order_header','stock_summary','stock_order_controller']){
-      const version=file==='stock_order_controller'?'20261104-selected-month-dashboard-r1':'20261104-physical-free-value-r1';
+      const version=file==='stock_order_controller'?'20261104-selected-month-dashboard-r1':'20261104-ui-cleanup-r1';
       const expected=new RegExp('<script\\s+src="'+file+'\\.js\\?v='+version+'"><\\/script>','g');
       assert.equal([...html.matchAll(expected)].length,1,page+' must load exactly one current '+file+' asset');
       assert.doesNotMatch(html,new RegExp(file+'\\.js\\?v=20261020-monthly-overview'),page+' must not retain a cached dated-stock renderer');
@@ -29,7 +29,7 @@ test('both report entry points cache-bust the current sold renderer and auth con
     assert.ok(html.indexOf('stock_order_header.js?')<html.indexOf('stock_summary.js?'),'current warehouse adapter must load before summary');
     assert.ok(html.includes('stock_readiness.js?v=20261103-stock-readiness-r1'));assert.ok(html.indexOf('stock_readiness.js?')<html.indexOf('stock_summary.js?'));
     assert.ok(html.includes('stock_review_notes_bridge.js?v=20261103-saved-registry-r1'));
-    assert.ok(html.includes('stock_order_review.js?v=20261104-premium-r1'));
+    assert.ok(html.includes('stock_order_review.js?v=20261104-factory-glass-r1'));
     assert.ok(html.includes('rel="manifest" href="manifest.webmanifest"'),'preserve the newer shortcut icon release');
   }
   assert.match(fs.readFileSync(new URL('../stock_report.html',import.meta.url),'utf8'),/stock_report.js\?v=20261103-current-month-review-r1/);

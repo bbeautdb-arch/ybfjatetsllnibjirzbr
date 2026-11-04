@@ -18,8 +18,11 @@ const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
 test('premium theme is screen-only, live-root scoped, and does not change hidden/interaction semantics',()=>{
   assert.ok(stripComments(outer).startsWith('@media screen {'));
   assert.ok(stripComments(shadowTheme).startsWith('@media screen {'));
+  const imageURLs=[...stripComments(outer).matchAll(/url\(\s*['"]?([^)'"\s]+)['"]?\s*\)/gi)].map(m=>m[1]);
+  assert.deepEqual(imageURLs,['./assets/aaf-factory-background.webp'],'only the one same-origin factory asset is permitted');
+  assert.doesNotMatch(stripComments(shadowTheme),/url\(/i,'the shadow theme does not fetch assets');
   for(const text of [outer,shadowTheme]){
-    assert.doesNotMatch(stripComments(text),/@import|url\(|@media\s+print|@font-face|content\s*:/i,'no remote assets, print overrides or invented business text');
+    assert.doesNotMatch(stripComments(text),/@import|https?:|data:|@media\s+print|@font-face|content\s*:/i,'no remote assets, print overrides or invented business text');
     for(const [property,value] of declarations(text)){
       assert.ok(!['visibility','pointer-events','overflow','overflow-x','overflow-y','contain','transform','animation','order'].includes(property),property+' changes behavior');
       if(property==='display')assert.equal(value,'none !important','only hidden safety may change display');
@@ -56,10 +59,10 @@ test('both entries opt in to the same theme and refresh only the matching presen
   for(const name of ['stock_manager.html','stock_report.html']){
     const text=read('../'+name);
     assert.equal((text.match(/data-aaf-premium="ivory"/g)||[]).length,1);
-    assert.equal((text.match(/stock_premium\.css\?v=20261104-premium-r1/g)||[]).length,1);
-    assert.equal((text.match(/stock_order_review\.js\?v=20261104-premium-r1/g)||[]).length,1);
+    assert.equal((text.match(/stock_premium\.css\?v=20261104-factory-glass-r1/g)||[]).length,1);
+    assert.equal((text.match(/stock_order_review\.js\?v=20261104-factory-glass-r1/g)||[]).length,1);
   }
-  assert.match(read('../stock_order_review.js'),/stock_order_review\.css\?v=20261104-premium-r1/);
+  assert.match(read('../stock_order_review.js'),/stock_order_review\.css\?v=20261104-factory-glass-r1/);
 });
 
 test('synthetic full summary covers exact sizes, separate units, zero stock and saved manual Free without mutation',()=>{

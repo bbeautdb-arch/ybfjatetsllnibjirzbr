@@ -122,7 +122,7 @@ for(const thick of [2,3]){
 }
 for(const group of summaryGroups){
   assert.equal((group.match(/rowspan="2"/g)||[]).length,9,'12-column table has nine fixed headers');assert.equal((group.match(/colspan="3"/g)||[]).length,1,'three Aging columns share one mail header');
-  assert(group.includes('0–90')&&group.includes('91–180')&&group.includes('&gt;180 วัน'));assert(!group.includes('หน่วยตามเมล (แผ่น/ชิ้น)'));assert(group.includes('Aging เมล = ยอดต้นฉบับก่อนโยก'));
+  assert(group.includes('0–90')&&group.includes('91–180')&&group.includes('&gt;180 วัน'));assert(!group.includes('หน่วยตามเมล (แผ่น/ชิ้น)'));assert.match(group,/<small\b(?=[^>]*\bhidden\b)(?=[^>]*\bdata-internal-metadata\b)[^>]*>Aging เมล = ยอดต้นฉบับก่อนโยก<\/small>/,'Aging explanation is retained as hidden metadata, not a visible heading caption');
   const footer=group.match(/<tfoot><tr>([\s\S]*?)<\/tr>/)?.[1];assert.equal((footer?.match(/<(?:th|td)\b/g)||[]).length,12,'first footer has exactly twelve cells');
   assert(footer.includes('>11</td>')&&footer.includes('>22</td>')&&footer.includes('>208</td>'),'footer repeats exact raw Aging totals');
 }
