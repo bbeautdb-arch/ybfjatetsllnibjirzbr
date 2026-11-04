@@ -21,12 +21,14 @@ test('both report entry points cache-bust the current sold renderer and auth con
     const html=fs.readFileSync(new URL('../'+page+'.html',import.meta.url),'utf8');
     assert.ok(html.includes('stock_sales_preview.js?v=20261019-notes-only'));assert.ok(html.includes('stock_sales_controller.js?v=20261019-notes-only'));
     for(const file of ['stock_order_header','stock_summary','stock_order_controller']){
-      const version=file==='stock_order_controller'?'20261104-selected-month-dashboard-r1':file==='stock_summary'?'20261104-all-production-r1':'20261104-grade-totals-r1';
+      const version=file==='stock_order_controller'?'20261104-selected-month-dashboard-r1':file==='stock_summary'?'20261105-production-cost-r1':'20261104-grade-totals-r1';
       const expected=new RegExp('<script\\s+src="'+file+'\\.js\\?v='+version+'"><\\/script>','g');
       assert.equal([...html.matchAll(expected)].length,1,page+' must load exactly one current '+file+' asset');
       assert.doesNotMatch(html,new RegExp(file+'\\.js\\?v=20261020-monthly-overview'),page+' must not retain a cached dated-stock renderer');
     }
     assert.ok(html.indexOf('stock_order_header.js?')<html.indexOf('stock_summary.js?'),'current warehouse adapter must load before summary');
+    assert.equal((html.match(/stock_production_planner\.js\?v=20261105-production-cost-r1/g)||[]).length,1);
+    assert.ok(html.indexOf('stock_production_planner.js?')<html.indexOf('stock_summary.js?'),'production estimator loads before summary');
     assert.ok(html.includes('stock_readiness.js?v=20261103-stock-readiness-r1'));assert.ok(html.indexOf('stock_readiness.js?')<html.indexOf('stock_summary.js?'));
     assert.ok(html.includes('stock_review_notes_bridge.js?v=20261103-saved-registry-r1'));
     assert.ok(html.includes('stock_order_review.js?v=20261104-three-sales-groups-r1'));

@@ -25,6 +25,9 @@
   }
   const expandedThickness=new Set();
   const expandedThicknessProduction=new Set();
+  // Scenario inputs are browser-memory estimates, never saved catalog prices.
+  const productionSettings={woodPricePerTonne:'1550',dailyCapacitySheets:'17500',fuelPricePerTonne:'1050',fuelTonnesPerDay:'80'};
+  const productionSettingLabels={woodPricePerTonne:['ราคาไม้ยูคา','บาท / ตัน'],dailyCapacitySheets:['กำลังผลิต','แผ่นเทียบ / วัน'],fuelPricePerTonne:['ราคาเชื้อเพลิง','บาท / ตัน'],fuelTonnesPerDay:['ใช้เชื้อเพลิง','ตัน / วัน']};
 
   // Saved stock prices are independent of the sales-allocation package. Exact
   // identity is required; never apply yesterday's prices/quantities as today's
@@ -186,6 +189,7 @@
     const orderedThicknessGrades=[...thicknessGrades].map(([t,children])=>[t,[...children].sort(([a],[b])=>gradeRank(a)-gradeRank(b)||(a<b?-1:a>b?1:0))]);
     const m={rows,total,grades:[...grades],thickness:[...thickness],thicknessGrades:orderedThicknessGrades,aging,agingEquivalent,agingEquivalentByThickness:[...agingEquivalentByThickness],reportDate:data.report.reportDate,updatedAt:data.updatedAt,importedAt:data.importedAt,revision:String(data.revision??''),exchangeRate:data.exchangeRate,sourceRowCount:data.report.sourceRowCount,renderedAt:new Date().toISOString(),cash,cashError,sold,currentMonthSold,reservationPlan};
     m.currentAllocation=window.AAFOrderHeader?.currentAllocationView(data.currentAllocation,currentWarehouse(m),currentMonthSold)||null;
+    m.productionLoading=data.currentAllocation?.productionLoading||null;
     return m;
   }
   const cell=n=>'<td class="ss-num">'+number(n)+'</td>';
@@ -247,16 +251,75 @@
     const rows=m.rows.filter(r=>r.reservedProductionQty>0).map(r=>({key:r.key,w:Number(r.w),l:Number(r.l),t:Number(r.t),grade:r.grade,unit:r.unit,demand:r.committedQty,allocated:r.reservedInStockQty,shortage:r.reservedProductionQty})).sort((a,b)=>a.t-b.t||rank(a.grade)-rank(b.grade)||a.grade.localeCompare(b.grade)||a.w-b.w||a.l-b.l||a.unit.localeCompare(b.unit)||a.key.localeCompare(b.key));
     return {status:'saved-plan',byUnit,rows,thickness,fractional:rows.some(r=>!Number.isInteger(r.shortage))};
   }
-  function allProductionHTML(m){
-    const view=allProduction(m),label=u=>u==='sheet'?'แผ่น':'ชิ้นไม้แถบ';
-    const heading='<header class="ss-all-production-heading"><div><span>ภาพรวมงานผลิต</span><h3>สรุปยอดต้องผลิตเพิ่มทั้งหมด</h3></div><small>ทุกความหนา · ทุกขนาด · ทุกเกรด</small></header>';
-    const basis=`ตามแผนที่บันทึก · ฐานสต๊อก ${reportDay(m?.reportDate)} · รุ่น ${m?.revision||'รอยืนยัน'} · รวมภาระทุกเดือนในแผน`;
-    const warning=`<p class="ss-all-production-warning" data-all-production-warning role="status">${esc(thicknessProductionWarning(m))}</p>`;
-    if(view.status==='pending')return `<section class="ss-all-production" data-all-production-summary="pending" aria-label="สรุปยอดต้องผลิตเพิ่มทั้งหมด">${heading}<p class="ss-all-production-basis">${esc(basis)}</p><p class="ss-production-pending" role="status">ยังสรุปยอดต้องผลิตเพิ่มไม่ได้: ${esc(view.reason)} · ไม่ใช้ศูนย์แทน</p></section>`;
-    const cards=['sheet','strip'].map(u=>`<div class="ss-all-production-stat"><span>${u==='sheet'?'แผ่นที่ต้องผลิตเพิ่ม':'ไม้แถบที่ต้องผลิตเพิ่ม'}</span><strong data-all-production-total="${u}">${number(view.byUnit[u])}<small>${label(u)}</small></strong></div>`).join('');
-    const chips=view.thickness.map(v=>`<div class="ss-all-production-thickness"><b>${number(v.t)} มม.</b><span>${productionQuantity(v.byUnit)}</span></div>`).join('');
-    const table=view.rows.length?`<div class="ss-all-production-scroll" role="region" tabindex="0" aria-label="รายการต้องผลิตเพิ่มครบทุกสเปก เลื่อนแนวนอนได้"><table><caption>รายละเอียดต้องผลิตเพิ่ม · ${view.rows.length} สเปก</caption><thead><tr><th scope="col">หนา (มม.)</th><th scope="col">เกรด</th><th scope="col">ขนาด (มม.)</th><th scope="col">หน่วย</th><th scope="col" class="ss-num">ยอดจอง</th><th scope="col" class="ss-num">จัดจากคลังแล้ว</th><th scope="col" class="ss-num">ต้องผลิตเพิ่ม</th></tr></thead><tbody>${view.rows.map(r=>`<tr data-all-production-row="${esc(r.key)}"><th scope="row">${number(r.t,3)}</th><td><b>${esc(r.grade)}</b></td><td>${number(r.w,3)} × ${number(r.l,3)}</td><td>${label(r.unit)}</td><td class="ss-num">${number(r.demand)}</td><td class="ss-num">${number(r.allocated)}</td><td class="ss-num ss-all-production-need">${number(r.shortage)}</td></tr>`).join('')}</tbody><tfoot>${['sheet','strip'].map(u=>`<tr data-all-production-unit="${u}"><th scope="row" colspan="6">รวมต้องผลิตเพิ่ม · ${label(u)}</th><td class="ss-num">${number(view.byUnit[u])}</td></tr>`).join('')}</tfoot></table></div>`:'<p class="ss-all-production-empty">ไม่มีรายการต้องผลิตเพิ่มตามแผนที่บันทึก</p>';
-    return `<section class="ss-all-production" data-all-production-summary="saved-plan" aria-label="สรุปยอดต้องผลิตเพิ่มทั้งหมด">${heading}<p class="ss-all-production-basis">${esc(basis)}</p><div class="ss-all-production-totals">${cards}<div class="ss-all-production-count"><strong>${view.rows.length}<small>สเปกที่ขาด</small></strong><span>${view.thickness.length} ความหนา</span></div></div>${warning}${chips?`<div class="ss-all-production-thicknesses" aria-label="ยอดต้องผลิตแยกความหนา">${chips}</div>`:''}${table}${view.fractional?'<p class="ss-all-production-basis">คงยอดทศนิยมตามแผนที่บันทึก · ยังไม่ปัดเป็นคำสั่งผลิต</p>':''}<p class="ss-all-production-note">ยอดจอง − จัดจากคลังแล้ว = ต้องผลิตเพิ่ม · รวมเฉพาะสเปกที่ขาด ไม่หักของต่างสเปก และไม่รวมยอดนี้เป็นสต๊อกจริง</p></section>`;
+  function productionDeadlines(m,view=allProduction(m),raw=m?.productionLoading){
+    const pending=reason=>({status:'pending',reason,byThickness:{}}),fail=()=>pending('รอยืนยันแผนโหลดหน้า 09 ที่ตรงกับแผนจองชุดนี้');
+    const allocation=window.AAFOrderHeader?.currentAllocationView?.(m?.currentAllocation,currentWarehouse(m),m?.currentMonthSold);
+    const close=(a,b)=>typeof a==='number'&&Number.isFinite(a)&&a>=0&&typeof b==='number'&&Number.isFinite(b)&&b>=0&&Math.abs(a-b)<1e-6;
+    const validDate=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
+    if(view.status!=='saved-plan'||allocation?.status!=='verified-allocation'||raw?.version!==1||raw.status!=='verified'||raw.dateBasis!=='ETD LOAD'||raw.source?.page!==9||raw.source.sourceIsLive!==false||raw.source.checksum!==allocation.source?.checksum||raw.source.capturedAt!==allocation.source?.capturedAt||!Array.isArray(raw.byThickness)||JSON.stringify(raw.excludedGrades)!=='["B","F"]')return fail();
+    for(const k of ['revision','reportDate','planChecksum','planCapturedAt'])if(raw.stock?.[k]!==allocation.stock?.[k])return fail();
+    const included=view.rows.filter(r=>!['B','F'].includes(r.grade.trim().toUpperCase())),expected=new Map(),seen=new Set(),byThickness={},sums={sheet:0,strip:0};
+    for(const r of included){const edges=[r.w,r.l].sort((a,b)=>a-b),key=[r.t,r.grade,...edges,r.unit].join('|'),prior=expected.get(key);if(prior)prior.shortage+=r.shortage;else expected.set(key,{...r,key,w:edges[0],l:edges[1]});}
+    for(const u of ['sheet','strip']){
+      const includeTotal=included.filter(r=>r.unit===u).reduce((n,r)=>n+r.shortage,0);
+      if(!close(raw.allShortage?.[u],view.byUnit[u])||!close(raw.totals?.[u],includeTotal)||!close(raw.excluded?.[u],view.byUnit[u]-includeTotal))return fail();
+    }
+    const groupKeys=new Set();
+    for(const group of raw.byThickness){
+      const key=String(group.thickness)+'|'+group.unit;
+      if(!Number.isFinite(group.thickness)||group.thickness<=0||!['sheet','strip'].includes(group.unit)||groupKeys.has(key)||!Array.isArray(group.specs)||!Array.isArray(group.dates)||!Array.isArray(group.invalidDateValues))return fail();groupKeys.add(key);
+      let qty=0,dated=0,missing=0,invalid=0;
+      for(const s of group.specs){const r=expected.get(s.key);if(!r||seen.has(s.key)||['w','l','t','grade','unit'].some(k=>s[k]!==r[k])||r.t!==group.thickness||r.unit!==group.unit||!close(s.shortage,r.shortage)||!close(s.datedQuantity+s.missingQuantity+s.invalidQuantity,s.shortage)||!['datedQuantity','missingQuantity','invalidQuantity'].every(k=>close(s[k],s[k])))return fail();seen.add(s.key);qty+=s.shortage;dated+=s.datedQuantity;missing+=s.missingQuantity;invalid+=s.invalidQuantity;}
+      if(!close(group.shortage,qty)||!close(group.datedQuantity,dated)||!close(group.missingQuantity,missing)||!close(group.invalidQuantity,invalid)||!close(group.overdueQuantity,group.overdueQuantity)||group.overdueQuantity>dated+1e-6)return fail();
+      let dateQty=0;const dateKeys=new Set();for(const d of group.dates){if(!validDate(d.date)||dateKeys.has(d.date)||!close(d.quantity,d.quantity)||d.quantity<=0)return fail();dateKeys.add(d.date);dateQty+=d.quantity;}
+      const first=[...dateKeys].sort()[0]||null;
+      if(!close(dateQty,dated)||group.earliestDate!==first||group.finishBeforeDate!==first)return fail();
+      sums[group.unit]+=qty;
+      // Sheet deadlines cannot be borrowed by strip quantities at the same thickness.
+      if(group.unit==='sheet')byThickness[String(group.thickness)]={status:first?'dated':'pending',date:first,finishBeforeDate:first,datedQuantity:dated,missingQuantity:missing,invalidQuantity:invalid,dates:group.dates.map(d=>({date:d.date,quantity:d.quantity})),unit:group.unit};
+    }
+    if(seen.size!==expected.size||['sheet','strip'].some(u=>!close(sums[u],raw.totals[u])))return fail();
+    return {status:'verified',source:{...raw.source},byThickness};
+  }
+  const bangkokDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const productionDate=v=>new Date(v+'T00:00:00+07:00').toLocaleDateString('th-TH',{timeZone:'Asia/Bangkok',day:'numeric',month:'short',year:'2-digit'});
+  function productionDateHTML(deadline){
+    if(!deadline?.date)return '<span class="ss-production-date-pending">รอวันโหลด</span>';
+    const overdue=deadline.date<bangkokDay(),unknown=deadline.missingQuantity+deadline.invalidQuantity;
+    return `<strong class="${overdue?'ss-production-overdue':''}">ก่อน ${esc(productionDate(deadline.date))}</strong><small>ETD LOAD${overdue?' · เลยกำหนด':''}${unknown?' · ยังขาดวันโหลด '+number(unknown)+' แผ่น':''}</small>`;
+  }
+  function productionDatesDetailHTML(deadline){
+    if(!deadline)return '';
+    const rows=deadline.dates.map(d=>`<li><span>${esc(productionDate(d.date))}${d.date<bangkokDay()?' · เลยกำหนด':''}</span><b>${number(d.quantity)} แผ่น</b></li>`).join('');
+    const pending=[deadline.missingQuantity?`ไม่ระบุวัน ${number(deadline.missingQuantity)} แผ่น`:'',deadline.invalidQuantity?`รูปแบบวันไม่ถูกต้อง ${number(deadline.invalidQuantity)} แผ่น`:''].filter(Boolean).join(' · ');
+    return `<details class="ss-production-dates"><summary>วันโหลดที่พบ · ETD LOAD</summary>${rows?`<ul>${rows}</ul>`:'<p>ยังไม่พบวันที่ยืนยันได้</p>'}${pending?`<p>${pending}</p>`:''}<small>จำนวนเป็นส่วนที่ขาดของแผนนี้ ไม่ใช่ยอดโหลดทั้งหมด</small></details>`;
+  }
+  function productionResultsHTML(m,settings=productionSettings,raw=m?.productionLoading){
+    const original=allProduction(m),dates=productionDeadlines(m,original,raw),planner=window.AAFProductionPlanner;
+    const view=planner?.build(original,settings,dates)||{status:'pending',reason:'ยังโหลดเครื่องมือประมาณการไม่ครบ'};
+    if(view.status==='pending')return `<p class="ss-production-pending" role="status">ยังสรุปแผนผลิตไม่ได้: ${esc(view.reason)} · ไม่ใช้ศูนย์แทน</p>`;
+    const units=u=>u==='sheet'?'แผ่น':'ชิ้นไม้แถบ',metric=(r,k,d=2)=>r.metrics===null?'—':number(r.metrics[k],d),total=view.sheetTotals;
+    const excluded=`ไม่นำเกรด B / F มาสั่งผลิตในกล่องนี้ ${view.excluded.count} สเปก · ${number(view.excluded.byUnit.sheet)} แผ่น${view.excluded.byUnit.strip?' · '+number(view.excluded.byUnit.strip)+' ชิ้นไม้แถบ':''} — ตารางด้านบนยังแสดงครบตามเดิม`;
+    const stats=`<div class="ss-all-production-totals"><div class="ss-all-production-stat"><span>ยอดที่นำมาวางแผนผลิต</span><strong data-all-production-total="sheet">${number(view.byUnit.sheet)}<small>แผ่น</small></strong>${view.byUnit.strip?`<small data-all-production-total="strip">ไม้แถบ ${number(view.byUnit.strip)} ชิ้น · รอฐานประมาณการ</small>`:''}</div><div class="ss-all-production-stat"><span>เทียบ 4×8 · หนา 2.5 มม.</span><strong data-production-total="eq2_5">${number(total.eq2_5)}<small>แผ่นเทียบ</small></strong></div><div class="ss-all-production-count"><strong>${view.rows.length}<small>สเปก</small></strong><span>${view.thickness.length} ความหนา · ${number(total.productionDays,3)} วันผลิต${view.pendingStripCount?' (เฉพาะแผ่น)':''}</span></div></div>`;
+    const chips=view.thickness.map(t=>`<div class="ss-all-production-thickness"><b>${number(t.t)} มม.</b><span>${productionQuantity(t.byUnit)}</span>${productionDateHTML(t.deadline)}${productionDatesDetailHTML(t.deadline)}</div>`).join('');
+    const table=view.rows.length?`<div class="ss-all-production-scroll" role="region" tabindex="0" aria-label="รายการวางแผนผลิตและประมาณการค่าไม้เชื้อเพลิง เลื่อนแนวนอนได้"><table class="ss-production-cost-table"><caption>รายละเอียดวางแผนผลิต · ${view.rows.length} สเปก · ไม่รวมเกรด B / F</caption><thead><tr><th scope="col">หนา / เกรด / ขนาด</th><th scope="col" class="ss-num">ต้องผลิตเพิ่ม</th><th scope="col">ต้องเสร็จ / วันโหลดแรก</th><th scope="col" class="ss-num">เทียบ 4×8<br>หนา 2.5</th><th scope="col" class="ss-num">ไม้ยูคา<br>ตัน</th><th scope="col" class="ss-num">เงินค่าไม้<br>บาท</th><th scope="col" class="ss-num">วันผลิต</th><th scope="col" class="ss-num">เชื้อเพลิง<br>ตัน</th><th scope="col" class="ss-num">เงินเชื้อเพลิง<br>บาท</th></tr></thead><tbody>${view.rows.map(r=>`<tr data-all-production-row="${esc(r.key)}"><th scope="row"><b>${number(r.t,3)} มม. · ${esc(r.grade)}</b><small>${number(r.w,3)} × ${number(r.l,3)} มม.</small></th><td class="ss-num ss-all-production-need">${number(r.shortage)}<small>${units(r.unit)}</small></td><td class="ss-production-date">${r.unit==='sheet'?productionDateHTML(r.deadline):'<span class="ss-production-date-pending">รอฐานไม้แถบ</span>'}</td><td class="ss-num">${metric(r,'eq2_5')}</td><td class="ss-num">${metric(r,'woodTonnes',3)}</td><td class="ss-num">${metric(r,'woodCost')}</td><td class="ss-num">${metric(r,'productionDays',3)}</td><td class="ss-num">${metric(r,'fuelTonnes',3)}</td><td class="ss-num">${metric(r,'fuelCost')}</td></tr>`).join('')}</tbody><tfoot><tr data-all-production-unit="sheet"><th scope="row">รวมประมาณการ · แผ่น</th><td class="ss-num">${number(view.byUnit.sheet)}</td><td></td><td class="ss-num">${number(total.eq2_5)}</td><td class="ss-num">${number(total.woodTonnes,3)}</td><td class="ss-num">${number(total.woodCost)}</td><td class="ss-num">${number(total.productionDays,3)}</td><td class="ss-num">${number(total.fuelTonnes,3)}</td><td class="ss-num">${number(total.fuelCost)}</td></tr>${view.byUnit.strip?`<tr data-all-production-unit="strip"><th scope="row">ไม้แถบแยกต่างหาก</th><td class="ss-num">${number(view.byUnit.strip)} ชิ้น</td><td colspan="7">ยังไม่รวมไม้แถบในประมาณการเงิน · รอฐานแปลงที่ยืนยัน</td></tr>`:''}</tfoot></table></div>`:'<p class="ss-all-production-empty">ไม่มีรายการต้องผลิตเพิ่มหลังแยกเกรด B / F ออกจากกล่องนี้</p>';
+    const cash=`<div class="ss-production-cash"><div><span>เงินค่าไม้ยูคา</span><strong data-production-total="woodCost">฿ ${number(total.woodCost)}</strong><small>${number(total.woodTonnes,3)} ตัน × ${number(view.settings.woodPricePerTonne)} บาท</small></div><div><span>เงินค่าเชื้อเพลิง</span><strong data-production-total="fuelCost">฿ ${number(total.fuelCost)}</strong><small>${number(total.productionDays,3)} วัน × ${number(view.settings.fuelTonnesPerDay)} ตัน/วัน × ${number(view.settings.fuelPricePerTonne)} บาท</small></div><div class="ss-production-cash-total"><span>${view.pendingStripCount?'รวมส่วนแผ่นที่คำนวณได้':'เงินที่ต้องใช้รวม'}</span><strong data-production-total="totalCost">฿ ${number(total.totalCost)}</strong><small>ค่าไม้ยูคา + ค่าเชื้อเพลิง${view.pendingStripCount?' · ยังไม่ใช่ยอดครบทั้งกล่อง':''}</small></div></div>`;
+    return `<p class="ss-production-exclusion">${excluded}</p>${stats}<p class="ss-all-production-warning" data-all-production-warning role="status">${esc(thicknessProductionWarning(m))}</p><p class="ss-production-date-source">${dates.status==='verified'?'แผนโหลดหน้า 09 อ่านเมื่อ '+esc(when(dates.source.capturedAt))+' · ใช้วัน ETD LOAD แรกของความหนาที่ขาด · ไม่ใช่ฟีดสด':esc(dates.reason)}</p>${chips?`<div class="ss-all-production-thicknesses" aria-label="ยอดต้องผลิตแยกความหนาและวันโหลด">${chips}</div>`:''}${table}${cash}<p class="ss-all-production-note">ประมาณการเฉพาะค่าไม้และเชื้อเพลิง ไม่ใช่ต้นทุนผลิตทั้งหมด · วันผลิตเป็นทศนิยมตามกำลังผลิต ไม่ปัดขึ้น และยังไม่ใช่ตารางเดินเครื่อง</p><details class="ss-production-formula"><summary>ดูสูตรคำนวณ</summary><p>แผ่นเทียบ = จำนวนที่ขาด × กว้าง × ยาว ÷ (1,220 × 2,440) × ความหนา ÷ 2.5<br>ไม้ยูคา (ตัน) = แผ่นเทียบ × 7.29 ÷ 1,000 × 2.45<br>วันผลิต = แผ่นเทียบ ÷ กำลังผลิตต่อวัน · เงินเชื้อเพลิง = วันผลิต × เชื้อเพลิงต่อวัน × ราคาเชื้อเพลิง</p></details>`;
+  }
+  function allProductionHTML(m,context={}){
+    const settings=context.settings||productionSettings,raw=Object.hasOwn(context,'productionLoading')?context.productionLoading:m?.productionLoading;
+    const controls=Object.entries(productionSettingLabels).map(([key,[label,unit]])=>`<label>${label}<input type="number" inputmode="decimal" step="any" min="${key==='dailyCapacitySheets'?'0.000001':'0'}" data-production-setting="${key}" value="${esc(settings[key]??'')}" aria-label="${label} ${unit}"><small>${unit}</small></label>`).join('');
+    return `<section class="ss-all-production" data-all-production-summary="planning-estimate" aria-label="สรุปยอดต้องผลิตเพิ่มทั้งหมด"><header class="ss-all-production-heading"><div><span>ภาพรวมงานผลิต</span><h3>สรุปยอดต้องผลิตเพิ่มทั้งหมด</h3><small>วางแผนเฉพาะรายการที่ต้องสั่งผลิต · ไม่รวมเกรด B / F</small></div><div class="ss-production-settings" role="group" aria-label="ปรับสมมติฐานค่าไม้และเชื้อเพลิง">${controls}</div></header><p class="ss-all-production-basis">ตามแผนที่บันทึก · ฐานสต๊อก ${esc(reportDay(m?.reportDate))} · รุ่น ${esc(m?.revision||'รอยืนยัน')} · รวมภาระทุกเดือนในแผน</p><div data-production-results aria-live="polite">${productionResultsHTML(m,settings,raw)}</div></section>`;
+  }
+  function repaintProductionResults(){
+    const target=root?.querySelector('[data-production-results]');if(!target||!latest)return;
+    target.innerHTML=productionResultsHTML(latest);
+    const parsed=window.AAFProductionPlanner?.readSettings(productionSettings);
+    root.querySelectorAll('[data-production-setting]').forEach(input=>input.setAttribute('aria-invalid',String(parsed?.invalidField===input.dataset.productionSetting)));
+  }
+  function editProductionSetting(event){
+    const input=event.target.closest?.('[data-production-setting]');if(!input||!Object.hasOwn(productionSettings,input.dataset.productionSetting))return;
+    productionSettings[input.dataset.productionSetting]=input.validity?.badInput?'invalid':input.value;repaintProductionResults();
   }
   function thicknessProductionWarning(m){
     const api=window.AAFOrderHeader;
@@ -634,8 +697,9 @@
     if(!latest||!window.AAFOrderHeader)return;
     const currentMonthSold=window.AAFOrderHeader.currentMonthSoldView(value);
     const warehouse=currentWarehouse(latest),currentAllocation=window.AAFOrderHeader.currentAllocationView(allocationValue,warehouse,currentMonthSold);
-    if(JSON.stringify(currentMonthSold)===JSON.stringify(latest.currentMonthSold)&&JSON.stringify(currentAllocation)===JSON.stringify(latest.currentAllocation))return;
-    latest={...latest,currentMonthSold,currentAllocation};
+    const productionLoading=allocationValue?.productionLoading||null;
+    if(JSON.stringify(currentMonthSold)===JSON.stringify(latest.currentMonthSold)&&JSON.stringify(currentAllocation)===JSON.stringify(latest.currentAllocation)&&JSON.stringify(productionLoading)===JSON.stringify(latest.productionLoading))return;
+    latest={...latest,currentMonthSold,currentAllocation,productionLoading};
     // Reuse authenticated polls. Do not rebuild Physical, tables or editors.
     const holder=document.createElement('div');
     holder.innerHTML=window.AAFOrderHeader.render(null,expandedCards,warehouse,'',currentMonthSold,currentAllocation);
@@ -651,6 +715,7 @@
     for(const selector of ['.ss-sales-summary-source','.ss-overview-source']){const node=root?.querySelector(selector);if(node)node.textContent=source;}
     repaintReadiness();
     repaintThicknessProductionWarnings();
+    repaintProductionResults();
   }
   function invalidateCurrentMonthSold(){
     setCurrentMonthSold(null);
@@ -705,6 +770,7 @@
     try{await window.AAFSalesPreview?.savePrices?.();}finally{syncPriceDrafts();}
   }
   root?.addEventListener('input',editGapPrice);root?.addEventListener('change',editGapPrice);root?.addEventListener('click',saveGapPrices);root?.addEventListener('click',overviewClick);
+  root?.addEventListener('input',editProductionSetting);root?.addEventListener('change',editProductionSetting);
   function overviewSourceText(m){
     if(window.AAFOrderHeader)return window.AAFOrderHeader.sourceText(orderHeader,currentWarehouse(m),undefined,undefined,m?.currentMonthSold,m?.currentAllocation);
     const e=m?.salesSummary?.evidence,fx=exchangeRateDisplay(m?.salesSummary,m?.headerExchangeRate);
@@ -714,7 +780,7 @@
   function dailyOverviewHTML(m){
     return `<section class="ss-daily-overview" aria-label="ภาพรวมรายวัน 4 กล่อง"><header class="ss-overview-header"><div><span>AAF · DAILY OVERVIEW</span><h3>ภาพรวมสต๊อกและยอดขาย</h3><small hidden>ข้อมูลส่วนกลาง ${esc(when(m.updatedAt))} · ${number(m.rows.length)} สเปก</small></div><div class="ss-overview-actions" data-html2canvas-ignore><button type="button" data-stock-overview-action="collapse">ย่อทั้ง 4 กล่อง</button><button type="button" data-stock-overview-action="expand">ดูรายละเอียดทั้งหมด</button><button type="button" class="ss-overview-download" ${exporting?'disabled':''}>ดาวน์โหลดภาพ 4 กล่อง</button></div></header><p class="ss-overview-source" hidden>${esc(overviewSourceText(m))}</p><div class="ss-kpis">${kpiHTML(m.salesSummary,m)}</div><p class="ss-overview-footer">สต๊อก / จอง / Free ใช้ราคาประเมิน · ยอดขายใช้ราคาขายจริง · ห้ามบวกทั้ง 4 กล่องเข้าด้วยกันเพราะมีส่วนซ้อนกัน</p></section>`;
   }
-  function html(m,thicknessOpen=expandedThickness,productionOpen=expandedThicknessProduction){
+  function html(m,thicknessOpen=expandedThickness,productionOpen=expandedThicknessProduction,productionContext={}){
     const t=m.total,overrides=m.rows.filter(r=>r.physicalAt||r.freeAt).length,followed=m.rows.filter(r=>String(r.followup).trim()).length;
     const displayedFx=exchangeRateDisplay(window.AAFOrderHeader?null:m.salesSummary,m.headerExchangeRate);
     let index=0;
@@ -728,7 +794,7 @@
       <p class="ss-help ss-reservation-help"><strong>จำนวนจองตามแผนทั้งคลังเดิม ไม่ใช่จองเฉพาะเดือนหรือคิวใหม่หัวข้อ02</strong><br>จองรวม = จองมีของ + จองต้องผลิตเพิ่ม · Physical − จองมีของ = Free · แยกคำนวณรายสเปกก่อนรวม ไม่เอาของคนละสเปกหักกัน${m.rows.some(r=>r.freeReconciliationException)?'<br><strong class="ss-manual">มีค่า Free ที่บันทึกไว้ต่างจากสูตรในบางสเปก · คงค่าที่บันทึกไว้ ไม่ล้างค่าปรับเอง</strong>':''}</p>
       <div class="ss-groups">${groupTable('แยกตามเกรด',m.grades,'เกรด',t)}${groupTable('แยกตามความหนา',m.thickness.filter(([,totals])=>totals.qty>0||totals.committedQty>0||totals.freeQty>0),'หนา (mm)',t,{grades:m.thicknessGrades,expanded:thicknessOpen,productionExpanded:productionOpen,model:m})}</div>
       ${agingPanel(m)}
-      ${allProductionHTML(m)}
+      ${allProductionHTML(m,productionContext)}
       <section class="ss-sales-block" data-html2canvas-ignore><div class="ss-section-title"><span>02</span><h3>ภาพรวมรายการขาย · เลือกเดือน</h3></div><div id="stock-order-review-slot"></div></section>
       <section class="ss-legacy-sales-services" hidden aria-hidden="true"><div id="stock-sales-preview-slot"></div></section>
       <section class="ss-legacy-detail" hidden aria-hidden="true">
@@ -768,8 +834,41 @@
     [data-aaf-stock-summary] .ss-all-production .ss-all-production-need{background:#fff4df;color:#8d5418;font-weight:700}
     [data-aaf-stock-summary] .ss-all-production tfoot{background:#eaf0e2;font-weight:700;color:#425434;border-top:2px solid #c4d0b5}
     [data-aaf-stock-summary] .ss-all-production-empty{background:#eaf4e7;color:#345a3b;padding:14px;border-radius:12px}
+    [data-aaf-stock-summary] .ss-production-settings{display:grid;grid-template-columns:repeat(4,minmax(95px,1fr));gap:8px;max-width:620px;margin-left:auto}
+    [data-aaf-stock-summary] .ss-production-settings label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:#52634b;font-weight:600;min-width:0}
+    [data-aaf-stock-summary] .ss-production-settings input{width:100%;max-width:145px;box-sizing:border-box;background:#ffffffdd;border:1px solid #bdcbb3;border-radius:9px;padding:9px 10px;font-family:inherit;font-size:16px;font-weight:700;color:#254c3b;font-variant-numeric:tabular-nums}
+    [data-aaf-stock-summary] .ss-production-settings input:focus-visible{outline:2px solid #27745e;outline-offset:2px}
+    [data-aaf-stock-summary] .ss-production-settings input[aria-invalid=true]{border-color:#b14327;background:#fff2e9}
+    [data-aaf-stock-summary] .ss-production-settings small{font-size:9px;color:#74806b;font-weight:400}
+    [data-aaf-stock-summary] .ss-production-exclusion{padding:9px 12px;border-radius:9px;background:#f2eee5;color:#74634b;font-size:11px;line-height:1.6}
+    [data-aaf-stock-summary] .ss-production-date-source{font-size:11px;color:#65755f;line-height:1.6;margin:7px 0}
+    [data-aaf-stock-summary] .ss-production-date{min-width:155px;white-space:normal!important;font-size:11px;color:#375743}
+    [data-aaf-stock-summary] .ss-production-date small,[data-aaf-stock-summary] .ss-production-cost-table th small,[data-aaf-stock-summary] .ss-production-cost-table td small{display:block;font-size:10px;font-weight:400;color:#7c816f;line-height:1.5;margin-top:3px}
+    [data-aaf-stock-summary] .ss-production-overdue{color:#b04830}
+    [data-aaf-stock-summary] .ss-production-date-pending{color:#9b6f27;font-size:11px}
+    [data-aaf-stock-summary] .ss-all-production-thickness{display:grid;grid-template-columns:auto auto;align-items:baseline;gap:3px 10px;min-width:150px}
+    [data-aaf-stock-summary] .ss-all-production-thickness>strong,[data-aaf-stock-summary] .ss-all-production-thickness>small{grid-column:1/-1;font-size:10px}
+    [data-aaf-stock-summary] .ss-production-dates{grid-column:1/-1;margin-top:4px;font-size:10px;line-height:1.7}
+    [data-aaf-stock-summary] .ss-production-dates summary{cursor:pointer;color:#526b48}
+    [data-aaf-stock-summary] .ss-production-dates ul{list-style:none;margin:5px 0;padding:0}
+    [data-aaf-stock-summary] .ss-production-dates li{display:flex;justify-content:space-between;gap:12px;border-top:1px dotted #d8ddcc;padding:3px 0}
+    [data-aaf-stock-summary] .ss-production-dates p,[data-aaf-stock-summary] .ss-production-dates small{font-size:9px;margin:4px 0;color:#8c7044}
+    [data-aaf-stock-summary] .ss-production-cost-table{min-width:1120px!important}
+    [data-aaf-stock-summary] .ss-production-cost-table th,[data-aaf-stock-summary] .ss-production-cost-table td{padding:11px 10px;font-size:11px}
+    [data-aaf-stock-summary] .ss-production-cash{display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:10px;margin:16px 0 8px}
+    [data-aaf-stock-summary] .ss-production-cash>div{display:flex;flex-direction:column;gap:6px;padding:18px 16px;border:1px solid #d4ddc5;border-radius:14px;background:#f3f6e9}
+    [data-aaf-stock-summary] .ss-production-cash span{font-size:12px;color:#53694b}
+    [data-aaf-stock-summary] .ss-production-cash strong{font-size:25px;line-height:1.4;color:#2f5740;font-weight:800;font-variant-numeric:tabular-nums}
+    [data-aaf-stock-summary] .ss-production-cash small{font-size:10px;color:#758368;line-height:1.5}
+    [data-aaf-stock-summary] .ss-production-cash .ss-production-cash-total{background:#294f3f;border-color:#294f3f}
+    [data-aaf-stock-summary] .ss-production-cash-total span,[data-aaf-stock-summary] .ss-production-cash-total small{color:#d0ddc9}
+    [data-aaf-stock-summary] .ss-production-cash-total strong{color:#fff9d7}
+    [data-aaf-stock-summary] .ss-production-formula{font-size:10px;line-height:1.8;color:#6c785e;margin-top:9px}
+    [data-aaf-stock-summary] .ss-production-formula summary{cursor:pointer;font-weight:600}
     @media(max-width:650px){[data-aaf-stock-summary] .ss-all-production{padding:16px}[data-aaf-stock-summary] .ss-all-production-heading h3{font-size:20px}[data-aaf-stock-summary] .ss-all-production-totals{grid-template-columns:1fr 1fr}[data-aaf-stock-summary] .ss-all-production-count{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center;padding:10px 16px}[data-aaf-stock-summary] .ss-all-production-totals strong{font-size:27px}[data-aaf-stock-summary] .ss-all-production-stat{padding:13px}[data-aaf-stock-summary] .ss-all-production-totals strong small{display:block;margin:2px 0 0}}
-    @media print{[data-aaf-stock-summary] .ss-all-production{background:#fff;box-shadow:none}[data-aaf-stock-summary] .ss-all-production-scroll{overflow:visible}[data-aaf-stock-summary] .ss-all-production table{min-width:0}[data-aaf-stock-summary] .ss-all-production tr{break-inside:avoid}}
+    @media(max-width:850px){[data-aaf-stock-summary] .ss-production-settings{max-width:none;width:100%;margin-left:0}[data-aaf-stock-summary] .ss-production-settings input{max-width:none}[data-aaf-stock-summary] .ss-production-cash{grid-template-columns:1fr 1fr}[data-aaf-stock-summary] .ss-production-cash-total{grid-column:1/-1}}
+    @media(max-width:450px){[data-aaf-stock-summary] .ss-production-settings{grid-template-columns:1fr 1fr}[data-aaf-stock-summary] .ss-production-cash{grid-template-columns:1fr}[data-aaf-stock-summary] .ss-production-cash-total{grid-column:auto}}
+    @media print{[data-aaf-stock-summary] .ss-all-production{background:#fff;box-shadow:none}[data-aaf-stock-summary] .ss-all-production-scroll{overflow:visible}[data-aaf-stock-summary] .ss-all-production table{min-width:0!important}[data-aaf-stock-summary] .ss-all-production tr{break-inside:avoid}}
     [data-aaf-stock-summary] .ss-readiness{margin:22px 0;border:1px solid #cddde7;border-radius:16px;background:#f7fafc;overflow:hidden}
     [data-aaf-stock-summary] .ss-readiness-inner{padding:22px}
     [data-aaf-stock-summary] .ss-readiness-heading span{font-size:12px;letter-spacing:.06em;color:#48718a;font-weight:700}
@@ -1115,6 +1214,7 @@
     // Retain the same native preview node: changing stock revisions must not discard price/note drafts.
     const preview=root.querySelector('#stock-sales-preview-host');
     const orderPreview=root.querySelector('#stock-order-review-host');
+    const planningFocus=root.querySelector('[data-production-setting]:focus')?.dataset.productionSetting;
     const focused=orderPreview?.shadowRoot?.activeElement||orderPreview?.querySelector('input:focus,textarea:focus,select:focus')||preview?.shadowRoot?.activeElement;
     const selection=focused&&typeof focused.selectionStart==='number'?{start:focused.selectionStart,end:focused.selectionEnd}:null;
     preview?.remove();orderPreview?.remove();
@@ -1125,6 +1225,7 @@
     window.AAFOrderReview?.attach(root.querySelector('#stock-order-review-slot'));
     syncPriceDrafts();
     if(focused?.isConnected){focused.focus({preventScroll:true});if(selection)focused.setSelectionRange(selection.start,selection.end);}
+    if(planningFocus)root.querySelector('[data-production-setting="'+planningFocus+'"]')?.focus({preventScroll:true});
     if(!jumpedToCash&&location.hash==='#stock-cash'&&m.cash){jumpedToCash=true;root.querySelector('#stock-cash').scrollIntoView();}
   }
   async function loadCanvas(){
@@ -1133,12 +1234,12 @@
     return canvasLoader;
   }
   async function download(which='stock'){
-    if(!latest||exporting)return;exporting=true;const captured=latest,capturedThickness=new Set(expandedThickness),capturedProduction=new Set(expandedThicknessProduction),capturedPhysicalGrades=new Set(expandedPhysicalGrades);let box=null;
+    if(!latest||exporting)return;exporting=true;const captured=latest,capturedThickness=new Set(expandedThickness),capturedProduction=new Set(expandedThicknessProduction),capturedPhysicalGrades=new Set(expandedPhysicalGrades),capturedProductionContext={settings:{...productionSettings},productionLoading:latest.productionLoading?JSON.parse(JSON.stringify(latest.productionLoading)):null};let box=null;
     const status=text=>{const p=root.querySelector('.ss-status');if(p)p.textContent=text;};
     root.querySelectorAll('.ss-download,.cash-download,.ss-overview-download').forEach(b=>b.disabled=true);status(which==='overview'?'กำลังสร้างภาพรวม 4 กล่อง…':'กำลังสร้างภาพยาวครบทุกแถว กรุณารอสักครู่…');
     try{
       const canvasFn=await loadCanvas();await document.fonts?.ready;
-      box=document.createElement('div');box.dataset.aafStockSummary='';box.className='ss-export'+(which==='overview'?' ss-overview-export':'');box.style.cssText='position:absolute;left:-20000px;top:0;width:1440px;box-sizing:border-box;padding:0;background:white;';box.innerHTML=which==='cash'?window.AAFStockCash.render(captured.cash):which==='overview'?dailyOverviewHTML(captured):html(captured,capturedThickness,capturedProduction);document.body.append(box);
+      box=document.createElement('div');box.dataset.aafStockSummary='';box.className='ss-export'+(which==='overview'?' ss-overview-export':'');box.style.cssText='position:absolute;left:-20000px;top:0;width:1440px;box-sizing:border-box;padding:0;background:white;';box.innerHTML=which==='cash'?window.AAFStockCash.render(captured.cash):which==='overview'?dailyOverviewHTML(captured):html(captured,capturedThickness,capturedProduction,capturedProductionContext);document.body.append(box);
       for(const card of box.querySelectorAll('[data-stock-card]'))setCardView(card,which!=='overview');
       restorePhysicalGrades(box,capturedPhysicalGrades);
       const sheet=which==='overview'?box:box.querySelector(which==='cash'?'.cash-sheet':'.ss-sheet'),width=Math.ceil(sheet.getBoundingClientRect().width),height=Math.ceil(sheet.getBoundingClientRect().height),scale=Math.min(1.5,30000/height,Math.sqrt(48000000/(width*height)));
@@ -1155,6 +1256,8 @@
   window.AAFStockSummary.buildThicknessProduction=thicknessProduction;
   window.AAFStockSummary.buildAllProduction=allProduction;
   window.AAFStockSummary.renderAllProduction=allProductionHTML;
+  window.AAFStockSummary.buildProductionDeadlines=productionDeadlines;
+  window.AAFStockSummary.renderProductionResults=productionResultsHTML;
   window.AAFStockSummary.soldLoadingBreakdown=soldLoadingBreakdown;
   window.AAFStockSummary.soldSettlementState=soldSettlementState;
   window.AAFStockSummary.exchangeRateDisplay=exchangeRateDisplay;
