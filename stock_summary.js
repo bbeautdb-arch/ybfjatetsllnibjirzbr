@@ -1275,6 +1275,9 @@
     [data-aaf-stock-summary] .ss-physical-grade-detail>summary::before{content:'›';font-size:16px;line-height:1;transition:transform .12s}
     [data-aaf-stock-summary] .ss-physical-grade-detail[open]>summary::before{transform:rotate(90deg)}
     [data-aaf-stock-summary] .ss-physical-grade-detail>summary>small{margin-left:auto;font-size:9px;font-weight:400;white-space:nowrap;color:#61766b}
+    [data-aaf-stock-summary] .ss-grade-summary-line{display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 10px;min-width:0}
+    [data-aaf-stock-summary] .ss-grade-summary-value{font-weight:700;color:#166746;font-variant-numeric:tabular-nums}
+    [data-aaf-stock-summary] .ss-grade-summary-value>small{display:block;font-size:9px;font-weight:400;line-height:1.5}
     [data-aaf-stock-summary] .ss-physical-grade-detail>summary:focus-visible{outline:2px solid #27745e;outline-offset:2px;border-radius:6px}
     [data-aaf-stock-summary] .ss-physical-grade-detail[open]{background:#fffef7;border-color:#d4dfce}
     [data-aaf-stock-summary] .ss-physical-items{padding:0 7px 7px;min-width:0}

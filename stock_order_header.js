@@ -404,11 +404,14 @@
       total.valueKnown=total.freeKnown&&total.valueKnown&&valid(total.value);
       const totalValueText=!total.freeKnown?'รอยืนยัน':total.valueKnown?money(total.value):!total.valueBound?'รอยืนยันชุดราคา/เรท':
         `${total.valuedItems?money(total.value):'ยังไม่มีมูลค่าที่คำนวณได้'}<small>รวมเฉพาะส่วนที่มีราคา · ยังขาด ${n(total.unpricedSpecCount)} รายการ</small><small>${priceCoverageText(total)}</small>`;
+      // The collapsed Free grade is the same subtotal as its item footer,
+      // not an averaged unit price or a second stock valuation.
+      const summaryLabel=freeOnly?`<span class="ss-grade-summary-line"><span>${label}</span><span class="ss-grade-summary-value${total.valueKnown?'':' ss-overview-warning'}" data-grade-summary-free-value title="มูลค่า Free ประเมินจากราคาสต๊อก ไม่ใช่ราคาขายจริง" aria-label="มูลค่า Free ประเมินจากราคาสต๊อก">${totalValueText}</span></span>`:`<span>${label}</span>`;
       const footer=`<div class="ss-physical-item-total" data-physical-grade-total aria-label="รวมเกรด ${esc(g.grade)} ${esc(unit)}"><span>รวม <small>${esc(unit)}</small></span><b data-grade-total-field="physical">${physicalNumber(total.physical,'quantity')}</b><b class="ss-physical-item-free${total.freeKnown?'':' ss-overview-warning'}" data-grade-total-field="free">${total.freeKnown?physicalNumber(total.free,'quantity'):'รอยืนยัน'}</b><b class="ss-physical-item-value${total.valueKnown?'':' ss-overview-warning'}" data-grade-total-field="value">${totalValueText}</b></div>`;
-      return `<details class="ss-physical-grade-detail" data-physical-grade="${esc(g.grade)}"><summary aria-label="ดูขนาดและความหนา เกรด ${esc(g.grade)} ${esc(unit)}"><span>${label}</span><small>ดูความหนา</small></summary><div class="ss-physical-items"><div class="ss-physical-item-head"><span>หนา</span><span>สต๊อก · ${esc(unit)}</span><span>Free ที่บันทึก</span><span>มูลค่า Free<br>ประเมิน · บาท</span></div>${rows}${footer}<small class="ss-physical-value-note">ราคาสต๊อกที่บันทึก · ไม่ใช่ราคาขายจริง</small></div></details>`;
+      return `<details class="ss-physical-grade-detail" data-physical-grade="${esc(g.grade)}"><summary aria-label="ดูขนาดและความหนา เกรด ${esc(g.grade)} ${esc(unit)}">${summaryLabel}<small>ดูความหนา</small></summary><div class="ss-physical-items"><div class="ss-physical-item-head"><span>หนา</span><span>สต๊อก · ${esc(unit)}</span><span>Free ที่บันทึก</span><span>มูลค่า Free<br>ประเมิน · บาท</span></div>${rows}${footer}<small class="ss-physical-value-note">ราคาสต๊อกที่บันทึก · ไม่ใช่ราคาขายจริง</small></div></details>`;
     });
     if(group.unknownGrade.quantity>0)entries.push(`<small class="ss-overview-warning">ยังไม่ระบุเกรด ${physicalNumber(group.unknownGrade.quantity,'quantity')} ${esc(unit)} · รอตรวจ</small>`);
-    return entries.length?'<div class="ss-physical-grade-list"><small class="ss-physical-grade-hint">เกรด: กดดูขนาด / ความหนา / Free</small>'+entries.join('')+'</div>':'';
+    return entries.length?'<div class="ss-physical-grade-list"><small class="ss-physical-grade-hint">'+(freeOnly?'เกรด / Free / มูลค่าประเมินจากราคาสต๊อก · กดดูความหนา':'เกรด: กดดูขนาด / ความหนา / Free')+'</small>'+entries.join('')+'</div>':'';
   }
   function compositionBindings(c,current){
     const itemFree=units();
