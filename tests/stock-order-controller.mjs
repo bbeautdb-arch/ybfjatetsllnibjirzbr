@@ -85,6 +85,65 @@ async function unlockBrowser(h){
   await h.mounted[0].services.unlockAnnotations('synthetic-code-not-a-real-secret');
   assert.equal(h.mounted[0].services.getAnnotationAccess().unlocked,true);
 }
+function authenticatedOwnerFixture(){
+  const f=fixture(),annotationAccess={eligible:true,unlocked:false,expiresAt:null,message:'Synthetic staff code required'};
+  f.stock.actor={username:'admin',role:'admin',owner:true};f.stock.permissions={note:true,followup:true,adjust:true};
+  f.stock.annotationAccess=annotationAccess;f.catalog.annotationAccess=annotationAccess;f.catalog.permissions.annotations=false;
+  return f;
+}
+async function mountOwner(h,f=authenticatedOwnerFixture(),extra={}){
+  h.api.setAccess({...binding(),ok:f.stock.ok,actor:f.stock.actor,permissions:f.stock.permissions,annotationAccess:f.stock.annotationAccess,...extra});
+  h.responses.push(report());await h.api.attach(new Node());return h.mounted[0].services;
+}
+test('root controller accepts verified owner without staff code, revalidates dual CAS and commits annotations once with no unlock header',async()=>{
+  const h=browser(),f=authenticatedOwnerFixture(),before=copy(f),services=await mountOwner(h,f);
+  assert.equal(services.getAnnotationAccess().owner,true);assert.equal(services.getAnnotationAccess().unlocked,true);
+  h.responses.push(copy(f.stock),copy(f.catalog));const initial=await services.readNotes();
+  assert.equal(initial.canSave,true);assert.equal(initial.canEditFollowup,true);assert.equal(f.catalog.permissions.annotations,false);
+  const after=copy(f),updatedAt='2026-01-15T00:01:00Z';
+  after.stock.revision=2;after.stock.updatedAt=updatedAt;
+  Object.assign(after.stock.rows[0],{followup:followupChanges[0].after,followupBy:'admin',followupAt:updatedAt});
+  after.catalog.revision=2;after.catalog.catalogRevision=3;
+  after.catalog.widgetState.privateContent.notesBySpec[key]=changes[0].after;after.catalog.widgetState.privateContent.savedAt=updatedAt;
+  const start=h.calls.length;
+  h.responses.push(copy(f.stock),copy(f.catalog),{ok:true,revision:2,catalogRevision:3,updatedAt,savedNoteCount:1,savedFollowupCount:1},after.stock,after.catalog);
+  const saved=await services.saveChanges({notesChanges:changes,followupChanges});
+  assert.equal(saved.canSave,true);assert.equal(saved.notesBySpec[key],changes[0].after);assert.equal(saved.rows[0].records[0].followup,followupChanges[0].after);
+  const saveCalls=h.calls.slice(start);assert.deepEqual(saveCalls.map(c=>c.options.method),['GET','GET','POST','GET','GET']);
+  assert.equal(saveCalls[0].url.endsWith('/api/aaf/stock'),true);assert.match(saveCalls[1].url,/\?view=salesReport&catalogOnly=1$/);
+  assert.deepEqual(JSON.parse(saveCalls[2].options.body),{action:'saveSalesAnnotations',expectedRevision:1,expectedCatalogRevision:2,reportDate:'2026-01-01',notesChanges:changes,followupChanges});
+  assert.equal(h.calls.filter(c=>c.options.method==='POST').length,1);
+  assert(h.calls.every(c=>!Object.hasOwn(c.options.headers,'X-AAF-Annotation-Unlock')),'owner never acquires or sends a shared code grant');
+  assert.equal(JSON.stringify(f),JSON.stringify(before),'synthetic input and protected values remain unchanged');
+  assert.equal(after.stock.rows[0].qty,before.stock.rows[0].qty);assert.deepEqual(after.catalog.widgetState.privateContent.prices,before.catalog.widgetState.privateContent.prices);
+});
+test('root GET revokes prior owner proof before POST if current identity, permission or authentication no longer verifies',async()=>{
+  for(const kind of ['staff','missing-actor','revoked-permission','401','403']){
+    const h=browser(),f=authenticatedOwnerFixture(),services=await mountOwner(h,f);h.mounted[0].v.dirty=true;
+    const current=copy(f.stock);
+    if(kind==='staff')current.actor={username:'synthetic-sales',role:'stock_sales',owner:false};
+    if(kind==='missing-actor')delete current.actor;
+    if(kind==='revoked-permission')current.permissions.note=false;
+    if(kind==='401'||kind==='403')h.responses.push({status:Number(kind),ok:false});else h.responses.push(current,copy(f.catalog));
+    await assert.rejects(services.saveChanges({notesChanges:changes,followupChanges}));
+    assert.equal(h.calls.filter(c=>c.options.method==='POST').length,0,kind);
+    assert.equal(services.getAnnotationAccess().unlocked,false,kind);assert.notEqual(services.getAnnotationAccess().owner,true,kind);
+    assert.equal(h.mounted[0].v.destroyed,false,kind+' retains existing draft');assert.equal(h.api.isDirty(),true,kind);
+  }
+});
+test('owner proof does not override standalone read-only mode and a code-less owner POST rejection locks subsequent attempts',async()=>{
+  const h=browser(),f=authenticatedOwnerFixture(),services=await mountOwner(h,f,{notesReadOnly:true});
+  assert.equal(services.getAnnotationAccess().unlocked,false);assert.equal(services.getAnnotationAccess().owner,false);
+  h.responses.push(copy(f.stock),copy(f.catalog));const snapshot=await services.readNotes();assert.equal(snapshot.canSave,false);assert.equal(snapshot.canEditFollowup,false);
+  h.responses.push(copy(f.stock),copy(f.catalog));await assert.rejects(services.saveChanges({notesChanges:changes,followupChanges}),e=>e.code==='read-only');
+  assert.equal(h.calls.filter(c=>c.options.method==='POST').length,0);
+  const denied=browser(),deniedServices=await mountOwner(denied,f);denied.mounted[0].v.dirty=true;
+  denied.responses.push(copy(f.stock),copy(f.catalog),{status:403,ok:false});
+  await assert.rejects(deniedServices.saveChanges({notesChanges:changes,followupChanges}),e=>e.code==='permission-denied');
+  assert.equal(deniedServices.getAnnotationAccess().unlocked,false);assert.equal(denied.api.isDirty(),true);
+  const count=denied.calls.length;await assert.rejects(deniedServices.saveChanges({notesChanges:changes,followupChanges}),e=>e.code==='permission-denied');
+  assert.equal(denied.calls.length,count,'no automatic retry or use of cached owner proof');
+});
 test('authorized overview is GET only, same month and no-store; reattach preserves drafts',async()=>{
   const h=browser();h.api.setAccess({revision:1,reportDate:'2026-01-01'});h.responses.push(report());await h.api.attach(new Node());assert.equal(h.mounted.length,1);assert.equal(h.calls[0].options.method,'GET');assert.equal(h.calls[0].options.cache,'no-store');assert.equal(h.calls[0].options.headers.Authorization,'Bearer synthetic-auth');assert(!h.calls[0].url.includes('synthetic-auth'));h.mounted[0].v.dirty=true;await h.api.attach(new Node());assert.equal(h.mounted.length,1);assert(h.api.isDirty());assert.equal(h.api.selectMonth('2026-02'),false);
 });

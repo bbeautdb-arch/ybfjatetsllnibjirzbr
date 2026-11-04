@@ -27,11 +27,17 @@
   const verifiedWrite=(before,after,changes)=>core.verifiedAnnotationWrite(before,after,changes);
   // A scoped grant stays in this tab's memory, not storage or the AAF login.
   function createAnnotationUnlockService(env){
-    let grant='',session='',expiresAt='',generation=0,server={eligible:false,unlocked:false,message:'กรุณาปลดล็อกเพื่อแก้ไข'};
-    function lock(){generation++;grant='';session='';expiresAt='';server={...server,unlocked:false};}
+    let grant='',session='',expiresAt='',ownerSession='',generation=0,server={eligible:false,unlocked:false,message:'กรุณาปลดล็อกเพื่อแก้ไข'};
+    function lock(){generation++;grant='';session='';expiresAt='';ownerSession='';server={...server,unlocked:false};}
     function getAccess(){
-      if(grant&&(env.token()!==session||Date.parse(expiresAt)<=env.now()))lock();
-      return {...server,unlocked:!!grant&&server.unlocked===true,expiresAt:grant?expiresAt:null};
+      if(ownerSession&&env.token()!==ownerSession||grant&&(env.token()!==session||Date.parse(expiresAt)<=env.now()))lock();
+      if(ownerSession)return {owner:true,mode:'owner',eligible:true,unlocked:true,expiresAt:null,message:'ผู้ดูแล · แก้ไขได้โดยไม่ต้องใช้รหัสปลดล็อก'};
+      return {...server,owner:false,mode:'code',unlocked:!!grant&&server.unlocked===true,expiresAt:grant?expiresAt:null};
+    }
+    function observeStock(stock){
+      getAccess();
+      ownerSession=core.isAuthenticatedAnnotationOwner(stock)&&env.token()?env.token():'';
+      if(ownerSession){grant='';session='';expiresAt='';}
     }
     function observe(value){if(value&&typeof value==='object')server={eligible:value.eligible===true,unlocked:value.unlocked===true,message:typeof value.message==='string'?value.message:''};}
     async function unlock(code){
@@ -43,7 +49,7 @@
       if(next?.eligible!==true||next.unlocked!==true||typeof result.unlockToken!=='string'||!result.unlockToken||!Number.isFinite(expiry)||expiry<=env.now()||expiry>env.now()+31*60*1000)fail('unlock-rejected','ยังปลดล็อกไม่ได้ กรุณาตรวจรหัสและสิทธิ์บัญชี');
       grant=result.unlockToken;session=credential;expiresAt=next.expiresAt;observe(next);return getAccess();
     }
-    return {unlock,lock,observe,getAccess,header:()=>getAccess().unlocked?grant:''};
+    return {unlock,lock,observe,observeStock,getAccess,header:()=>{const access=getAccess();return access.unlocked&&!access.owner?grant:'';}};
   }
   function createNotesService(env){
     let busy=false,uncertain=null;
@@ -173,7 +179,7 @@
       catch{fail(unlocking?'unlock-unavailable':payload?'save-uncertain':'read-failed',unlocking?'เชื่อมต่อเพื่อปลดล็อกไม่สำเร็จ กรุณาลองใหม่':payload?'ยังยืนยันผลบันทึกไม่ได้ ห้ามส่งซ้ำ ให้โหลดหมายเหตุตรวจผลก่อน':'อ่านส่วนกลางไม่สำเร็จ กรุณาตรวจการเชื่อมต่อ');}
       if(current!==scope())fail('session-changed','เซสชันเปลี่ยนระหว่างอ่าน ไม่ใช้ผลเก่า');
       if(unlocking&&res.status!==401&&!res.ok)fail('unlock-rejected',res.status===429?'ใส่รหัสผิดหลายครั้ง กรุณารอ 15 นาที':res.status===403?'บัญชีนี้ไม่มีสิทธิ์หรือรหัสไม่ถูกต้อง กรุณาตรวจอีกครั้ง':res.status===400?'รหัสไม่ถูกต้อง กรุณาลองใหม่':'ยังปลดล็อกไม่ได้ กรุณาตรวจรหัสและสิทธิ์บัญชี');
-      if(res.status===403&&payload)fail('permission-denied','ยังไม่บันทึก · บัญชีนี้ไม่มีสิทธิ์แก้หมายเหตุหรือการติดตามที่เลือก ร่างยังอยู่ กรุณาตรวจสิทธิ์');
+      if(res.status===403&&payload){annotationUnlock.lock();fail('permission-denied','ยังไม่บันทึก · บัญชีนี้ไม่มีสิทธิ์แก้หมายเหตุหรือการติดตามที่เลือก ร่างยังอยู่ กรุณาตรวจสิทธิ์');}
       if([401,403].includes(res.status)){invalidate(res.status===401?'กรุณาเข้าสู่ระบบ AAF ใหม่':'บัญชีหรือลิงก์นี้ไม่มีสิทธิ์อ่านรายงาน');fail('auth-expired','สิทธิ์อ่านข้อมูลหมดอายุหรือไม่เพียงพอ');}
       if([409,412].includes(res.status))fail('conflict','ข้อมูลส่วนกลางเปลี่ยนแล้ว กรุณาโหลดล่าสุดและตรวจร่างก่อนบันทึก');
       if(res.status===422&&!payload)fail('month-unavailable','เดือนที่เลือกยังไม่มีชุดข้อมูลที่ตรวจครบ ไม่ใช้เดือนอื่นแทน');
@@ -181,6 +187,7 @@
       let data;try{data=await res.json();}catch{fail(payload?'save-uncertain':'read-failed','ยังอ่านผลส่วนกลางไม่สำเร็จ');}
       if(current!==scope())fail('session-changed','เซสชันเปลี่ยนระหว่างอ่าน ไม่ใช้ผลเก่า');
       if(!res.ok||!data?.ok)fail(payload?'save-uncertain':'read-failed','ยังยืนยันผลจากส่วนกลางไม่ได้');
+      if(!payload&&suffix==='')annotationUnlock.observeStock(data);
       if(!unlocking)annotationUnlock.observe(data.annotationAccess);
       return data;
     }
@@ -243,7 +250,7 @@
           const review={...data.review,readModel:data.readModel,displaySourceNote:(rm.warning||'ชุดยอดขายที่ตรวจไว้ ไม่ใช่การอ่านหน้า 09 สด')+' · เดือน '+month+' · อ่านส่วนกลาง '+new Date(now()).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})+' · ไม่เปลี่ยนยอดสต๊อก/จอง/ราคา'};
           const existingView=!!view;
           if(view)view.update(review);else view=win.AAFOrderReviewUI.mount(body,review,{compactChrome:true,
-            getAnnotationAccess:()=>annotationUnlock.getAccess(),
+            getAnnotationAccess:()=>access?.notesReadOnly?{eligible:false,unlocked:false,owner:false,message:'รายงานนี้อ่านอย่างเดียว'}:annotationUnlock.getAccess(),
             unlockAnnotations:async code=>{await annotationUnlock.unlock(code);const snapshot=await notes.readNotes();return {access:annotationUnlock.getAccess(),snapshot};},
             lockAnnotations:()=>{annotationUnlock.lock();return {access:annotationUnlock.getAccess()};},
             prepareAnnotationsFile:notes.prepareAnnotationsFile,
@@ -277,6 +284,7 @@
       const changed=!access||access.revision!==next.revision||access.reportDate!==next.reportDate;
       const binding=sourceBinding(next),sourceChanged=!equal(binding,expected);
       auth=credential;access={revision:next.revision,reportDate:next.reportDate,notesReadOnly:next.notesReadOnly===true,currentMonthSold:clone(next.currentMonthSold||null)};
+      if(Object.hasOwn(next,'actor'))annotationUnlock.observeStock(next);
       if(!annotationUnlock.header())annotationUnlock.observe(next.annotationAccess);
       view?.setStockIdentity?.({revision:access.revision,reportDate:access.reportDate});
       expected=binding;

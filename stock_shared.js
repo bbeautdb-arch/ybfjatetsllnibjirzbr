@@ -113,7 +113,7 @@
   function accept(data,refreshReport=false){assertCurrentResponse(data);if(shared&&data.revision!==shared.revision){reportData=null;reportDataDay=null;$('download-stock-report').disabled=true;}accessDenied=false;lastReportRetryAt=Date.now();shared=data;user=data.actor;currentStockData=data.rows;globalExchangeRate=data.exchangeRate;priceDB=Object.fromEntries(data.rows.map(r=>[r.key,r.priceObj]));
     $('stock-summary').hidden=false;window.AAFStockLinks?.update(data);
     window.AAFSalesPreview?.setAccess?.({...controllerEvidence(data),refreshReport});
-    window.AAFOrderReview?.setAccess?.({...controllerEvidence(data),refreshReport,currentMonthSold:data.currentMonthSold,currentAllocation:data.currentAllocation});
+    window.AAFOrderReview?.setAccess?.({...controllerEvidence(data),ok:data.ok,actor:data.actor,permissions:data.permissions,annotationAccess:data.annotationAccess,refreshReport,currentMonthSold:data.currentMonthSold,currentAllocation:data.currentAllocation});
     if($('stock-sales-tools'))$('stock-sales-tools').hidden=!salesLink;
     if($('stock-sales-state'))$('stock-sales-state').textContent='โหลดจากส่วนกลางล่าสุด '+dateText(new Date().toISOString())+' · รายงาน '+(data.report?.reportDate||'—')+' · รุ่นข้อมูล '+data.revision+' · '+data.rows.length+' สเปก';
     $('global-exchange-rate').value=data.exchangeRate;$('global-exchange-rate').disabled=!isOwner();
@@ -220,8 +220,8 @@
       $('open-stock-report').hidden=true;
       document.querySelectorAll('#stock-report-access a').forEach(a=>a.hidden=true);
       const info=document.createElement('div');info.style.cssText='max-width:1500px;width:100%;margin:0 auto 12px;padding:10px 14px;border:1px solid #b6d7cc;background:#effaf5;border-radius:10px;font-size:13px';
-      info.textContent='เข้าผ่านลิงก์ฝ่ายขาย · ติดตามและหมายเหตุต้องล็อกอินบัญชี AAF แล้วใส่รหัสปลดล็อก · ห้ามส่งต่อลิงก์โดยไม่ได้รับอนุญาต ';
-      const exit=document.createElement('button');exit.textContent='ออกจากโหมดลิงก์';exit.onclick=()=>window.AAFStockAccess.exit();info.append(exit);$('stock-report-access').before(info);
+      info.textContent='ลิงก์ฝ่ายขายนี้อ่านอย่างเดียว · ผู้ดูแลใช้บัญชี AAF เพื่อแก้ไขได้โดยไม่ต้องใส่รหัสปลดล็อก · ฝ่ายขายยังใช้รหัสตามสิทธิ์เดิม ';
+      const exit=document.createElement('button');exit.textContent='ใช้บัญชี AAF เพื่อแก้ไข';exit.onclick=()=>window.AAFStockAccess.exit();info.append(exit);$('stock-report-access').before(info);
     }
     $('btn-rollback-stock').hidden=true;$('btn-rollback-stock').classList.add('hidden');$('btn-edit-raw').hidden=true;$('btn-edit-raw').style.display='none';$('raw-edit-controls').remove();
     $('btn-open-auto-mail-import').hidden=true;$('btn-sync-price').hidden=true;document.querySelector('input[type=file]').closest('label').hidden=true;$('global-exchange-rate').disabled=true;

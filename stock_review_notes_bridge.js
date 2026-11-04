@@ -6,7 +6,7 @@
   else {
     // Shared, pure validators for the same-origin report. No credentials or
     // transport are exported; the localhost channel keeps its original scope.
-    root.AAFStockNotesCore = Object.freeze({ parseSnapshot: api.parseSnapshot, validChanges: api.validChanges, validAnnotationChanges: api.validAnnotationChanges, verifiedAnnotationWrite: api.verifiedAnnotationWrite });
+    root.AAFStockNotesCore = Object.freeze({ isAuthenticatedAnnotationOwner: api.isAuthenticatedAnnotationOwner, parseSnapshot: api.parseSnapshot, validChanges: api.validChanges, validAnnotationChanges: api.validAnnotationChanges, verifiedAnnotationWrite: api.verifiedAnnotationWrite });
     api.boot(root);
   }
 })(typeof window === 'undefined' ? null : window, function () {
@@ -50,6 +50,10 @@
   const dimension = v => (typeof v === 'number' || typeof v === 'string' && /^\d+(?:\.\d+)?$/.test(v)) && positive(Number(v));
   const qty = v => typeof v === 'number' && Number.isFinite(v) && v >= 0;
   const integer = v => Number.isSafeInteger(v) && v >= 0;
+  // Called only with a fresh, authenticated stock response. A cached profile,
+  // arbitrary admin role, or shared sales capability is not owner authority.
+  const isAuthenticatedAnnotationOwner = stock => stock?.ok===true&&stock.actor?.owner===true&&stock.actor.username==='admin'&&stock.actor.role==='admin'&&stock.actor.scope===undefined&&
+    stock.permissions?.adjust===true&&stock.permissions.note===true&&stock.permissions.followup===true;
   const keyOf = r => [Number(r.t), r.grade, Math.min(Number(r.w), Number(r.l)), Math.max(Number(r.w), Number(r.l)), r.unit].join('|');
   const sourceRecord = r => {
     // Keep the server's exact raw-row identity. Do not replace a reversed alias
@@ -106,7 +110,8 @@
     }
     const readAt = new Date(now).toISOString();
     const savedStockRegistry = {revision:stock.revision,reportDate:stock.report.reportDate,readAt,rows:savedRows};
-    return { snapshot: { rows, notesBySpec, legacyNotesByThickness, savedStockRegistry, revision: stock.revision, catalogRevision: catalog.catalogRevision, reportDate: stock.report.reportDate, readAt, canSave: (Object.hasOwn(catalog.permissions||{},'annotations') ? catalog.permissions.annotations : catalog.permissions?.pricesAndNotes) === true, canEditFollowup: stock.permissions?.followup === true }, catalog: clone(catalog), stock: clone(stock) };
+    const ownerNotes=isAuthenticatedAnnotationOwner(stock)&&catalog.permissions?.pricesAndNotes===true;
+    return { snapshot: { rows, notesBySpec, legacyNotesByThickness, savedStockRegistry, revision: stock.revision, catalogRevision: catalog.catalogRevision, reportDate: stock.report.reportDate, readAt, canSave: ownerNotes||(Object.hasOwn(catalog.permissions||{},'annotations') ? catalog.permissions.annotations : catalog.permissions?.pricesAndNotes) === true, canEditFollowup: stock.permissions?.followup === true }, catalog: clone(catalog), stock: clone(stock) };
   }
   function validChanges(changes, snapshot) {
     if (!Array.isArray(changes) || !changes.length || changes.length > 2000 || !snapshot.canSave) fail('invalid-request');
@@ -380,5 +385,5 @@
     };
     if (win.document.readyState === 'loading') win.document.addEventListener('DOMContentLoaded', start, { once: true }); else start();
   }
-  return { PROTOCOL, LOCAL_ORIGIN, STOCK_ORIGIN, API, INTENT_KEY, canonicalKey, parseSnapshot, validChanges, validAnnotationChanges, verifiedAnnotationWrite, createController, captureIntent, boot };
+  return { PROTOCOL, LOCAL_ORIGIN, STOCK_ORIGIN, API, INTENT_KEY, canonicalKey, isAuthenticatedAnnotationOwner, parseSnapshot, validChanges, validAnnotationChanges, verifiedAnnotationWrite, createController, captureIntent, boot };
 });

@@ -466,10 +466,13 @@ function mount(host, review, services = {}) {
     if(managedAnnotations){
       document.getElementById('notes-stage').hidden=!total;
       document.getElementById('notes-refresh').hidden=notesState.tone!=='error'&&!notesState.retryBlocked;
-      const unlock=document.getElementById('annotations-unlock');unlock.textContent=access.unlocked?'ล็อกการแก้ไข':'ปลดล็อกแก้ไข';unlock.disabled=notesBusy;
-      const status=document.getElementById('annotations-access-status');
-      if(!access.eligible){status.hidden=false;status.textContent=access.message||'กรุณาเข้าสู่ระบบบัญชี AAF ที่มีสิทธิ์';}
+      const owner=access.owner===true&&access.unlocked;
+      const unlock=document.getElementById('annotations-unlock');unlock.textContent=access.unlocked?'ล็อกการแก้ไข':'ปลดล็อกแก้ไข';unlock.disabled=notesBusy;unlock.hidden=owner;
+      const status=document.getElementById('annotations-access-status'),ownerStatus='ผู้ดูแล · แก้ไขได้ ไม่ต้องใช้รหัสปลดล็อก';
+      if(owner){status.hidden=false;status.textContent=ownerStatus;document.getElementById('annotations-unlock-form').hidden=true;document.getElementById('annotations-code').value='';}
+      else if(!access.eligible){status.hidden=false;status.textContent=access.message||'กรุณาเข้าสู่ระบบบัญชี AAF ที่มีสิทธิ์';}
       else if(access.unlocked){status.hidden=true;status.textContent='';}
+      else if(status.textContent===ownerStatus){status.hidden=true;status.textContent='';}
       document.getElementById('annotations-submit').disabled=notesBusy;
       document.getElementById('annotations-code').disabled=notesBusy;
       if(annotationExpiryTimer&&typeof global.clearTimeout==='function')global.clearTimeout(annotationExpiryTimer);
@@ -883,6 +886,7 @@ function mount(host, review, services = {}) {
   }
   async function toggleAnnotationUnlock(){
     if(notesBusy||!isCurrent())return;
+    if(annotationAccess().owner===true&&annotationsUnlocked()){updateNotesControls();return;}
     const form=document.getElementById('annotations-unlock-form'),field=document.getElementById('annotations-code'),message=document.getElementById('annotations-access-status');
     field.value='';
     if(annotationsUnlocked()){
@@ -895,6 +899,7 @@ function mount(host, review, services = {}) {
   async function unlockAnnotationEditors(event){
     event?.preventDefault?.();
     const field=document.getElementById('annotations-code');let code=field.value;field.value='';
+    if(annotationAccess().owner===true&&annotationsUnlocked()){code='';updateNotesControls();return;}
     if(notesBusy||!isCurrent()||!code||!annotationAccess().eligible||typeof services.unlockAnnotations!=='function'){code='';return;}
     const message=document.getElementById('annotations-access-status');message.hidden=true;notesBusy=true;updateNotesControls();
     try{
@@ -913,6 +918,7 @@ function mount(host, review, services = {}) {
   }
   async function prepareAnnotationsFile(file){
     if(!file||notesBusy||!isCurrent()||!annotationsUnlocked())return;
+    if(!notesState.loaded||!(notesState.canSave||notesState.canEditFollowup))return;
     if(notesState.drafts.size||notesState.followupDrafts.size||notesState.conflicts.size||notesState.followupConflicts.size||notesState.retryBlocked){setNotesStatus('มีร่างค้าง กรุณาตรวจให้จบก่อนอัปโหลด','error');return;}
     if(typeof services.prepareAnnotationsFile!=='function'){setNotesStatus('ยังอัปโหลดไม่ได้ กรุณาลองใหม่','error');return;}
     const preview=document.getElementById('notes-import-preview');preview.textContent='กำลังตรวจไฟล์…';importReviewPending=false;notesBusy=true;updateNotesControls();
