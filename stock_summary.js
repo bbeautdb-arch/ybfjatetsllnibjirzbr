@@ -190,6 +190,9 @@
     const m={rows,total,grades:[...grades],thickness:[...thickness],thicknessGrades:orderedThicknessGrades,aging,agingEquivalent,agingEquivalentByThickness:[...agingEquivalentByThickness],reportDate:data.report.reportDate,updatedAt:data.updatedAt,importedAt:data.importedAt,revision:String(data.revision??''),exchangeRate:data.exchangeRate,sourceRowCount:data.report.sourceRowCount,renderedAt:new Date().toISOString(),cash,cashError,sold,currentMonthSold,reservationPlan};
     m.currentAllocation=window.AAFOrderHeader?.currentAllocationView(data.currentAllocation,currentWarehouse(m),currentMonthSold)||null;
     m.productionLoading=data.currentAllocation?.productionLoading||null;
+    // Separate immutable display projection. Raw Aging above remains on the
+    // mail's original specifications; follow only the server's saved move graph.
+    m.postTransferAging=window.AAFStockAgingProjection?.build(data)||{status:'pending',reason:'ยังโหลดตัวตรวจ Aging หลังโยกไม่ครบ'};
     return m;
   }
   const cell=n=>'<td class="ss-num">'+number(n)+'</td>';
@@ -374,7 +377,7 @@
   }
   // Existing report chart, kept dependency-free so it also renders in long PNG exports.
   const agingPalette=['#0072B2','#E69F00','#009E73','#D55E00','#CC79A7','#56B4E9','#F0E442','#000000','#6A3D9A','#1B9E77','#E31A1C','#A6761D','#1F78B4','#B15928','#33A02C','#7570B3'];
-  function agingPanel(m){
+  function rawAgingDetail(m){
     const t=m.total,mixed=t.byUnit?.strip.count>0;
     const cells=m.aging.map((n,i)=>{
       if(!mixed)return `<div><small>${agingLabels[i]}</small><b>${number(n)}</b><span>${t.agingBaseQty?number(n/t.agingBaseQty*100,1):'0'}%</span></div>`;
@@ -382,21 +385,31 @@
       return `<div><small>${agingLabels[i]}</small><b>${number(sheet[key])}</b><span>แผ่น · ${sheet.agingBaseQty?number(sheet[key]/sheet.agingBaseQty*100,1):'0'}%</span><small>ไม้แถบ ${number(strip[key])} ชิ้น · ${strip.agingBaseQty?number(strip[key]/strip.agingBaseQty*100,1):'0'}%</small></div>`;
     }).join('');
     const basis=mixed?'ฐาน Aging เมลต้นฉบับแยกหน่วย '+stockQuantityText(t,'agingBaseQty'):'ฐาน Aging '+number(m.aging.reduce((a,b)=>a+b,0))+' / ยอดเมลต้นฉบับ '+number(t.agingBaseQty)+' หน่วย';
-    return `<div class="ss-aging"><h3>Aging ตามรายงานเมลต้นฉบับ</h3><div class="ss-aging-grid">${cells}</div><p>${basis} · ไม่กระจายยอดปรับระหว่างวันเข้าอายุสินค้า · กราฟ Aging ไม่นับไม้แถบ</p>${agingChart(m)}</div>`;
+    return `<details class="ss-aging-raw"><summary>ดู Aging ต้นฉบับจากเมล · ไม่เปลี่ยนข้อมูล</summary><div class="ss-aging-grid">${cells}</div><p>${basis}</p><p>ไม้แผ่นตามขนาดก่อนโยก ${number(m.agingEquivalent.reduce((a,b)=>a+b,0))} แผ่นเทียบ 4×8 · ไม่รวมไม้แถบ</p></details>`;
   }
-  function agingChart(m){
-    const groups=m.agingEquivalentByThickness.slice().sort((a,b)=>Number(a[0])-Number(b[0])).map(([t,values],i)=>({t,values,color:agingPalette[i%agingPalette.length]}));
-    const max=Math.max(...m.agingEquivalent,1),width=760,height=270,left=108,right=18,top=22,bottom=46,innerW=width-left-right,innerH=height-top-bottom;
-    const gap=14,barW=(innerW-gap*(agingLabels.length-1))/agingLabels.length,bars=[];
+  function agingPanel(m){
+    const p=m.postTransferAging;
+    if(!p||!['verified','adjusted'].includes(p.status))return `<div class="ss-aging" data-aging-projection="pending"><h3>Aging หลังโยก · เทียบ 4×8</h3><p class="ss-aging-pending" role="status">รอตรวจฐาน Aging หลังโยก: ${esc(p?.reason||'ข้อมูลไม่ครบ')} · ยังไม่แสดงยอดแทนด้วยศูนย์</p>${rawAgingDetail(m)}</div>`;
+    const totals=p.projected;
+    const adjustment=p.status==='adjusted'?`<div class="ss-aging-adjustment"><b>ยอดปรับ Physical ที่ยังไม่ทราบอายุ ${number(p.checks.adjustmentRows)} สเปก · ไม่นำใส่ช่วง Aging</b><span>ยอดปรับสุทธิ: ไม้แผ่น ${number(p.unagedAdjustment.sheet.qty)} แผ่น / ${number(p.unagedAdjustment.sheet.eq4x8)} แผ่นเทียบ · ไม้แถบ ${number(p.unagedAdjustment.strip.qty)} ชิ้น / ${number(p.unagedAdjustment.strip.eq4x8)} แผ่นเทียบ</span><span>รวม Aging ${number(totals.eq4x8)} + ยอดปรับสุทธิ ${number(p.unagedAdjustment.eq4x8)} = Physical ${number(p.physical.eq4x8)} แผ่นเทียบ 4×8</span></div>`:'';
+    const cards=[['ไม้แผ่นหลังโยก',totals.sheet.eq4x8,number(totals.sheet.qty)+' แผ่นจริง','sheet'],['ไม้แถบ · แยกจากไม้แผ่น',totals.strip.eq4x8,number(totals.strip.qty)+' ชิ้นจริง','strip'],['รวม Aging หลังโยก',totals.eq4x8,p.status==='verified'?'ตรงกับกล่องสต๊อกจริง':'ยังไม่รวมยอดปรับที่ไม่ทราบอายุ','combined']].map(([label,value,hint,kind])=>`<div class="ss-aging-basis ss-aging-basis-${kind}"><span>${label}</span><b>${number(value)}</b><small>แผ่นเทียบ 4×8 · ${hint}</small></div>`).join('');
+    return `<div class="ss-aging" data-aging-projection="${p.status}"><h3>Aging หลังโยก · ฐานเดียวกับสต๊อกจริง</h3><div class="ss-aging-basis-grid">${cards}</div>${agingChart(p)}${adjustment}${rawAgingDetail(m)}</div>`;
+  }
+  function agingChart(p){
+    const groups=p.byThickness.slice().sort((a,b)=>Number(a.t)-Number(b.t)).filter(g=>g.sheet.some(v=>v>0)).map((g,i)=>({t:g.t,values:g.sheet,color:agingPalette[i%agingPalette.length]}));
+    const max=Math.max(...p.buckets.flatMap(b=>[b.sheet.eq4x8,b.strip.eq4x8]),1),width=760,height=270,left=108,right=18,top=22,bottom=46,innerW=width-left-right,innerH=height-top-bottom;
+    const gap=14,slotW=(innerW-gap*(agingLabels.length-1))/agingLabels.length,barW=slotW*.66,stripW=slotW*.23,bars=[];
     for(let i=0;i<agingLabels.length;i++){
       let offset=0;
-      for(const g of groups){const v=g.values[i]||0;if(v<=0)continue;const h=v/max*innerH,y=top+innerH-offset-h,x=left+i*(barW+gap);bars.push(`<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${barW.toFixed(2)}" height="${Math.max(h,0.5).toFixed(2)}" rx="3" fill="${g.color}"><title>${esc(agingLabels[i])} · ${esc(thicknessLabel(g.t))} mm · ${number(v)} แผ่นเทียบ 1,220 × 2,440</title></rect>`);offset+=h;}
+      for(const g of groups){const v=g.values[i]||0;if(v<=0)continue;const h=v/max*innerH,y=top+innerH-offset-h,x=left+i*(slotW+gap);bars.push(`<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${barW.toFixed(2)}" height="${h.toFixed(2)}" rx="2" fill="${g.color}"><title>${esc(agingLabels[i])} · ไม้แผ่น ${esc(thicknessLabel(g.t))} mm หลังโยก · ${number(v)} แผ่นเทียบ 4×8</title></rect>`);offset+=h;}
+      const strip=p.buckets[i].strip,v=strip.eq4x8;if(v>0){const h=v/max*innerH,x=left+i*(slotW+gap)+slotW-stripW;bars.push(`<rect class="ss-aging-strip-bar" x="${x.toFixed(2)}" y="${(top+innerH-h).toFixed(2)}" width="${stripW.toFixed(2)}" height="${h.toFixed(2)}" rx="2" fill="#496c65" stroke="#173d34" stroke-dasharray="3 2"><title>${esc(agingLabels[i])} · ไม้แถบ ${number(strip.qty)} ชิ้น = ${number(v)} แผ่นเทียบ 4×8</title></rect>`);}
     }
     const ticks=[0,.25,.5,.75,1].map(f=>{const y=top+innerH-innerH*f;return `<line x1="${left}" x2="${width-right}" y1="${y.toFixed(2)}" y2="${y.toFixed(2)}" class="ss-aging-gridline"/><text x="${left-10}" y="${(y+4).toFixed(2)}" text-anchor="end" class="ss-aging-axis">${number(max*f,0)}</text>`;}).join('');
-    const labels=agingLabels.map((label,i)=>`<text x="${(left+i*(barW+gap)+barW/2).toFixed(2)}" y="${height-14}" text-anchor="middle" class="ss-aging-label">${esc(label.replace(' วัน',''))}</text>`).join('');
+    const labels=agingLabels.map((label,i)=>`<text x="${(left+i*(slotW+gap)+slotW/2).toFixed(2)}" y="${height-14}" text-anchor="middle" class="ss-aging-label">${esc(label.replace(' วัน',''))}</text>`).join('');
     const insights=agingLabels.map((label,i)=>{let best=null;for(const g of groups){const v=g.values[i]||0;if(!best||v>best.value)best={t:g.t,value:v};}return `<div><span>${esc(label)}</span><b>${best&&best.value?esc(thicknessLabel(best.t))+' mm · '+number(best.value)+' แผ่นเทียบ':'ไม่มีแผ่น'}</b></div>`;}).join('');
     const legend=groups.map(g=>`<span><i style="background:${g.color}"></i>${esc(thicknessLabel(g.t))} mm</span>`).join('');
-    return `<div class="ss-aging-chart"><h4>กราฟ Aging เดิม · เทียบพื้นที่เป็นแผ่นมาตรฐาน 1,220 × 2,440 มม.</h4><div class="ss-aging-chart-main"><div><svg class="ss-aging-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="กราฟ Aging จากรายงานเมล แยกตามความหนา โดยแปลงเป็นแผ่นมาตรฐาน 1220 × 2440 มม.">${ticks}<line x1="${left}" x2="${left}" y1="${top}" y2="${top+innerH}" class="ss-aging-axisline"/><line x1="${left}" x2="${width-right}" y1="${top+innerH}" y2="${top+innerH}" class="ss-aging-axisline"/>${bars.join('')}${labels}</svg></div><div class="ss-aging-insights"><h4>ความหนาที่สูงสุดในแต่ละช่วง</h4>${insights}</div></div><div class="ss-aging-legend">${legend}</div><div class="ss-aging-total">รวม Aging ${number(m.agingEquivalent.reduce((a,b)=>a+b,0))} แผ่นเทียบ 1,220 × 2,440 มม.</div></div>`;
+    const buckets=p.buckets.map((b,i)=>`<div><small>${agingLabels[i]}</small><b>${number(b.eq4x8)}</b><span>แผ่นเทียบ 4×8</span><small>ไม้แผ่น ${number(b.sheet.eq4x8)} · ไม้แถบ ${number(b.strip.eq4x8)}</small></div>`).join('');
+    return `<div class="ss-aging-chart"><h4>แท่งใหญ่: ไม้แผ่นแยกความหนาหลังโยก · แท่งเล็กขอบประ: ไม้แถบ · ทุกแท่งใช้หน่วยแผ่นเทียบ 4×8</h4><div class="ss-aging-chart-main"><div><svg class="ss-aging-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="กราฟ Aging หลังโยก แยกไม้แผ่นตามความหนาและไม้แถบ เทียบพื้นที่ 1220 × 2440 มม.">${ticks}<line x1="${left}" x2="${left}" y1="${top}" y2="${top+innerH}" class="ss-aging-axisline"/><line x1="${left}" x2="${width-right}" y1="${top+innerH}" y2="${top+innerH}" class="ss-aging-axisline"/>${bars.join('')}${labels}</svg></div><div class="ss-aging-insights"><h4>ไม้แผ่น · ความหนาที่สูงสุดในแต่ละช่วง</h4>${insights}</div></div><div class="ss-aging-legend">${legend}<span><i class="ss-aging-strip-key"></i>ไม้แถบ · แท่งแยก</span></div><div class="ss-aging-grid ss-aging-projected-buckets">${buckets}</div><div class="ss-aging-total">รวม Aging หลังโยก ${number(p.projected.eq4x8)} แผ่นเทียบ 4×8${p.status==='verified'?' · ตรงกับกล่องสต๊อกจริง':' · ไม่รวมยอดปรับที่ยังไม่ทราบอายุ'}</div></div>`;
   }
   const display=v=>v===null||v===undefined?'—':number(v);
   const quantityText=b=>b?number(b.sheet||0)+' แผ่น'+(b.strip?' · ไม้แถบ '+number(b.strip)+' ชิ้น':''):'—';
@@ -1105,6 +1118,20 @@
     [data-aaf-stock-summary] .ss-aging-legend span{display:inline-flex;align-items:center;gap:4px}
     [data-aaf-stock-summary] .ss-aging-legend i{display:inline-block;width:10px;height:10px;border-radius:2px}
     [data-aaf-stock-summary] .ss-aging-total{margin-top:8px;color:#756347;font-size:10px;text-align:right}
+    [data-aaf-stock-summary] .ss-aging-basis-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0}
+    [data-aaf-stock-summary] .ss-aging-basis{padding:14px;border:1px solid #e6d9b9;border-radius:12px;background:#fffdf7;min-width:0}
+    [data-aaf-stock-summary] .ss-aging-basis span,[data-aaf-stock-summary] .ss-aging-basis small{display:block;font-size:11px;color:#5f6350}
+    [data-aaf-stock-summary] .ss-aging-basis b{display:block;font-size:25px;font-weight:700;color:#27473a;font-variant-numeric:tabular-nums;margin:4px 0;overflow-wrap:anywhere}
+    [data-aaf-stock-summary] .ss-aging-basis-strip{border-style:dashed;background:#f3f7f3}
+    [data-aaf-stock-summary] .ss-aging-basis-combined{background:#eaf2e5;border-color:#b9cfad}
+    [data-aaf-stock-summary] .ss-aging-projected-buckets{border-top:1px solid #eadbbd;padding-top:12px;margin-top:12px}
+    [data-aaf-stock-summary] .ss-aging-strip-key{background:#496c65;border:1px dashed #173d34}
+    [data-aaf-stock-summary] .ss-aging-raw{margin-top:14px;padding-top:10px;border-top:1px solid #e6d9b9}
+    [data-aaf-stock-summary] .ss-aging-raw summary{cursor:pointer;font-size:11px;color:#756347;font-weight:600}
+    [data-aaf-stock-summary] .ss-aging-raw[open] summary{margin-bottom:12px}
+    [data-aaf-stock-summary] .ss-aging-pending,[data-aaf-stock-summary] .ss-aging-adjustment{padding:12px;border:1px solid #dbb36c;background:#fff1d8;border-radius:8px;font-size:12px;color:#7b4a12}
+    [data-aaf-stock-summary] .ss-aging-adjustment span{display:block;margin-top:6px}
+    @media(max-width:640px){[data-aaf-stock-summary]:not(.ss-export) .ss-aging-basis-grid{grid-template-columns:1fr}[data-aaf-stock-summary]:not(.ss-export) .ss-aging-basis b{font-size:24px}}
     @media(max-width:760px){[data-aaf-stock-summary]:not(.ss-export) .ss-aging-chart-main{grid-template-columns:1fr}[data-aaf-stock-summary]:not(.ss-export) .ss-aging-insights{border-left:0;border-top:1px solid #eadbbd;padding:10px 0 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}[data-aaf-stock-summary]:not(.ss-export) .ss-aging-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     [data-aaf-stock-summary] .ss-detail-group{margin-bottom:24px;border:1px solid #bacbd9;border-radius:9px;overflow:hidden}
     [data-aaf-stock-summary] .ss-band{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;background:#213e56;color:white}

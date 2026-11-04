@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 const source=fs.readFileSync(new URL('../stock_summary.js',import.meta.url),'utf8');
 const context={window:{},document:{getElementById:()=>null,createElement:()=>({}),head:{append(){}}}};
+vm.runInNewContext(fs.readFileSync(new URL('../stock_aging_projection.js',import.meta.url),'utf8'),context);
 vm.runInNewContext(source,context);
 const {buildModel,renderHTML}=context.window.AAFStockSummary;
 const calculate=(r)=>{const p=r.priceObj;const value=p.price*(p.currency==='USD'?34:1);return{price:p.price,curr:p.currency,eq:r.qty*Number(r.w)*Number(r.l)/2976800*Number(r.t)/2.5,value:r.qty*value,freeValue:r.freeQty*value};};
@@ -94,12 +95,12 @@ const gradeF=agingModel.grades.find(([grade])=>grade==='F')[1],thick5=agingModel
 assert.equal(gradeF.qty,141);assert.equal(gradeF.aging90,1);assert.equal(gradeF.aging180,2);assert.equal(gradeF.agingOver180,138,'Aging stays on source 5 mm F while Physical moved to 5.5 mm F');
 assert.equal(thick5.qty,0);assert.equal(thick5.agingOver180,138,'Physical zero does not remove raw Aging');
 assert.equal(thick55.qty,141);assert.equal(thick55.aging90+thick55.aging180+thick55.agingOver180,0,'derived thickness receives no guessed Aging');
-assert.deepEqual(Array.from(agingModel.agingEquivalent),[3.5,7,37.5,45,73],'legacy chart alone uses 4x8 area equivalents');
-assert.deepEqual(Array.from(agingModel.agingEquivalentByThickness,([thick])=>thick),['1.6','5'],'chart legend includes raw-source thicknesses only');
-assert(agingHTML.includes('class="ss-aging-chart"')&&agingHTML.includes('<svg class="ss-aging-svg"'),'dependency-free legacy SVG chart is restored');
-assert.equal((agingHTML.match(/<rect /g)||[]).length,10,'five chart buckets stack both raw thicknesses');
-assert(agingHTML.indexOf('1.6 mm</span>')<agingHTML.indexOf('5.0 mm</span>'),'chart legend sorts source thickness numerically');
-assert(agingHTML.includes('รวม Aging 166 แผ่นเทียบ 1,220 × 2,440 มม.'),'chart states its converted total and unit');
+assert.deepEqual(Array.from(agingModel.agingEquivalent),[3.5,7,37.5,45,73],'original mail area-equivalent evidence is retained separately');
+assert.deepEqual(Array.from(agingModel.agingEquivalentByThickness,([thick])=>thick),['1.6','5'],'original mail thickness groups remain unchanged');
+assert.equal(agingModel.postTransferAging.status,'pending','old fixture lacks verified transfer provenance');
+assert.match(agingHTML,/data-aging-projection="pending"/,'missing projection evidence remains visibly pending');
+assert.equal((agingHTML.match(/<svg class="ss-aging-svg"/g)||[]).length,0,'never silently fall back to a raw-basis chart');
+assert(!agingHTML.includes('รวม Aging 166 แผ่นเทียบ 1,220 × 2,440 มม.'),'raw total is not mislabeled as post-transfer Physical');
 assert(!/(?:new\s+Chart|chart\.js)/i.test(source),'Aging chart adds no external chart dependency');
 assert(!agingHTML.includes('Physical และ Free รวมการปรับที่กดเซฟแล้ว'),'removed Physical/Free help paragraph stays absent');
 assert(!agingHTML.includes('ยอดเทียบขนาดใช้ Physical ที่เซฟแล้ว'),'removed conversion help paragraph stays absent');
@@ -111,7 +112,7 @@ const summaryGroups=[...agingHTML.matchAll(/<section class="ss-group">[\s\S]*?<\
 assert.equal(summaryGroups.length,2,'grade and thickness summaries both render');
 assert(!summaryGroups[1].includes('data-thickness-parent="5"')&&!summaryGroups[1].includes('data-thickness-parent="1.6"'),'Physical-zero thickness rows are omitted from this summary only');
 assert(summaryGroups[1].includes('data-thickness-parent="5.5"'),'nonzero fractional thickness remains unchanged');
-assert(agingHTML.includes('ความหนา 5 mm')&&agingHTML.includes('รวม Aging 166 แผ่นเทียบ'),'zero display filtering preserves detail and original Aging evidence');
+assert(agingHTML.includes('ความหนา 5 mm')&&agingHTML.includes('ดู Aging ต้นฉบับจากเมล'),'zero display filtering preserves detail and original Aging evidence');
 assert(summaryGroups[0].includes('<th scope="row">AAA</th>'),'grade labels are not formatted as thickness');
 for(const thick of [2,3]){
   const wholeSource={...data,rows:[{...row,t:String(thick)}]},wholeBefore=JSON.stringify(wholeSource),wholeModel=buildModel(wholeSource,calculate);
@@ -171,4 +172,44 @@ assert.throws(()=>buildModel({...data,report:null},calculate));
 const bulk=buildModel({...data,rows:Array.from({length:107},(_,i)=>({...row,key:String(i),note:i===106?'LAST ROW NOTE':''}))},calculate);
 const bulkHTML=renderHTML(bulk);
 assert.equal((bulkHTML.match(/class="ss-stock-row"/g)||[]).length,107);assert(bulkHTML.includes('LAST ROW NOTE'));assert(bulkHTML.includes('107 / 107'));
+
+// Synthetic integration: Aging renders the same post-transfer basis as the
+// Physical card, while original mail fields and source tables stay unchanged.
+const agingUIRow=fields=>{
+  const r={...row,unit:'sheet',rawSource:true,movedTo:null,physicalOverride:null,freeOverride:null,...fields};
+  return {...r,key:`w${Number(r.w)}_l${Number(r.l)}_t${Number(r.t)}_g${r.grade}`};
+};
+const targetAge=agingUIRow({w:'1260',baseQty:8,qty:20,sellableBaseQty:20,freeQty:13,committedQty:7,d90:2,d180:3,d270:2,d360:1,dOver:0});
+const sourceAge=agingUIRow({w:'1270',baseQty:12,qty:0,sellableBaseQty:0,freeQty:0,committedQty:0,d90:4,d180:3,d270:2,d360:2,dOver:1,movedTo:targetAge.key});
+const stripAge=agingUIRow({w:'25',l:'2000',t:'3.2',grade:'B',unit:'strip',baseQty:200,qty:200,sellableBaseQty:200,freeQty:160,committedQty:40,d90:150,d180:50,d270:0,d360:0,dOver:0});
+const integratedSource={...data,rows:[sourceAge,targetAge,stripAge]},integratedBefore=JSON.stringify(integratedSource);
+const integratedModel=buildModel(integratedSource,calculate),integratedHTML=renderHTML(integratedModel),projection=integratedModel.postTransferAging;
+assert.equal(projection.status,'verified');assert.equal(JSON.stringify(integratedSource),integratedBefore);
+near(projection.projected.sheet.eq4x8,integratedModel.total.eq4x8);
+near(projection.projected.strip.eq4x8,integratedModel.total.stripEq4x8);
+near(projection.projected.eq4x8,integratedModel.total.eq4x8+integratedModel.total.stripEq4x8);
+assert.match(integratedHTML,/data-aging-projection="verified"/);
+for(const [kind,value]of [['sheet',projection.projected.sheet.eq4x8],['strip',projection.projected.strip.eq4x8],['combined',projection.projected.eq4x8]]){
+  const card=integratedHTML.match(new RegExp('<div class="ss-aging-basis ss-aging-basis-'+kind+'">([\\s\\S]*?)<\\/div>'))?.[1];
+  assert(card?.includes('<b>'+shown(value)+'</b>'),kind+' Aging equivalent shown explicitly');
+}
+assert(integratedHTML.includes('รวม Aging หลังโยก '+shown(projection.projected.eq4x8)+' แผ่นเทียบ 4×8 · ตรงกับกล่องสต๊อกจริง'));
+assert.equal((integratedHTML.match(/class="ss-aging-strip-bar"/g)||[]).length,2,'strip bars remain visually separate from sheets');
+assert(integratedHTML.includes('class="ss-aging-grid ss-aging-projected-buckets"'));
+assert.match(integratedHTML,/<details class="ss-aging-raw"><summary>/,'original mail detail remains present and collapsed by default');
+assert(!integratedHTML.includes('<details class="ss-aging-raw" open'));
+assert.equal(integratedModel.rows.find(r=>r.key===sourceAge.key).d90,4,'raw source retains its original age');
+assert.equal(integratedModel.rows.find(r=>r.key===targetAge.key).d90,2,'raw destination retains its own age, not the projected sum');
+assert.equal(projection.rows.find(r=>r.key===targetAge.key).aging[0],6,'chart uses the separately projected destination age');
+assert.equal(integratedModel.total.byUnit.sheet.agingBaseQty,20);assert.equal(integratedModel.total.byUnit.strip.agingBaseQty,200);
+const adjustedSource={...integratedSource,rows:[sourceAge,{...targetAge,qty:22,physicalOverride:{value:22,reportDate:integratedSource.report.reportDate}},stripAge]};
+const adjustedModel=buildModel(adjustedSource,calculate),adjustedHTML=renderHTML(adjustedModel);
+assert.equal(adjustedModel.postTransferAging.status,'adjusted');
+assert(adjustedHTML.includes('class="ss-aging-adjustment"')&&adjustedHTML.includes('ยังไม่ทราบอายุ'),'manual adjustments have a separate unknown-age disclosure');
+assert(!adjustedHTML.includes('แผ่นเทียบ 4×8 · ตรงกับกล่องสต๊อกจริง</div>'),'unaged adjustment is not silently pushed into age bands');
+for(const entry of ['stock_manager.html','stock_report.html']){
+  const page=fs.readFileSync(new URL('../'+entry,import.meta.url),'utf8');
+  const agingIndex=page.indexOf('src="stock_aging_projection.js'),summaryIndex=page.indexOf('src="stock_summary.js');
+  assert(agingIndex>=0&&agingIndex<summaryIndex,entry+' loads projection before summary');
+}
 console.log('Stock summary checks passed: totals, manual Free, saved-state isolation, XSS, all 107 rows.');

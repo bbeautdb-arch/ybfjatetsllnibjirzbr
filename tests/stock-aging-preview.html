@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aging หลังโยก — ข้อมูลจำลองสำหรับทดสอบ</title>
+  <link rel="stylesheet" href="../stock_premium.css">
+  <style>
+    body{font-family:system-ui,sans-serif}main{max-width:1450px;margin:auto}
+    .preview-toolbar{background:#fffdf3ee;border:1px solid #c2d3c7;border-radius:14px;padding:16px;margin-bottom:16px;color:#254c3c;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .preview-toolbar h1{font-size:19px;margin:0}.preview-toolbar p{margin:5px 0;font-size:12px}
+    .preview-toolbar select{padding:8px;border:1px solid #9ab7a5;border-radius:8px;background:white;font:inherit}
+    #preview-physical{margin-left:auto;font-weight:700;line-height:1.6}
+    #preview-check{font-size:12px;color:#356244}
+  </style>
+</head>
+<body data-aaf-premium="ivory">
+<main>
+  <header class="preview-toolbar">
+    <div><h1>Aging หลังโยก</h1><p>ข้อมูลจำลองสำหรับทดสอบเท่านั้น · ไม่ใช่สต๊อกบริษัท · ไม่มีการเชื่อมต่อฐานข้อมูล</p>
+    <label>สถานการณ์ <select id="preview-mode"><option value="verified">หลังโยกตรงกับ Physical</option><option value="adjusted">มียอดปรับที่ยังไม่ทราบอายุ</option><option value="pending">หลักฐานปลายทางไม่ครบ</option></select></label></div>
+    <div id="preview-physical"></div>
+  </header>
+  <section id="stock-summary" data-aaf-stock-summary></section>
+  <p id="preview-check" role="status"></p>
+</main>
+<script src="../stock_aging_projection.js"></script>
+<script src="../stock_summary.js"></script>
+<script>
+(() => {
+  'use strict';
+  const day='2026-02-15',keys=['d90','d180','d270','d360','dOver'];
+  const row=(w,l,t,grade,quantity,ages,extra={})=>({
+    key:`w${w}_l${l}_t${t}_g${grade}`,w,l,t,grade,unit:'sheet',rawSource:true,
+    sku:'SYNTHETIC',desc:'ข้อมูลจำลอง',size:'Normal',qty:quantity,baseQty:quantity,
+    sellableBaseQty:quantity,movedTo:null,freeQty:quantity,committedQty:0,
+    ...Object.fromEntries(keys.map((key,i)=>[key,ages[i]||0])),
+    priceObj:{price:50,currency:'THB'},note:'',followup:'',...extra
+  });
+  const data={report:{reportDate:day,sourceRowCount:6},revision:7,updatedAt:day+'T02:00:00Z',exchangeRate:33,rows:[
+    row(1220,2440,1.6,'AAA',128000,[92000,27000,9000,0,0]),
+    row(1220,2440,1.8,'A',0,[400,180,20,0,0],{baseQty:600,sellableBaseQty:0,movedTo:'w1220_l2440_t1.6_gB'}),
+    row(1220,2440,1.6,'B',900,[200,90,10,0,0],{baseQty:300}),
+    row(1270,2440,2.5,'AAA',0,[600,400,200,0,0],{baseQty:1200,sellableBaseQty:0,movedTo:'w1260_l2440_t2.5_gAAA'}),
+    row(1260,2440,2.5,'AAA',1400,[100,80,20,0,0],{baseQty:200}),
+    row(25,2100,3.2,'B',500000,[100000,350000,50000,0,0],{unit:'strip'})
+  ]};
+  const format=n=>n.toLocaleString('th-TH',{maximumFractionDigits:2});
+  function render(){
+    const next=structuredClone(data),mode=document.getElementById('preview-mode').value;
+    if(mode==='adjusted'){
+      next.rows[0].qty+=37;next.rows[0].freeQty+=37;
+      next.rows[0].physicalOverride={value:next.rows[0].qty,reportDate:day,at:day+'T03:00:00Z'};
+    }
+    if(mode==='pending')next.rows[3].movedTo='w1260_l2440_t2.5_gMISSING';
+    const before=JSON.stringify(next);
+    const model=window.AAFStockSummary.buildModel(next,r=>({price:50,curr:'THB',eq:r.qty*r.w*r.l/2976800*r.t/2.5,value:r.qty*50,freeValue:r.freeQty*50}));
+    const template=document.createElement('template');template.innerHTML=window.AAFStockSummary.renderHTML(model);
+    document.getElementById('stock-summary').replaceChildren(template.content.querySelector('.ss-aging'));
+    document.getElementById('preview-physical').textContent='Physical จำลอง รวมไม้แถบ: '+format(model.total.eq4x8+model.total.stripEq4x8)+' แผ่นเทียบ 4×8';
+    document.getElementById('preview-check').textContent=JSON.stringify(next)===before?'ตรวจแล้ว: ข้อมูล Aging ต้นฉบับ และยอดสต๊อกจำลองไม่เปลี่ยน':'ผิดพลาด: ข้อมูลจำลองถูกเปลี่ยน';
+  }
+  document.getElementById('preview-mode').addEventListener('change',render);render();
+})();
+</script>
+</body>
+</html>
