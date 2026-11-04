@@ -20,7 +20,11 @@ function mount(host, review, services = {}) {
   const uiState = {thickness:'all',month:null,freePanelOpen:false};
   const notesState = {connected:false,canSave:false,canEditFollowup:false,loaded:false,liveRows:new Map(),rawRecords:new Map(),notes:new Map(),legacy:new Map(),drafts:new Map(),followupDrafts:new Map(),conflicts:new Map(),followupConflicts:new Map(),pending:null,retryBlocked:false,revision:null,catalogRevision:null,readAt:'',reportDate:'',status:'ยังไม่โหลดหมายเหตุส่วนกลาง · ช่องว่างไม่ใช่หลักฐานว่าไม่มีหมายเหตุ',tone:''};
   let destroyed=false, notesBusy=false, generation=0, queuedReview=null, currentReview=review, instance, salesSuspended='',expectedStockIdentity=null;
+  // One annotation state serves the registry and the upper Free card. The
+  // external host never owns credentials, a second draft, or a write service.
+  let externalFreeHost=null,externalFreeIdentity=null,lastExternalFreeMarkup=null;
   const savedStockReady=()=>!!notesState.savedStockRegistry&&!notesState.stockInvalidated&&(!expectedStockIdentity||notesState.savedStockRegistry.revision===expectedStockIdentity.revision&&notesState.savedStockRegistry.reportDate===expectedStockIdentity.reportDate);
+  const externalFreeReady=()=>savedStockReady()&&!!externalFreeIdentity&&notesState.savedStockRegistry.revision===externalFreeIdentity.revision&&notesState.savedStockRegistry.reportDate===externalFreeIdentity.reportDate;
   function applySalesSuspension(){
     if(!salesSuspended||destroyed)return;
     // Keep the existing note/followup nodes and caret. Hide stale SALES and
@@ -40,6 +44,7 @@ function mount(host, review, services = {}) {
   function rebuild(data) {
     if (destroyed) return;
     const version=++generation;
+    lastExternalFreeMarkup=null; // Rebind to this generation's save handlers.
     currentReview=data;
     shadow.replaceChildren();
     const link=ownerDocument.createElement('link');link.rel='stylesheet';link.href=stylesheetURL;shadow.append(link);
@@ -438,6 +443,8 @@ function mount(host, review, services = {}) {
     document.getElementById('changes-permission').textContent=notesState.loaded&&!notesState.canEditFollowup?'การติดตามดูอย่างเดียว · เข้าสู่ระบบบัญชีที่มีสิทธิ์เพื่อแก้ไข':'ผู้ติดตามและเวลาให้ระบบบันทึกหลังเซฟ';
     for(const id of ['notes-file','notes-file-column','notes-file-mode'])document.getElementById(id).disabled=notesBusy||!notesState.canSave||notesState.retryBlocked||!!notesState.drafts.size||!!notesState.followupDrafts.size||typeof services.prepareNotesFile!=='function';
     const freeSave=document.getElementById('free-notes-stage');if(freeSave)freeSave.disabled=blocked;
+    const upperSave=externalFreeHost?.querySelector('[data-upper-free-stage]');if(upperSave)upperSave.disabled=blocked||!externalFreeReady();
+    const upperStatus=externalFreeHost?.querySelector('[data-upper-free-status]');if(upperStatus)upperStatus.textContent=notesState.status+(total?' · ร่างร่วมกัน '+total+' รายการ ยังไม่บันทึก':'');
     syncNoteEditorPermissions();
     const status=document.getElementById('notes-status');status.className='notes-status '+notesState.tone;
     status.textContent=notesState.status+(notesState.drafts.size||notesState.followupDrafts.size?' · ยังมีร่างที่ไม่เซฟ':'')+(notesState.conflicts.size+notesState.followupConflicts.size?' · ต้องทวนข้อความ '+(notesState.conflicts.size+notesState.followupConflicts.size)+' รายการ':'');
@@ -451,10 +458,11 @@ function mount(host, review, services = {}) {
     const rendered=p.rawKey?content.replace('<textarea ','<textarea data-note-raw-key="'+esc(p.rawKey)+'" '):content;
     return surface==='free'?rendered:'<td class="stock-note-cell">'+rendered+'</td>';
   };
-  function noteEditorContainers(){return [document.getElementById('stock-table'),document.getElementById('free-detail-panel')].filter(Boolean);}
+  function noteEditorContainers(){return [document.getElementById('stock-table'),document.getElementById('free-detail-panel'),externalFreeHost].filter(Boolean);}
   function syncNoteEditorPermissions(){
-    for(const root of noteEditorContainers())for(const input of root.querySelectorAll('[data-stock-note]')){
-      input.disabled=notesBusy||!!notesState.pending||notesState.loaded&&(!notesState.canSave||!notesState.liveRows.has(input.dataset.stockNote));
+    for(const root of noteEditorContainers()){
+      for(const input of root.querySelectorAll('[data-stock-note]'))input.disabled=notesBusy||!!notesState.pending||root===externalFreeHost&&!externalFreeReady()||notesState.loaded&&(!notesState.canSave||!notesState.liveRows.has(input.dataset.stockNote));
+      for(const input of root.querySelectorAll('[data-followup-edit]'))input.disabled=notesBusy||!!notesState.pending||!notesState.loaded||!notesState.canEditFollowup||!notesState.rawRecords.has(input.dataset.followupEdit)||root===externalFreeHost&&!externalFreeReady();
     }
   }
   function syncNoteEditors(key,sourceInput){
@@ -499,33 +507,58 @@ function mount(host, review, services = {}) {
     const legacy=[...notesState.legacy].filter(([,note])=>note).sort(([a],[b])=>Number(a)-Number(b));
     const legacyHTML=legacy.length?`<details class="stock-legacy"><summary>หมายเหตุเดิมที่บันทึกรวมตามความหนา · อ่านอย่างเดียว (${legacy.length})</summary><p class="small muted">ไม่ใช่ความหนาก่อนโยก และไม่ใช่หมายเหตุรายสเปก · คงข้อความเดิมไว้ ไม่กระจายใส่สินค้า</p>${legacy.map(([t,note])=>`<p class="small"><strong>${esc(thick(t))} มม.</strong></p><p class="legacy-note small">${esc(note)}</p>`).join('')}</details>`:'';
     const legacyNode=document.getElementById('stock-legacy');if(lastLegacyMarkup!==legacyHTML){lastLegacyMarkup=legacyHTML;legacyNode.innerHTML=legacyHTML;}
-    if(!selected.length){stock.innerHTML=currentSalesOnly?'<p class="no-data">ส่วนนี้แสดงข้อมูลขายเท่านั้น · การจัดสรรและ Free ยังรอยืนยันฐานสต๊อก · โหลดหมายเหตุล่าสุดเพื่ออ่านทะเบียนที่มีสิทธิ์ โดยไม่เติมยอดคลังหรือยอดผลิต</p>':'<p class="no-data">ไม่มีทะเบียนสต๊อกในข้อมูลที่ตรวจแล้ว</p>';return;}
+    if(!selected.length){stock.innerHTML=currentSalesOnly?'<p class="no-data">ส่วนนี้แสดงข้อมูลขายเท่านั้น · การจัดสรรและ Free ยังรอยืนยันฐานสต๊อก · โหลดหมายเหตุล่าสุดเพื่ออ่านทะเบียนที่มีสิทธิ์ โดยไม่เติมยอดคลังหรือยอดผลิต</p>':'<p class="no-data">ไม่มีทะเบียนสต๊อกในข้อมูลที่ตรวจแล้ว</p>';renderExternalFree();return;}
     const manualFree=saved&&selected.some(p=>p.freeAt||p.committed!==null&&Math.abs(p.free-Math.max(0,p.physical-p.committed))>1e-6);
     const basis=saved?(ready?`สต๊อกที่บันทึก · รายงาน ${registry.reportDate} · Rev ${registry.revision} · อ่าน ${trackingDate(registry.readAt)} · รวมภาระในแผนที่บันทึก ไม่ใช่ผลจัดสรรยอดขายล่าสุด`:`รออ่านสต๊อกที่บันทึกให้ตรงชุดส่วนกลาง${expectedStockIdentity?' · Rev '+expectedStockIdentity.revision+' / รายงาน '+expectedStockIdentity.reportDate:''} · เก็บทะเบียนและร่างหมายเหตุไว้ ไม่ใช้ยอดเก่าแทน`):metadata.stockPoolWarning||(currentSavedLedger?'Physical / จัดให้เดือนนี้ / ภาระเดือนอื่น / Free จากส่วนกลางชุดเดียวกัน · หน้านี้ไม่เปลี่ยนยอด':'ตัวเลขจัดสรร / Free เป็นฐานเดิม ไม่ใช่ยอดว่างล่าสุด และไม่ได้คืนจองหรือจัดสรรใหม่');
     const markup=`<p class="stock-basis-warning"${saved?' data-saved-stock-basis':''}>${esc(basis)}${ready&&manualFree?' · Free มีค่าปรับหรือไม่ตรงสูตรจอง: แสดงค่าที่บันทึกไว้ ไม่คำนวณทับ':''}</p><p class="stock-catalog-count">แสดงทุกความหนา ${selected.length} ${saved?'แถวทะเบียนแยกตามรหัสจริง':'สเปก'} รวม Physical = 0 และ Free = 0 · ไม่ตามตัวกรองยอดขาย · กลับด้านกว้าง×ยาวใช้หมายเหตุเดียวกัน</p><p class="tracking-import-note">${esc(workbookTracking.description||'ข้อมูลติดตามตามสเปกที่ตรงกัน · ไม่ใช้ยอดหรือราคาในไฟล์ · ไม่เติมชื่อหรือเวลาแทนช่องว่าง')}</p><div class="table-scroll" role="region" aria-label="ทะเบียนสต๊อกครบทุกเกรดขนาดและหมายเหตุ"><table class="basis-table with-notes with-tracking"${saved?' data-saved-stock-registry':''}><thead><tr><th>หนา / ขนาด / เกรด</th><th class="number">Physical<br>${stockLabels.physical}</th><th class="number">${stockLabels.month}</th><th class="number">${stockLabels.other}</th><th class="number">${stockLabels.free}</th><th>ติดตามการขาย<small class="tracking-source">ส่วนกลาง · แก้ไขตามสิทธิ์</small></th><th>ผู้ติดตาม<small class="tracking-source">ระบบบันทึก</small></th><th>เวลาติดตาม<small class="tracking-source">เวลาไทย · ระบบบันทึก</small></th><th>หมายเหตุเดิม · ร่วมกับ Free Stock</th></tr></thead><tbody>${selected.map(p=>`<tr data-stock-key="${esc(noteKey(p))}"${p.rawKey?' data-stock-raw-key="'+esc(p.rawKey)+'"':''}><td>${esc(thick(p.t))} มม. · ${esc(dimensions(p))} · ${esc(p.grade)}<span class="subqty">${esc(unitLabel(p.unit))}</span>${p.pending?`<span class="pool-pending">${stockLabels.pending}</span>`:''}${p.historicalMissing?'<span class="stock-external-label">ทะเบียนส่วนกลางที่เพิ่มภายหลัง · ไม่เติม 0 ลงฐานเก่า</span>':''}</td>${quantityFields.map((k,i)=>quantity(p,k,i===1?'ready-val':'')).join('')}${trackingFields(p)}${notesField(p)}</tr>`).join('')}</tbody><tfoot>${Object.entries(totals).map(([u,t])=>`<tr><th>${stockLabels.total} · ${esc(unitLabel(u))}</th>${quantityFields.map(k=>quantity(t,k)).join('')}<td colspan="4">ข้อมูลติดตามและหมายเหตุไม่เปลี่ยนยอด</td></tr>`).join('')}</tfoot></table></div>`;
     if(lastStockMarkup!==markup){lastStockMarkup=markup;stock.innerHTML=markup;
     bindNoteEditors(stock);
-    stock.querySelectorAll('[data-followup-edit]').forEach(input=>input.addEventListener('input',()=>{
-      editFollowup(input.dataset.followupEdit,input.value);
-      const status=stock.querySelector('[data-followup-status="'+CSS.escape(input.dataset.followupEdit)+'"]');
-      if(status)status.textContent=notesState.followupConflicts.has(input.dataset.followupEdit)?'ส่วนกลางเปลี่ยน · ต้องเลือกวิธีจัดการ':input.value===''?'ร่างล้างข้อความ · ต้องยืนยันก่อนเซฟ':'ร่างยังไม่เซฟ';
+    bindFollowupEditors(stock);
+    }
+    renderExternalFree();
+    updateNotesControls();
+    if(caret){const restored=[...stock.querySelectorAll(caret.kind==='stockNote'?'[data-stock-note]':'[data-followup-edit]')].find(input=>input.dataset[caret.kind]===caret.key&&input.dataset.noteRawKey===caret.rawKey);if(restored&&!restored.disabled){restored.focus({preventScroll:true});restored.setSelectionRange(caret.start,caret.end,caret.direction);}}
+  };
+  function bindFollowupEditors(container){
+    container.querySelectorAll('[data-followup-edit]').forEach(input=>input.addEventListener('input',()=>{
+      if(input.disabled||container===externalFreeHost&&!externalFreeReady())return;
+      editFollowup(input.dataset.followupEdit,input.value,input);
     }));
-    stock.querySelectorAll('[data-followup-suggest]').forEach(button=>button.addEventListener('click',()=>{
+    container.querySelectorAll('[data-followup-suggest]').forEach(button=>button.addEventListener('click',()=>{
       const row=stockRowsForNotes().find(row=>row.rawKey?row.rawKey===button.dataset.followupSuggest:noteKey(row)===button.dataset.followupSpec),allLive=notesState.liveRows.get(button.dataset.followupSpec)?.records||[],live=row?.rawKey?allLive.filter(record=>record.rawKey===row.rawKey):allLive,records=row?workbookTrackingRecords(row):[];
       if(allLive.length!==1||live.length!==1||records.length!==1||live[0].rawKey!==button.dataset.followupSuggest)return;
       editFollowup(button.dataset.followupSuggest,String(records[0].followup||''));renderStock(select.value);
     }));
-    stock.querySelectorAll('[data-followup-use-remote]').forEach(button=>button.addEventListener('click',()=>{notesState.followupDrafts.delete(button.dataset.followupUseRemote);notesState.followupConflicts.delete(button.dataset.followupUseRemote);renderStock(select.value);}));
-    stock.querySelectorAll('[data-followup-keep-draft]').forEach(button=>button.addEventListener('click',()=>{const rawKey=button.dataset.followupKeepDraft,draft=notesState.followupDrafts.get(rawKey),record=notesState.rawRecords.get(rawKey);if(draft&&record&&notesState.canEditFollowup){draft.before=record.followup;notesState.followupConflicts.delete(rawKey);renderStock(select.value);}}));
-    }
-    updateNotesControls();
-    if(caret){const restored=[...stock.querySelectorAll(caret.kind==='stockNote'?'[data-stock-note]':'[data-followup-edit]')].find(input=>input.dataset[caret.kind]===caret.key&&input.dataset.noteRawKey===caret.rawKey);if(restored&&!restored.disabled){restored.focus({preventScroll:true});restored.setSelectionRange(caret.start,caret.end,caret.direction);}}
-  };
-  function editFollowup(rawKey,after){
+    container.querySelectorAll('[data-followup-use-remote]').forEach(button=>button.addEventListener('click',()=>{notesState.followupDrafts.delete(button.dataset.followupUseRemote);notesState.followupConflicts.delete(button.dataset.followupUseRemote);renderStock(select.value);}));
+    container.querySelectorAll('[data-followup-keep-draft]').forEach(button=>button.addEventListener('click',()=>{const rawKey=button.dataset.followupKeepDraft,draft=notesState.followupDrafts.get(rawKey),record=notesState.rawRecords.get(rawKey);if(draft&&record&&notesState.canEditFollowup){draft.before=record.followup;notesState.followupConflicts.delete(rawKey);renderStock(select.value);}}));
+  }
+  function editFollowup(rawKey,after,sourceInput){
     const record=notesState.rawRecords.get(rawKey);if(!record||!notesState.canEditFollowup||notesBusy||notesState.pending)return;
     if(after===record.followup){notesState.followupDrafts.delete(rawKey);notesState.followupConflicts.delete(rawKey);}
     else notesState.followupDrafts.set(rawKey,{before:notesState.followupDrafts.get(rawKey)?.before??record.followup,after});
+    const draft=notesState.followupDrafts.get(rawKey),value=draft?draft.after:record.followup;
+    for(const container of noteEditorContainers()){
+      for(const input of container.querySelectorAll('[data-followup-edit]'))if(input.dataset.followupEdit===rawKey&&input!==sourceInput&&input.value!==value)input.value=value;
+      for(const label of container.querySelectorAll('[data-followup-status]'))if(label.dataset.followupStatus===rawKey)label.textContent=notesState.followupConflicts.has(rawKey)?'ส่วนกลางเปลี่ยน · ต้องทวนก่อนบันทึก':draft?value===''?'ร่างล้างข้อความ · ต้องยืนยัน':'ร่างร่วมกัน · ยังไม่เซฟ':'อ่านจากส่วนกลาง';
+    }
     updateNotesControls();
+  }
+  function renderExternalFree(){
+    const target=externalFreeHost;if(!target)return;
+    if(!externalFreeReady()){
+      const pending='<p class="ss-free-editor-pending" role="status">รออ่านทะเบียนส่วนกลางให้ตรงกับกล่องสต๊อกจริง · ยังไม่แสดงยอดเก่าหรือเปิดแก้ไข · ร่างที่กรอกไว้ยังอยู่</p>';
+      if(lastExternalFreeMarkup!==pending){target.innerHTML=pending;lastExternalFreeMarkup=pending;}return;
+    }
+    const active=ownerDocument.activeElement,caret=target.contains?.(active)&&(active?.dataset?.stockNote||active?.dataset?.followupEdit)?{kind:active.dataset.stockNote?'stockNote':'followupEdit',key:active.dataset.stockNote||active.dataset.followupEdit,rawKey:active.dataset.noteRawKey,start:active.selectionStart,end:active.selectionEnd,direction:active.selectionDirection}:null;
+    const values=stockRowsForNotes().filter(row=>row.freeQty>0),registry=notesState.savedStockRegistry;
+    const totals={sheet:0,strip:0},physicalTotals={sheet:0,strip:0};for(const row of values){totals[row.unit]+=row.freeQty;physicalTotals[row.unit]+=row.qty;}
+    const markup='<div class="ss-free-linked-editors"><p><b>รายการ Free ที่มีอยู่ · '+values.length+' รายการ</b><br><small>ทุกความหนา · ทุกขนาด · เรียงความหนา / ขนาด / เกรด · รายงาน '+esc(registry.reportDate)+' · รุ่น '+esc(registry.revision)+'</small></p><div class="ss-free-linked-actions"><button type="button" data-upper-free-stage disabled>ตรวจและบันทึกข้อความ</button><span data-upper-free-status role="status"></span></div><div class="ss-free-linked-scroll" role="region" aria-label="รายการ Free และข้อความร่วมกับทะเบียน"><table><thead><tr><th>หนา / ขนาด / เกรด</th><th>Physical</th><th>Free</th><th>ติดตามการขาย</th><th>ผู้ติดตาม</th><th>เวลาติดตาม</th><th>หมายเหตุ</th></tr></thead><tbody>'+values.map(row=>'<tr data-upper-free-raw-key="'+esc(row.rawKey)+'"><td>'+esc(thick(row.t))+' มม. · '+esc(row.grade)+'<small>'+esc(dimensions(row))+' มม. · '+esc(unitLabel(row.unit))+'</small></td><td>'+fmt(row.qty)+'</td><td>'+fmt(row.freeQty)+'</td>'+trackingFields(row)+ '<td class="stock-note-cell">'+notesField(row,'free')+'</td>'+'</tr>').join('')+'</tbody><tfoot>'+['sheet','strip'].map(unit=>'<tr><th>รวม '+esc(unitLabel(unit))+'</th><td>'+fmt(physicalTotals[unit])+'</td><td>'+fmt(totals[unit])+'</td><td colspan="4">ใช้ข้อความเดียวกับทะเบียนด้านล่าง</td></tr>').join('')+'</tfoot></table></div><small>พิมพ์ที่นี่หรือในทะเบียน ข้อความจะตรงกันทันที · ต้องตรวจและยืนยันบันทึกก่อนเก็บส่วนกลาง</small></div>';
+    if(lastExternalFreeMarkup!==markup){
+      target.innerHTML=markup;lastExternalFreeMarkup=markup;
+      bindNoteEditors(target);bindFollowupEditors(target);
+      target.querySelector('[data-upper-free-stage]')?.addEventListener('click',()=>{if(externalFreeReady())stageNotes();});
+    }
+    if(caret){const restored=[...target.querySelectorAll(caret.kind==='stockNote'?'[data-stock-note]':'[data-followup-edit]')].find(input=>input.dataset[caret.kind]===caret.key&&input.dataset.noteRawKey===caret.rawKey);if(restored&&!restored.disabled){restored.focus({preventScroll:true});restored.setSelectionRange(caret.start,caret.end,caret.direction);}}
   }
   const parseSavedStockRegistry = (registry,snapshot,liveRows,rawRecords) => {
     if(registry===undefined)return null;
@@ -824,6 +857,7 @@ function mount(host, review, services = {}) {
     const transport=typeof services.saveChanges==='function'?services.saveChanges:!payload.followupChanges.length&&typeof services.saveNotes==='function'?value=>services.saveNotes(value.notesChanges):null;
     if(notesBusy||!isCurrent()||!transport||notesState.retryBlocked||notesState.conflicts.size||notesState.followupConflicts.size||payload.notesChanges.length&&!notesState.canSave||payload.followupChanges.length&&!notesState.canEditFollowup)return;
     if(JSON.stringify(payload)!==JSON.stringify(currentChanges())){document.getElementById('notes-confirmation').hidden=true;setNotesStatus('ร่างเปลี่ยนจากชุดที่ตรวจ กรุณากดตรวจอีกครั้ง','error');return;}
+    let savedVerified=false;
     notesBusy=true;notesState.pending={...payload};document.getElementById('notes-confirmation').hidden=true;renderStock(select.value);
     setNotesStatus('กำลังบันทึกเฉพาะหมายเหตุ/ติดตาม และรออ่านกลับส่วนกลาง');
     try {
@@ -838,11 +872,18 @@ function mount(host, review, services = {}) {
         for(const change of payload.notesChanges)if(snapshot.saveUnresolved||!noteMatch(change))notesState.drafts.set(change.key,{before:change.before,after:change.after});
         for(const change of payload.followupChanges)if(snapshot.saveUnresolved||!followupMatch(change))notesState.followupDrafts.set(change.rawKey,{before:change.before,after:change.after});
         setNotesStatus('ผลอ่านกลับยังไม่ตรงครบ · เก็บร่างไว้ ต้องโหลดล่าสุดก่อนตรวจส่งใหม่ ไม่ส่งซ้ำอัตโนมัติ','error');
-      }else setNotesStatus('บันทึกและอ่านกลับส่วนกลางตรงครบ · หมายเหตุ '+payload.notesChanges.length+' สเปก / ติดตาม '+payload.followupChanges.length+' แถว · '+notesState.readAt,'ready');
+      }else {savedVerified=true;setNotesStatus('บันทึกและอ่านกลับส่วนกลางตรงครบ · หมายเหตุ '+payload.notesChanges.length+' สเปก / ติดตาม '+payload.followupChanges.length+' แถว · '+notesState.readAt,'ready');}
     }catch(error){
       if(!isCurrent())return;notesState.pending=null;notesState.retryBlocked=true;
       setNotesStatus((error?.message||'ยังยืนยันผลบันทึกไม่ได้')+' · เก็บร่างไว้และโหลดล่าสุดก่อนส่งใหม่ ห้ามส่งซ้ำทั้งชุดอัตโนมัติ','error');
     }finally{notesBusy=false;if(isCurrent()){renderStock(select.value);refreshFreeStockPanel();}flushQueued();}
+    // An annotation save advances the stock revision. Refresh through the
+    // existing authenticated reader only after the shared draft/save lock is
+    // released; never relabel old card quantities or trigger a second write.
+    if(savedVerified&&!destroyed&&!hasDirty()&&!notesState.retryBlocked&&typeof services.onSavedVerified==='function'){
+      try{await services.onSavedVerified();}
+      catch{if(!destroyed&&isCurrent())setNotesStatus('บันทึกและอ่านกลับข้อความสำเร็จแล้ว · แต่รีเฟรชฐานสต๊อกยังไม่สำเร็จ กรุณาโหลดล่าสุด ไม่ต้องบันทึกข้อความซ้ำ','error');}
+    }
   }
   document.getElementById('review-title').textContent=metadata.title||('ภาพรวมรายการขาย'+(metadata.monthLabel||metadata.month?' · '+(metadata.monthLabel||metadata.month):''));
   select.addEventListener('change',render);
@@ -854,7 +895,7 @@ function mount(host, review, services = {}) {
   document.getElementById('notes-file').addEventListener('change',event=>prepareNotesFile(event.target.files?.[0]));
   render();
   updateNotesControls();
-  instance={refreshNotes,stageNotes,render,renderStock,select,setView(value){if([...select.options].some(option=>option.value===String(value))){select.value=String(value);render();}},applyNotesSnapshot,suspendEditing(message){notesState.canSave=false;notesState.canEditFollowup=false;notesState.stockInvalidated=true;document.getElementById('notes-confirmation').hidden=true;setNotesStatus(message||'สิทธิ์ยังไม่ยืนยัน · เก็บร่างไว้ กรุณาเข้าสู่ระบบบัญชีเดิมแล้วโหลดล่าสุด','error');renderStock();}};
+  instance={refreshNotes,stageNotes,render,renderStock,renderExternalFree,select,setView(value){if([...select.options].some(option=>option.value===String(value))){select.value=String(value);render();}},applyNotesSnapshot,suspendEditing(message){notesState.canSave=false;notesState.canEditFollowup=false;notesState.stockInvalidated=true;document.getElementById('notes-confirmation').hidden=true;setNotesStatus(message||'สิทธิ์ยังไม่ยืนยัน · เก็บร่างไว้ กรุณาเข้าสู่ระบบบัญชีเดิมแล้วโหลดล่าสุด','error');renderStock();}};
   return instance;
   }
   function flushQueued(){if(!destroyed&&!notesBusy&&queuedReview){const value=queuedReview;queuedReview=null;rebuild(value);}}
@@ -864,12 +905,20 @@ function mount(host, review, services = {}) {
   return {
     update(value){if(destroyed)return;if(notesBusy){queuedReview=value;return;}salesSuspended='';rebuild(value||{});},
     suspendSales(message){if(destroyed)return;salesSuspended=message||'รอข้อมูลขายเดือนที่เลือก · เก็บร่างหมายเหตุไว้ ไม่ใช้เดือนอื่นแทน';queuedReview=null;applySalesSuspension();},
-    destroy(){if(destroyed)return;destroyed=true;generation++;if(typeof global.removeEventListener==='function')global.removeEventListener('beforeunload',unloadGuard);shadow.replaceChildren();notesState.drafts.clear();notesState.followupDrafts.clear();notesState.notes.clear();notesState.liveRows.clear();notesState.rawRecords.clear();notesState.legacy.clear();notesState.conflicts.clear();notesState.followupConflicts.clear();notesState.pending=null;queuedReview=null;currentReview=null;instance=null;},
+    destroy(){if(destroyed)return;destroyed=true;generation++;if(typeof global.removeEventListener==='function')global.removeEventListener('beforeunload',unloadGuard);shadow.replaceChildren();externalFreeHost?.replaceChildren();externalFreeHost=null;externalFreeIdentity=null;lastExternalFreeMarkup=null;notesState.drafts.clear();notesState.followupDrafts.clear();notesState.notes.clear();notesState.liveRows.clear();notesState.rawRecords.clear();notesState.legacy.clear();notesState.conflicts.clear();notesState.followupConflicts.clear();notesState.pending=null;queuedReview=null;currentReview=null;instance=null;},
     hasDirty,
     refreshNotes(){return !destroyed?instance.refreshNotes():Promise.resolve();},
     setView(value){if(!destroyed)instance.setView(value?.thickness??value);},
     getView(){return {month:uiState.month,thickness:uiState.thickness};},
     applyNotesSnapshot(snapshot){if(!destroyed)instance.applyNotesSnapshot(snapshot);},
+    attachFreeSurface(target,identity){
+      if(destroyed)return;
+      const nextIdentity=identity&&Number.isSafeInteger(identity.revision)&&identity.revision>=0&&/^\d{4}-\d{2}-\d{2}$/.test(identity.reportDate||'')?{revision:identity.revision,reportDate:identity.reportDate}:null;
+      if(externalFreeHost===target&&JSON.stringify(externalFreeIdentity)===JSON.stringify(nextIdentity))return;
+      if(externalFreeHost!==target){externalFreeHost?.replaceChildren();externalFreeHost=target||null;lastExternalFreeMarkup=null;}
+      externalFreeIdentity=nextIdentity;
+      instance.renderExternalFree();instance.renderStock();
+    },
     setStockIdentity(identity){if(destroyed)return;const valid=identity&&Number.isSafeInteger(identity.revision)&&identity.revision>=0&&/^\d{4}-\d{2}-\d{2}$/.test(identity.reportDate||'');if(!valid){notesState.stockInvalidated=true;instance.renderStock();return;}const changed=!expectedStockIdentity||expectedStockIdentity.revision!==identity.revision||expectedStockIdentity.reportDate!==identity.reportDate;expectedStockIdentity={revision:identity.revision,reportDate:identity.reportDate};if(changed)instance.renderStock();},
     suspendEditing(message){if(!destroyed)instance.suspendEditing(message);}
   };

@@ -73,7 +73,7 @@
     return {readNotes,saveNotes:changes=>save(changes),saveChanges:changes=>save(changes,true),prepareNotesFile,isBusy:()=>busy,isUncertain:()=>!!uncertain};
   }
   function boot(win){
-    let host=null,body=null,status=null,monthLabel=null,monthSelect=null,view=null,loading=null,auth='',epoch=0,reportEpoch=0,access=null,response=null,failed=false,needsLoad=true;
+    let host=null,body=null,status=null,monthLabel=null,monthSelect=null,view=null,loading=null,auth='',epoch=0,reportEpoch=0,access=null,response=null,failed=false,needsLoad=true,freeSurface=null;
     const now=()=>win.Date?.now?.()??Date.now();
     let calendarMonth=currentBangkokMonth(now()),selectedMonth=calendarMonth,availableMonths=[calendarMonth],expected=null,refreshHandler=null;
     const token=()=>{if(win.AAFStockAccess)return win.AAFStockAccess.token();if(win.AAFStockAccessRequired)return '';try{const user=JSON.parse(win.sessionStorage.getItem('aaf_user'));return user?.stockSessionToken||user?.gradeBridgeSessionToken||user?.bridgeSessionToken||'';}catch{return '';}};
@@ -202,11 +202,12 @@
           response=data;failed=false;availableMonths=Array.isArray(data.availableMonths)?data.availableMonths.filter(validMonth):[calendarMonth];paintMonth();if(body){body.hidden=false;body.inert=false;}
           const review={...data.review,readModel:data.readModel,displaySourceNote:(rm.warning||'ชุดยอดขายที่ตรวจไว้ ไม่ใช่การอ่านหน้า 09 สด')+' · เดือน '+month+' · อ่านส่วนกลาง '+new Date(now()).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})+' · ไม่เปลี่ยนยอดสต๊อก/จอง/ราคา'};
           const existingView=!!view;
-          if(view)view.update(review);else view=win.AAFOrderReviewUI.mount(body,review,{compactChrome:true,readNotes:async()=>{const snapshot=await notes.readNotes();if(snapshot.saveUnresolved)fail('save-uncertain','ข้อมูลหลังบันทึกยังไม่ตรงครบทุกช่องที่ต้องคงเดิม · เก็บร่างและสถานะรอตรวจไว้ ห้ามส่งซ้ำ ยังไม่ถือว่าเซฟสำเร็จ');return access?.notesReadOnly?{...snapshot,canSave:false,canEditFollowup:false}:snapshot;},saveNotes:notes.saveNotes,saveChanges:notes.saveChanges,prepareNotesFile:async(file,settings)=>{if(access?.notesReadOnly)fail('read-only','รายงานหน้านี้อ่านอย่างเดียว');return notes.prepareNotesFile(file,settings);}});
+          if(view)view.update(review);else view=win.AAFOrderReviewUI.mount(body,review,{compactChrome:true,readNotes:async()=>{const snapshot=await notes.readNotes();if(snapshot.saveUnresolved)fail('save-uncertain','ข้อมูลหลังบันทึกยังไม่ตรงครบทุกช่องที่ต้องคงเดิม · เก็บร่างและสถานะรอตรวจไว้ ห้ามส่งซ้ำ ยังไม่ถือว่าเซฟสำเร็จ');return access?.notesReadOnly?{...snapshot,canSave:false,canEditFollowup:false}:snapshot;},saveNotes:notes.saveNotes,saveChanges:notes.saveChanges,onSavedVerified:()=>refreshHandler?.(),prepareNotesFile:async(file,settings)=>{if(access?.notesReadOnly)fail('read-only','รายงานหน้านี้อ่านอย่างเดียว');return notes.prepareNotesFile(file,settings);}});
           // The registry has its own saved-stock basis, never the Page09 month
           // filter. Invalidate an older basis immediately; reuse the existing
           // authenticated notes reader after a report refresh (no new timer).
           view?.setStockIdentity?.({revision:access.revision,reportDate:access.reportDate});
+          if(freeSurface)view?.attachFreeSurface?.(freeSurface,{revision:access.revision,reportDate:access.reportDate});
           if(existingView)void view?.refreshNotes?.();
           publish();tell('');
         }catch(e){
@@ -249,8 +250,13 @@
       checkCurrentMonth();if(response&&!failed){publish();return;}
       if(access&&!loading)return load();
     }
+    function attachFreeSurface(slot){
+      if(!slot)return;
+      freeSurface=slot;
+      view?.attachFreeSurface?.(slot,access?{revision:access.revision,reportDate:access.reportDate}:null);
+    }
     win.addEventListener('beforeunload',event=>{if(view?.hasDirty?.()||notes.isBusy()||notes.isUncertain()){event.preventDefault();event.returnValue='';}});
-    return {setAccess,attach,invalidate,selectMonth,syncCurrentSource,checkCurrentMonth,setRefreshHandler:fn=>{refreshHandler=typeof fn==='function'?fn:null;},isDirty:()=>!!view?.hasDirty?.(),isSaving:()=>notes.isBusy()||notes.isUncertain()};
+    return {setAccess,attach,attachFreeSurface,invalidate,selectMonth,syncCurrentSource,checkCurrentMonth,setRefreshHandler:fn=>{refreshHandler=typeof fn==='function'?fn:null;},isDirty:()=>!!view?.hasDirty?.(),isSaving:()=>notes.isBusy()||notes.isUncertain()};
   }
   return {createNotesService,verifiedWrite,boot,currentBangkokMonth,archivedReviewValid};
 });

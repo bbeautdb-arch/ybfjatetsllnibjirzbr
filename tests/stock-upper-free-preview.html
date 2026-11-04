@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SYNTHETIC · Shared upper Free and registry editors</title>
+  <link rel="stylesheet" href="../stock_premium.css">
+  <style>
+    .fixture{margin:12px auto 20px;max-width:1440px;padding:18px;background:#fff4cd;border:1px solid #d4b252;border-radius:14px;font:14px/1.5 system-ui;color:#42391e}
+    .fixture h1{font-size:20px;margin:0 0 8px}.fixture p{margin:8px 0}.fixture button{font:inherit;padding:7px 12px;margin:4px;border:1px solid #a5b8a0;border-radius:8px;background:white;cursor:pointer}
+    #fixture-status{white-space:pre-wrap;font-weight:600}#fixture-status[data-pass="false"]{color:#a52020}
+  </style>
+</head>
+<body data-aaf-premium="ivory">
+  <header class="fixture">
+    <h1>SYNTHETIC — ทดสอบ Free Stock กับทะเบียนร่วม ไม่ใช่ข้อมูลบริษัท</h1>
+    <p>6 แถวทะเบียน · Free 100 แผ่น + ไม้แถบ 400 ชิ้น · มีแถวกลับด้านหมายเหตุร่วมแต่ติดตามคนละรหัส, ขนาดไม่ปกติ, ศูนย์, และ Free ปรับมือ 75</p>
+    <p>ทดสอบกรอกได้ทั้งสองจุด แล้วกดตรวจ/ยืนยันบันทึกกับเซิร์ฟเวอร์จำลองในหน้านี้เท่านั้น ไม่มีการเรียก API หรือบันทึกข้อมูลจริง</p>
+    <div>
+      <button id="fixture-repaint">วาดสรุปใหม่ · เก็บร่าง</button>
+      <button id="fixture-all">ยอดขายทุกความหนา</button>
+      <button id="fixture-thickness">ยอดขายเฉพาะ 2.5 มม.</button>
+      <button id="fixture-readonly">สลับดูอย่างเดียว</button>
+      <button id="fixture-conflict">จำลองส่วนกลางแก้ข้อความ</button>
+      <button id="fixture-check">ตรวจการเชื่อมทั้งสองจุด</button>
+    </div>
+    <p id="fixture-status" role="status">กำลังเตรียมข้อมูลสมมติ…</p>
+  </header>
+  <main class="report-shell"><div id="stock-summary" data-aaf-stock-summary></div></main>
+  <script src="../stock_review_notes_bridge.js"></script>
+  <script src="../stock_order_header.js"></script>
+  <script src="../stock_order_review.js"></script>
+  <script src="../stock_summary.js"></script>
+  <script type="module">
+    import {salesOnlyFixture} from './stock-sales-only-fixture.mjs';
+    const month=AAFOrderHeader.currentBangkokMonth(),day=month+'-01',capturedAt=day+'T01:00:00Z',fixture=salesOnlyFixture(month);
+    const make=(w,l,t,grade,qty,committedQty,freeQty,unit='sheet',extra={})=>({key:`w${w}_l${l}_t${t}_g${grade}`,w,l,t,grade,qty,committedQty,freeQty,unit,sku:'SYNTHETIC',desc:'Invented stock only',size:'Synthetic',baseQty:qty,d90:qty,d180:0,d270:0,d360:0,dOver:0,note:'',followup:'Synthetic tracking '+w+'×'+l+' '+t,followupBy:'Synthetic author',followupAt:capturedAt,priceObj:{price:12,currency:'THB'},...extra});
+    const rows=[make(1220,2440,2.5,'AAA',100,30,75,'sheet',{freeOverride:{value:75,at:capturedAt}}),make(2440,1220,2.5,'AAA',20,5,15),make(610,1220,3.2,'A',16,6,10),make(25,2000,3.2,'B',500,100,400,'strip'),make(1220,2440,1.6,'AAA',0,0,0),make(1220,2440,4.5,'B',30,30,0)];
+    const keyOf=r=>[r.t,r.grade,...[r.w,r.l].sort((a,b)=>a-b),r.unit].join('|');
+    const stock={ok:true,revision:7,exchangeRate:30,report:{reportDate:day,sourceRowCount:rows.length},updatedAt:capturedAt,rows,permissions:{followup:true}};
+    const privateContent={version:3,context:'aaf-sales-stock-preview|free-price-catalog',fx:30,savedAt:capturedAt,prices:Object.fromEntries(rows.map(r=>[keyOf(r),12])),currencies:Object.fromEntries(rows.map(r=>[keyOf(r),'THB'])),notesByThickness:{},notesBySpec:Object.fromEntries(rows.map(r=>[keyOf(r),'Synthetic note '+keyOf(r)]))};
+    const catalog={ok:true,revision:7,catalogRevision:3,stockReportDate:day,permissions:{pricesAndNotes:true},widgetState:{privateContent}};
+    const baselineQuantities=JSON.stringify(rows.map(({key,w,l,t,grade,unit,qty,committedQty,freeQty,priceObj})=>({key,w,l,t,grade,unit,qty,committedQty,freeQty,priceObj})));
+    let view=null,reviewHost=null,freeHost=null,readOnly=false,mockWrites=0;
+    const snapshot=()=>AAFStockNotesCore.parseSnapshot(stock,catalog,Date.now()).snapshot;
+    const services={compactChrome:true,readNotes:async()=>snapshot(),saveChanges:async changes=>{
+      if(readOnly)throw Error('Synthetic permission denied');
+      if(changes.notesChanges.some(c=>privateContent.notesBySpec[c.key]!==c.before)||changes.followupChanges.some(c=>rows.find(r=>r.key===c.rawKey)?.followup!==c.before))throw Error('Synthetic conflict: reload latest first');
+      for(const c of changes.notesChanges)privateContent.notesBySpec[c.key]=c.after;
+      for(const c of changes.followupChanges)Object.assign(rows.find(r=>r.key===c.rawKey),{followup:c.after,followupBy:'Synthetic server',followupAt:new Date().toISOString()});
+      stock.revision++;catalog.revision=stock.revision;if(changes.notesChanges.length)catalog.catalogRevision++;
+      mockWrites++;view.setStockIdentity({revision:stock.revision,reportDate:day});const out=snapshot();setTimeout(()=>{paint();check();},0);return out;
+    }};
+    window.AAFOrderReview={
+      attach(slot){if(!slot)return;if(!reviewHost){reviewHost=document.createElement('div');reviewHost.id='stock-order-review-host';slot.append(reviewHost);view=AAFOrderReviewUI.mount(reviewHost,{...fixture.review,readModel:fixture.readModel},services);}else slot.replaceChildren(reviewHost);view.setStockIdentity({revision:stock.revision,reportDate:day});if(freeHost)view.attachFreeSurface(freeHost,{revision:stock.revision,reportDate:day});},
+      attachFreeSurface(slot){if(!slot)return;freeHost=slot;view?.attachFreeSurface(slot,{revision:stock.revision,reportDate:day});}
+    };
+    function paint(){
+      AAFStockSummary.update(stock,r=>({eq:r.qty*r.w*r.l/(1220*2440)*r.t/2.5,value:r.qty*12,freeValue:r.freeQty*12,price:12,curr:'THB'}));
+      AAFStockSummary.setSavedStockCatalog({revision:stock.revision,reportDate:day,catalogRevision:catalog.catalogRevision,savedAt:privateContent.savedAt,rows:rows.map(r=>({...r,price:12,currency:'THB'}))});
+    }
+    function check(){
+      const root=reviewHost?.shadowRoot,external=document.querySelector('[data-free-followup-host]'),registry=root?.querySelectorAll('[data-stock-raw-key]')||[];
+      let matching=true;for(const input of external?.querySelectorAll('[data-stock-note],[data-followup-edit]')||[]){const attr=input.hasAttribute('data-stock-note')?'data-stock-note':'data-followup-edit',peers=[...root.querySelectorAll('['+attr+']')].filter(node=>node.getAttribute(attr)===input.getAttribute(attr));if(!peers.length||peers.some(node=>node.value!==input.value))matching=false;}
+      const preserved=baselineQuantities===JSON.stringify(rows.map(({key,w,l,t,grade,unit,qty,committedQty,freeQty,priceObj})=>({key,w,l,t,grade,unit,qty,committedQty,freeQty,priceObj}))),status=document.getElementById('fixture-status');
+      status.dataset.pass=String(matching&&preserved&&registry.length===6);status.textContent=`${matching&&preserved&&registry.length===6?'PASS':'PENDING / FAIL'} · ข้อความสองจุด ${matching?'ตรงกัน':'ไม่ตรง'} · ทะเบียน ${registry.length}/6 · ตัวกรองขาย ${view?.getView().thickness} · mock writes ${mockWrites} · ยอด/ราคา ${preserved?'คงเดิม':'เปลี่ยน!'} · ${readOnly?'อ่านอย่างเดียว':'แก้ข้อความได้'}`;
+      document.body.dataset.fixtureReady='true';return matching&&preserved;
+    }
+    document.getElementById('fixture-repaint').addEventListener('click',()=>{paint();check();});
+    document.getElementById('fixture-all').addEventListener('click',()=>{view.setView('all');check();});
+    document.getElementById('fixture-thickness').addEventListener('click',()=>{view.setView('2.5');check();});
+    document.getElementById('fixture-readonly').addEventListener('click',async()=>{readOnly=!readOnly;stock.permissions.followup=!readOnly;catalog.permissions.pricesAndNotes=!readOnly;await view.refreshNotes();check();});
+    document.getElementById('fixture-conflict').addEventListener('click',async()=>{const first=rows[0];first.followup='Synthetic remote changed tracking';privateContent.notesBySpec[keyOf(first)]='Synthetic remote changed note';await view.refreshNotes();check();});
+    document.getElementById('fixture-check').addEventListener('click',check);
+    paint();await new Promise(requestAnimationFrame);check();
+  </script>
+</body>
+</html>

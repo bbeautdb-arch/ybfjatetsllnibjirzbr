@@ -23,6 +23,20 @@
   function restorePhysicalGrades(container,opened=expandedPhysicalGrades){
     container?.querySelectorAll('details.ss-physical-grade-detail').forEach(node=>{node.open=opened.has(physicalGradeKey(node));});
   }
+  // One live editor surface belongs to the registry controller. Move its DOM
+  // through summary refreshes; never fork the note/followup draft or lose caret.
+  function retainFreeSurface(){
+    const panel=root?.querySelector('[data-free-followup-panel]');
+    const active=document.activeElement,focused=panel?.contains(active)?active:null;
+    const selection=focused&&typeof focused.selectionStart==='number'?{start:focused.selectionStart,end:focused.selectionEnd,direction:focused.selectionDirection}:null;
+    panel?.remove();return {panel,focused,selection};
+  }
+  function restoreFreeSurface(retained={}){
+    const fresh=root?.querySelector('[data-free-followup-panel]');
+    if(fresh&&retained.panel)fresh.replaceWith(retained.panel);
+    window.AAFOrderReview?.attachFreeSurface?.(root?.querySelector('[data-free-followup-host]'));
+    if(retained.focused?.isConnected){retained.focused.focus({preventScroll:true});if(retained.selection)retained.focused.setSelectionRange(retained.selection.start,retained.selection.end,retained.selection.direction);}
+  }
   const expandedThickness=new Set();
   const expandedThicknessProduction=new Set();
   // Scenario inputs are browser-memory estimates, never saved catalog prices.
@@ -675,12 +689,14 @@
   function setSalesSummary(summary){
     if(latest)latest={...latest,salesSummary:summary};
     const cards=root?.querySelector('.ss-kpis');if(cards){
+      const freeSurface=retainFreeSurface();
       const opened=new Set([...cards.querySelectorAll('[data-stock-gap-group]')].filter(node=>node.open).map(node=>node.dataset.stockGapGroup));
       const receipts=new Set([...cards.querySelectorAll('[data-stock-receipt-details]')].filter(node=>node.open).map(node=>node.dataset.stockReceiptDetails));
       cards.innerHTML=kpiHTML(summary,latest);
       restorePhysicalGrades(cards);
       cards.querySelectorAll('[data-stock-gap-group]').forEach(node=>{node.open=opened.has(node.dataset.stockGapGroup);});
       cards.querySelectorAll('[data-stock-receipt-details]').forEach(node=>{node.open=receipts.has(node.dataset.stockReceiptDetails);});
+      restoreFreeSurface(freeSurface);
     }
     paintExchangeRate();
     const status=root?.querySelector('.ss-sales-summary-source');if(status)status.textContent=window.AAFOrderHeader?window.AAFOrderHeader.sourceText(orderHeader,currentWarehouse(latest),undefined,undefined,latest?.currentMonthSold,latest?.currentAllocation):summarySourceText(summary,latest);
@@ -716,10 +732,13 @@
     // Reuse authenticated polls. Do not rebuild Physical, tables or editors.
     const holder=document.createElement('div');
     holder.innerHTML=window.AAFOrderHeader.render(null,expandedCards,warehouse,'',currentMonthSold,currentAllocation);
+    const freeSurface=retainFreeSurface();
     for(const id of ['sold','reserved','free']){
       const card=root?.querySelector('.ss-kpis [data-stock-card="'+id+'"]'),replacement=holder.querySelector('[data-stock-card="'+id+'"]');
       if(card&&replacement)card.replaceWith(replacement);
     }
+    restorePhysicalGrades(root);
+    restoreFreeSurface(freeSurface);
     // Refresh only the drilldown basis warning, without rebuilding Physical
     // or touching any existing note/price editor or disclosure state.
     const freshBasis=holder.querySelector('.ss-physical-free-basis');
@@ -1188,6 +1207,31 @@
     [data-aaf-stock-summary] .ss-physical-group[data-physical-group="nonstandard"] .ss-physical-group-heading{color:#80521e}
     [data-aaf-stock-summary] .ss-physical-grades{display:block;line-height:1.7;font-size:10px;color:#52657a;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
     [data-aaf-stock-summary] .ss-physical-grade{display:inline-block}
+    [data-aaf-stock-summary] .ss-free-followup-panel{border:1px solid #b8d2bd;border-radius:12px;background:#ffffffa6;overflow:hidden}
+    [data-aaf-stock-summary] .ss-free-followup-panel>summary{padding:12px 14px;cursor:pointer;font-size:13px;font-weight:700;color:#205d40}
+    [data-aaf-stock-summary] .ss-kpi-free:has([data-free-followup-panel][open]){grid-column:1/-1}
+    [data-aaf-stock-summary] .ss-free-linked-editors{padding:0 14px 14px;font-size:12px;color:#294f40}
+    [data-aaf-stock-summary] .ss-free-linked-editors p{margin:8px 0}
+    [data-aaf-stock-summary] .ss-free-linked-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0}
+    [data-aaf-stock-summary] .ss-free-linked-actions button,[data-aaf-stock-summary] .ss-free-linked-editors .plainbutton{font:inherit;padding:8px 12px;border-radius:8px;border:1px solid #a9c5b1;background:#eff8ef;color:#205d40;cursor:pointer}
+    [data-aaf-stock-summary] .ss-free-linked-actions button:disabled,[data-aaf-stock-summary] .ss-free-linked-editors .plainbutton:disabled{opacity:.5;cursor:default}
+    [data-aaf-stock-summary] .ss-free-linked-scroll{max-height:580px;overflow:auto;border:1px solid #d2dfd4;border-radius:8px}
+    [data-aaf-stock-summary] .ss-free-linked-scroll table{width:100%;min-width:960px;border-collapse:collapse;font-size:12px}
+    [data-aaf-stock-summary] .ss-free-linked-scroll :is(th,td){padding:10px 8px;border-bottom:1px solid #dbe6dc;vertical-align:top;text-align:left;line-height:1.55}
+    [data-aaf-stock-summary] .ss-free-linked-scroll thead th{position:sticky;top:0;z-index:1;background:#e6efe3;color:#294f40;font-weight:700}
+    [data-aaf-stock-summary] .ss-free-linked-scroll tbody tr:nth-child(even){background:#f5f8f0a6}
+    [data-aaf-stock-summary] .ss-free-linked-scroll tbody tr>td:nth-child(1){min-width:150px}
+    [data-aaf-stock-summary] .ss-free-linked-scroll tbody tr>td:nth-child(2),[data-aaf-stock-summary] .ss-free-linked-scroll tbody tr>td:nth-child(3){font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+    [data-aaf-stock-summary] .ss-free-linked-scroll tbody tr>td:nth-child(4),[data-aaf-stock-summary] .ss-free-linked-scroll tbody tr>td:nth-child(7){width:24%;min-width:220px}
+    [data-aaf-stock-summary] .ss-free-linked-scroll small,[data-aaf-stock-summary] .ss-free-linked-editors .tracking-source{display:block;font-size:10px;color:#61766b;overflow-wrap:anywhere}
+    [data-aaf-stock-summary] .ss-free-linked-scroll textarea{box-sizing:border-box;width:100%;min-height:74px;resize:vertical;border:1px solid #bacfc0;border-radius:8px;padding:9px;background:#fffefa;color:#234333;font:inherit}
+    [data-aaf-stock-summary] .ss-free-linked-scroll textarea:disabled{background:#edf0ec;color:#63716a}
+    [data-aaf-stock-summary] .ss-free-linked-scroll tfoot{font-weight:700;background:#e6efe3}
+    [data-aaf-stock-summary] .ss-free-linked-editors :is(.conflict,.note-conflict){color:#9b4b13;background:#fff0d9;padding:6px;border-radius:6px}
+    [data-aaf-stock-summary] .ss-free-linked-editors pre{white-space:pre-wrap;overflow-wrap:anywhere}
+    [data-aaf-stock-summary] .ss-free-allocation-basis{font-size:11px;border-top:1px solid #cedfd3;padding-top:8px}
+    [data-aaf-stock-summary] .ss-free-allocation-basis>summary{cursor:pointer;color:#61766b}
+    [data-aaf-stock-summary].ss-export [data-free-followup-panel],[data-aaf-stock-summary].ss-overview-export [data-free-followup-panel]{display:none!important}
     [data-aaf-stock-summary] .ss-physical-grade-list{display:grid;gap:3px;min-width:0}
     [data-aaf-stock-summary] .ss-physical-grade-hint{font-size:10px;color:#52657a;margin:3px 0}
     [data-aaf-stock-summary] .ss-physical-grade-detail{min-width:0;border-radius:7px;border:1px solid transparent}
@@ -1241,6 +1285,7 @@
     // Retain the same native preview node: changing stock revisions must not discard price/note drafts.
     const preview=root.querySelector('#stock-sales-preview-host');
     const orderPreview=root.querySelector('#stock-order-review-host');
+    const freeSurface=retainFreeSurface();
     const planningFocus=root.querySelector('[data-production-setting]:focus')?.dataset.productionSetting;
     const focused=orderPreview?.shadowRoot?.activeElement||orderPreview?.querySelector('input:focus,textarea:focus,select:focus')||preview?.shadowRoot?.activeElement;
     const selection=focused&&typeof focused.selectionStart==='number'?{start:focused.selectionStart,end:focused.selectionEnd}:null;
@@ -1250,6 +1295,7 @@
     restorePhysicalGrades(root);
     window.AAFSalesPreview?.attach(root.querySelector('#stock-sales-preview-slot'));
     window.AAFOrderReview?.attach(root.querySelector('#stock-order-review-slot'));
+    restoreFreeSurface(freeSurface);
     syncPriceDrafts();
     if(focused?.isConnected){focused.focus({preventScroll:true});if(selection)focused.setSelectionRange(selection.start,selection.end);}
     if(planningFocus)root.querySelector('[data-production-setting="'+planningFocus+'"]')?.focus({preventScroll:true});
