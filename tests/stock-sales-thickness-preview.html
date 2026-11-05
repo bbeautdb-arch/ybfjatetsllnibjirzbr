@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SYNTHETIC — สรุปยอดขายและแผ่นเทียบตามความหนา</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(140deg,#eef4ed,#eff6f8);color:#243e31;font:14px/1.55 system-ui,sans-serif}
+    header{padding:20px 28px;background:#fffbec;border-bottom:1px solid #dfd6b8}h1{font-size:20px;margin:0 0 4px}p{margin:5px 0}
+    label{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}select,button{font:inherit;padding:8px 12px;border:1px solid #b5c7ba;border-radius:8px;background:#fff;color:#294d39;margin:10px 8px 0 0}
+    #preview{display:block;max-width:1440px;margin:24px auto;padding:0 20px}button{cursor:pointer}.legend{font-size:12px;color:#646954}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SYNTHETIC — ยอดขาย 3 กลุ่ม + สรุปแยกความหนา</h1>
+    <p>ข้อมูลสมมติทั้งหมด · ไม่มีข้อมูลลูกค้าจริง · ไม่เชื่อม API บัญชีหรือฐานข้อมูล · ไม่บันทึกข้อมูล</p>
+    <label>กรณีทดสอบ
+      <select id="scenario">
+        <option value="partial">บาท / USD / ไม้แถบ / มีราคาบางส่วน</option>
+        <option value="missing-fx">ไม่มีหลักฐาน FX · คง USD และยอดบาทที่ทราบ</option>
+        <option value="missing-dimensions">ขนาดต้นทางขาด · ยอดแผ่นเทียบยังไม่ครบ</option>
+        <option value="unverified">ต้นทางยังไม่ผ่านการตรวจ · ไม่ใช้ยอดแทน</option>
+      </select>
+    </label>
+    <button id="expand" type="button">เปิดรายละเอียดทั้งหมด</button>
+    <button id="collapse" type="button">ย่อรายละเอียดทั้งหมด</button>
+    <p class="legend">ตัวอย่างตั้งใจมีราคาขาด 1 บรรทัด · ยอดขายใช้ราคาจริงรายสินค้า ไม่ใช่เงินรับหรือราคาสต๊อก · ไม้แถบไม่ปนจำนวนแผ่น</p>
+  </header>
+  <div id="preview"></div>
+  <script src="../stock_sales_groups.js"></script>
+  <script src="../stock_sales_thickness.js"></script>
+  <script src="../stock_sales_thickness_view.js"></script>
+  <script src="../stock_sales_groups_view.js"></script>
+  <script>
+    'use strict';
+    const capture='2030-11-05T11:00:00Z';
+    const row=(id,status,qty,extra={})=>({id,orderId:'SYNTH-ORDER-'+id,ref:'SYNTH-PI-'+id,customer:'ลูกค้าสมมติ '+id,w:1220,l:2440,t:2.5,grade:'AAA',unit:'sheet',qty,sourceStatus:status,productStatus:'พร้อมโหลด',etd:'12/11/30',...extra});
+    const baseRows=[
+      row('THB-LOADED','ออก INV',100,{currency:'THB',unitPrice:60}),
+      row('USD-WAITING','เปิด PI',200,{t:1.6,currency:'USD',unitPrice:1.9}),
+      row('UNKNOWN-PRICE','เปิด PI',300,{t:1.6,grade:'B'}),
+      row('STRIP','เปิด PI',10000,{unit:'strip',w:25,l:2052,t:3.2,grade:'B',currency:'USD',unitPrice:0.1}),
+      row('SMALL-SIZE','เปิด PI',50,{w:1200,l:2400,t:3,grade:'A',currency:'USD',unitPrice:3}),
+      row('NEGOTIATION','เจรจา',150,{currency:'THB',unitPrice:75}),
+      row('FORECAST','Forecast',70,{t:4.5,grade:'A',currency:'USD',unitPrice:4})
+    ];
+    const shadow=document.getElementById('preview').attachShadow({mode:'open'}),main=document.createElement('main');
+    for(const name of ['stock_order_review.css','stock_sales_thickness_view.css']){const link=document.createElement('link');link.rel='stylesheet';link.href='../'+name;shadow.append(link);}shadow.append(main);
+    function fixture(){
+      const rows=structuredClone(baseRows),scenario=document.getElementById('scenario').value;
+      if(scenario==='missing-dimensions')rows.find(r=>r.id==='UNKNOWN-PRICE').w=null;
+      const source={month:'2030-11',capturedAt:capture};
+      const financial={metadata:{month:'2030-11',salesAsOf:capture,salesFx:scenario==='missing-fx'?null:{verified:true,rate:32,date:'2030-11-05',source:'Synthetic verified FX'}},byRowId:{}};
+      for(const r of rows){
+        const {id,orderId,ref,customer,w,l,t,grade,qty,unit}=r;
+        const sale=typeof r.unitPrice==='number'?{status:'verified',unitPrice:r.unitPrice,amount:r.unitPrice*r.qty,currency:r.currency,commercialTerm:'FOB',source:'Synthetic exact Page02 product line',sourceDocument:r.ref,sourceId:'SYNTH-PRODUCT-'+r.id,sourceLineIndex:0,valueBasis:'actual-line-sale-value'}:{status:'pending',amount:null,unitPrice:null,currency:null,reason:'exact-current-order-price-evidence-missing'};
+        financial.byRowId[id]={id,orderId,ref,customer,w,l,t,grade,qty,unit,sale};
+      }
+      return {metadata:{month:'2030-11',sourceSalesCapturedAt:capture},readModel:{kind:'current-month-order-review',status:scenario==='unverified'?'pending':'verified',selectedMonth:'2030-11',source},rows,financial};
+    }
+    function render(){
+      const review=fixture(),model=window.AAFSalesGroups.build(review);
+      const thicknessModel=window.AAFSalesThickness.build(review,model,{fx:review.financial.metadata.salesFx});
+      main.innerHTML=window.AAFSalesGroupsView.render(model,{monthLabel:'พฤศจิกายน 2573 · ตัวอย่างสมมติ',thicknessModel});
+    }
+    document.getElementById('scenario').addEventListener('change',render);
+    document.getElementById('expand').addEventListener('click',()=>main.querySelectorAll('details').forEach(d=>{d.open=true;}));
+    document.getElementById('collapse').addEventListener('click',()=>main.querySelectorAll('details').forEach(d=>{d.open=false;}));
+    render();
+  </script>
+</body>
+</html>

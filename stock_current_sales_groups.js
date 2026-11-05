@@ -5,11 +5,12 @@
   const node = typeof module === 'object' && module.exports;
   const api = factory(
     () => node && typeof require === 'function' ? require('./stock_sales_groups.js') : root?.AAFSalesGroups,
-    () => node && typeof require === 'function' ? require('./stock_sales_receipts.js') : root?.AAFSalesReceipts
+    () => node && typeof require === 'function' ? require('./stock_sales_receipts.js') : root?.AAFSalesReceipts,
+    () => node && typeof require === 'function' ? require('./stock_sales_thickness.js') : root?.AAFSalesThickness
   );
   if (node) module.exports = api;
   else root.AAFCurrentSalesGroups = api;
-})(typeof window === 'undefined' ? null : window, function (getGroups, getReceipts) {
+})(typeof window === 'undefined' ? null : window, function (getGroups, getReceipts, getThickness) {
   'use strict';
   const count = value => Number.isSafeInteger(value) && value >= 0;
   const units = value => value && ['sheet', 'strip'].every(key => count(value[key]));
@@ -21,6 +22,20 @@
     return {month, monthLabel};
   }
   const pending = (now, reason) => ({version: 1, status: 'pending', ...period(now), reason: reason || 'รอชุดหน้า 09 เดือนปัจจุบันที่ตรงกับหัวข้อ 02 · ไม่ใช้ยอดเก่าหรือเดือนอื่นแทน'});
+
+  // Exact source dimensions, not allocation pool dimensions. Keep this additive
+  // projection outside the group/receipt DTO so quantities and money stay intact.
+  function equivalentGroups(data, grouped) {
+    try {
+      const engine = getThickness();
+      if (typeof engine?.build !== 'function') return null;
+      const result = engine.build(data, grouped);
+      return Object.fromEntries(grouped.groups.map(group => {
+        const aggregate = result?.byGroup?.[group.id];
+        return [group.id, aggregate ? {total: aggregate.totals?.eq25 ?? null, loaded: aggregate.loaded?.eq25 ?? null, waiting: aggregate.waiting?.eq25 ?? null} : null];
+      }));
+    } catch { return null; }
+  }
 
   // The existing sold DTO proves current-month source identity only. Its narrow
   // legacy sold categories are not reused as the new confirmed/negotiation totals.
@@ -53,9 +68,10 @@
       const grouped = groupModule.build(data), receipts = receiptModule.build(data, grouped);
       const result = {...grouped, version: 1, ...period(now), source,
         groups: grouped.groups.map(group => ({...group, money: receipts[group.id]})),
+        equivalentByGroup: equivalentGroups(data, grouped),
         reason: grouped.status === 'verified' ? undefined : 'บางรายการหน้า 09 ยังจัดกลุ่มหรือยืนยันจำนวนไม่ได้ · ไม่ใช้ยอดเก่าหรือศูนย์แทน'};
-      // Retain only the inputs these two pure projections read. Rebuilding at
-      // render catches mutated totals, subsets, cash evidence and old-month data.
+      // Retain the source inputs read by these pure projections. Rebuilding at
+      // render catches mutated totals, equivalents, cash and old-month data.
       const proof = {kind: rm.kind, status: rm.status, source: rm.source,
         ...(rm.selectedMonth !== undefined ? {selectedMonth: rm.selectedMonth} : {}),
         ...(rm.sourceCapturedAt !== undefined ? {sourceCapturedAt: rm.sourceCapturedAt} : {}),
@@ -74,6 +90,9 @@
       for (const key of ['month', 'monthLabel', 'source', 'capturedAt', 'sourceLineCount', 'groups', 'summary', 'cancelled', 'unclassified', 'issues']) {
         if (JSON.stringify(value[key]) !== JSON.stringify(fresh[key])) return pending(now, 'ยอดสรุปกับรายการต้นทางไม่ตรงกัน · รออ่านชุดหน้า 09 ใหม่');
       }
+      // A missing conversion module must not invent zero or hide separately
+      // verified actual quantities/cash. When available, its evidence is checked.
+      if (fresh.equivalentByGroup !== null && JSON.stringify(value.equivalentByGroup) !== JSON.stringify(fresh.equivalentByGroup)) return pending(now, 'ยอดแผ่นเทียบกับรายการต้นทางไม่ตรงกัน · รอตรวจชุดหน้า 09');
       return fresh;
     } catch { return pending(now); }
   }

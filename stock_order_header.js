@@ -538,6 +538,15 @@
   function receiptDetails(info, id) {
     return `<details class="ss-settlement-details" data-stock-receipt-details="${esc(id)}"><summary>รับเมื่อไร / หลักฐานรายใบ</summary>${info.money.orders.map(order => `<div><b>${esc(order.ref || 'ยังไม่มีเลขใบ')} · ${esc(order.customer)}</b><span>ยอดขาย ${esc(nativeText(order.sale))}</span>${order.receiptEvents.map(event => `<small>${esc(event.date || (event.month ? event.month + ' · ไม่ระบุวัน' : 'ยังไม่ระบุวันรับ'))} · ${esc(event.currency)} ${n(event.amount)}</small>`).join('')}${order.unconfirmed.THB || order.unconfirmed.USD ? `<small>ยังแยกรับ/คงเหลือไม่ได้ ${esc(nativeText(order.unconfirmed))}${order.partial ? ' · เลือกไม่ครบใบ จึงไม่เฉลี่ยงวดเงิน' : ''}</small>` : ''}</div>`).join('')}</details>`;
   }
+  function currentSalesEquivalentHTML(equivalents) {
+    const total = equivalents?.total;
+    const amount = value => valid(value) && value <= Number.MAX_SAFE_INTEGER ? n(value)+' แผ่นเทียบ' : 'ยังยืนยันไม่ได้';
+    const missing = eq => Number.isSafeInteger(eq?.missingLineCount) && eq.missingLineCount > 0 ? ' · รอขนาด '+n(eq.missingLineCount)+' บรรทัด' : '';
+    const parts = eq => line('จากแผ่น / จากไม้แถบ',amount(eq?.sheet)+' / '+amount(eq?.strip));
+    const partial = eq => eq?.total === null && valid(eq?.knownTotal) ? line('ส่วนที่แปลงได้',amount(eq.knownTotal),true) : '';
+    const subsets = equivalents ? `<details class="ss-sales-equivalent-subsets"><summary>แผ่นเทียบ · โหลดแล้ว / รอโหลด</summary>${line('โหลดแล้ว',amount(equivalents.loaded?.total)+missing(equivalents.loaded))}${parts(equivalents.loaded)}${partial(equivalents.loaded)}${line('รอโหลด / ยังไม่โหลด',amount(equivalents.waiting?.total)+missing(equivalents.waiting))}${parts(equivalents.waiting)}${partial(equivalents.waiting)}</details>` : '';
+    return `<div class="ss-overview-breakdown ss-sales-equivalent" data-current-sales-equivalent="confirmed">${line('เทียบ 4×8 หนา 2.5 มม. · รวมแผ่นและไม้แถบ',amount(total?.total)+missing(total))}${parts(total)}${partial(total)}${subsets}${!equivalents?'<small class="ss-overview-warning">รอตรวจขนาดต้นทางสำหรับยอดแผ่นเทียบ · ไม่ใช้ 0 แทน</small>':''}</div>`;
+  }
   function currentSalesMoneyHTML(group) {
     const receipt = group?.money, id = group?.id;
     if (!receipt) return '<div class="ss-overview-value"><span>เงินรับ / รอรับ</span><small>ยังไม่มีข้อมูลจำนวนเงินที่ยืนยัน</small></div>';
@@ -578,7 +587,7 @@
       {id:'physical', label:'สต๊อกจริง · ทั้งคลัง', data:physical, money:physicalMoney, moneyLabel:'มูลค่าสต๊อก · ราคาประเมินที่บันทึก',
         breakdown:current ? '<div hidden data-internal-metadata>'+line('ฐานข้อมูล',esc(current.stockReportDate)+(current.stockRevision !== undefined ? ' · รุ่น '+esc(current.stockRevision) : ''))+'</div>' + physicalEquivalentsHTML(physical) : '',
         basis:'Physical ทั้งคลัง ไม่ใช่ยอดเฉพาะเดือนขาย'},
-      confirmed ? {id:'sold',label:'ขายแล้วเดือนนี้',month:sales.month,salesGroup:'confirmed',salesSource:sales.source,data:{quantity:confirmed.totals},valueHTML:currentSalesMoneyHTML(confirmed),
+      confirmed ? {id:'sold',label:'ขายแล้วเดือนนี้',month:sales.month,salesGroup:'confirmed',salesSource:sales.source,data:{quantity:confirmed.totals},valueHTML:currentSalesEquivalentHTML(sales.equivalentByGroup?.confirmed)+currentSalesMoneyHTML(confirmed),
         breakdown:line('ขายแล้ว / ออเดอร์ยืนยัน · '+sales.monthLabel,n(confirmed.orderCount)+' รายการต้นทาง · '+n(confirmed.lineCount)+' บรรทัดสินค้า')+
           line('โหลดแล้ว',qtyText(confirmed.loaded.totals))+line('รอโหลด / ยังไม่โหลด',qtyText(confirmed.waiting.totals))+
           line('ข้อมูลหน้า 09',esc(new Date(sales.source.capturedAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))),

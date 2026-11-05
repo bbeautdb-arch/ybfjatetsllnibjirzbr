@@ -1,9 +1,9 @@
 /* Read-only selected-month sales grouping. Runtime source only; no acquisition or writes. */
 (function(root,factory){
   'use strict';
-  const api=factory();
+  const api=factory(typeof module==='object'&&module.exports?()=>require('./stock_sales_thickness_view.js'):()=>root.AAFSalesThicknessView);
   if(typeof module==='object'&&module.exports)module.exports=api;else root.AAFSalesGroupsView=api;
-})(typeof window==='undefined'?null:window,function(){
+})(typeof window==='undefined'?null:window,function(getThicknessView){
   'use strict';
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const finite=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0;
@@ -33,6 +33,13 @@
   }
   const quantities=(bucket,showStrip=false)=>['sheet',...(showStrip?['strip']:[])].map(unit=>`<span class="sg-quantity" data-sales-unit="${unit}">${finite(bucket?.totals?.[unit])?`${fmt(bucket.totals[unit])} <small>${label(unit)}</small>`:`<span class="sg-unknown">ยังไม่ยืนยัน <small>${label(unit)}</small></span>`}</span>`).join('');
   const counts=bucket=>`${count(bucket?.orderCount)} รายการต้นทาง · ${count(bucket?.lineCount)} บรรทัดสินค้า`;
+  const eqFormat=value=>finite(value)?value.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'ยังไม่ยืนยัน';
+  function equivalentSummary(group){
+    const total=group?.totals?.eq25;
+    if(!total)return '<span class="sg-equivalent sg-unknown">เทียบ 4×8 หนา 2.5 มม. · รอตรวจขนาด</span>';
+    const value=total.complete?total.total:total.knownTotal;
+    return `<div class="sg-equivalent" data-sales-equivalent="${esc(group.id)}"><span>เทียบ 4×8 หนา 2.5 มม.</span><strong>${total.complete?'':'ส่วนที่ทราบ '}${eqFormat(value)} <small>แผ่นเทียบ</small></strong><span class="sg-equivalent-parts">จากแผ่น ${eqFormat(total.complete?total.sheet:total.knownSheet)} · จากไม้แถบ ${eqFormat(total.complete?total.strip:total.knownStrip)}</span>${!total.complete?`<span class="sg-money-coverage">ขนาดยังไม่ครบ ${count(total.missingLineCount)} รายการ</span>`:''}${group.id==='confirmed'?`<span class="sg-equivalent-parts">โหลดแล้ว ${eqFormat(group.loaded?.eq25?.total)} · รอโหลด ${eqFormat(group.waiting?.eq25?.total)} แผ่นเทียบ</span>`:''}</div>`;
+  }
   const issuesFor=(model,groupId,row)=>{
     const issues=Array.isArray(model?.issues)?model.issues:[];
     return issues.filter(issue=>{
@@ -107,11 +114,12 @@
       const sub=id==='confirmed'?`<div class="sg-subsets-preview"><span>โหลดแล้ว <b>${quantities(bucket?.loaded,showStrip)}</b></span><span>รอโหลด <b>${quantities(bucket?.waiting,showStrip)}</b></span></div>`:'';
       const description=id==='confirmed'?'รวม PI ที่ยืนยันแล้ว · ไม่ขึ้นกับว่ารับเงินครบหรือยัง':id==='negotiation'?'ตามกลุ่มเจรจา · ไม่ใช่จำนวนที่จองคลัง':'โอกาสขายที่ยังเป็น Forecast · ไม่หักสต๊อกด้วยการจัดกลุ่มนี้';
       const content=id==='confirmed'?['loaded','waiting'].map(kind=>`<details class="sg-subset" data-sales-subset="${kind}"><summary><span>${kind==='loaded'?'โหลดแล้ว':'รอโหลด / ยังไม่โหลด'}</span><strong>${quantities(bucket?.[kind],showStrip)}</strong><small>${esc(counts(bucket?.[kind]))}</small></summary>${rowTable(bucket?.[kind],model,kind==='loaded'?'โหลดแล้ว':'รอโหลด')}</details>`).join(''):rowTable(bucket,model,title);
-      return `<details class="sg-card sg-${id}" data-sales-group="${id}"><summary><span class="sg-card-title"><span class="sg-number">${number}</span>${title}</span><strong class="sg-card-total">${quantities(bucket,showStrip)}</strong><span class="sg-counts">${esc(counts(bucket))}</span>${sub}${moneySummary(bucket?.money,id)}<span class="sg-card-description">${description}</span><span class="sg-open-hint">กดดูรายการ / รายละเอียดเงิน ▾</span></summary><div class="sg-card-details">${warningMarkup(issuesFor(model,id))}${moneyDetails(bucket?.money,id)}${content}</div></details>`;
+      return `<details class="sg-card sg-${id}" data-sales-group="${id}"><summary><span class="sg-card-title"><span class="sg-number">${number}</span>${title}</span><strong class="sg-card-total">${quantities(bucket,showStrip)}</strong><span class="sg-counts">${esc(counts(bucket))}</span>${equivalentSummary(options.thicknessModel?.byGroup?.[id])}${sub}${moneySummary(bucket?.money,id)}<span class="sg-card-description">${description}</span><span class="sg-open-hint">กดดูรายการ / รายละเอียดเงิน ▾</span></summary><div class="sg-card-details">${warningMarkup(issuesFor(model,id))}${moneyDetails(bucket?.money,id)}${content}</div></details>`;
     }).join('');
     const outside=[['unclassified','ยังจัดกลุ่มไม่ได้ · ไม่รวมในยอด 3 กลุ่ม'],['cancelled','ยกเลิกตามต้นทาง · ไม่รวมในยอด 3 กลุ่ม']].filter(([key])=>(model?.[key]?.rows||[]).length).map(([key,title])=>`<details class="sg-exceptions" data-sales-exception="${key}"><summary>${title}<span>${esc(counts(model[key]))}</span></summary>${rowTable(model[key],model,title)}</details>`).join('');
     const blocking=issues.filter(issue=>issue.severity!=='warning');
-    return `<div class="month-dashboard-heading"><h2>ยอดขาย · ${esc(month)}</h2><span>ทุกความหนา · ไม่ตามตัวกรองรายการด้านล่าง</span></div>${sourceLabel(model,options)}${!hasModel?'<p class="sg-warning" role="status">ยังโหลดตัวสรุป 3 กลุ่มไม่ครบ · ไม่ใช้ยอดเก่าหรือศูนย์แทน โปรดโหลดหน้าใหม่</p>':''}${model?.status==='pending'?'<p class="sg-warning" role="status">ยังมีข้อมูลที่ต้องตรวจ · ส่วนที่ยังไม่ยืนยันไม่ใช่ศูนย์ และไม่รวมรายการจัดกลุ่มไม่ได้ในยอด 3 กลุ่ม</p>':''}${warningMarkup(blocking)}${options.warning?`<p class="sg-warning">${esc(options.warning)}</p>`:''}<div class="sg-grid">${cards}</div>${outside}<p class="sg-footnote">${Number.isSafeInteger(model?.sourceLineCount)?`เก็บรายการต้นทาง ${count(model.sourceLineCount)} บรรทัด · `:''}สามกลุ่มนี้ใช้สถานะการขาย ไม่ใช่ลำดับจองคลัง · กลุ่ม 1 = โหลดแล้ว + รอโหลด · เงินรับใช้หลักฐานแต่ละงวดแยกจากสถานะการขาย</p><p class="sg-footnote">รายละเอียดเรียง ETD ที่ตรวจรูปแบบได้ก่อน–หลัง แล้ววันที่ไม่ทราบ/ต้องตรวจไว้ท้าย · คงวันที่ต้นทาง ไม่ใช้ ETD ตัดสินว่าโหลดแล้วหรือรับเงินแล้ว</p>`;
+    const thicknessHTML=options.thicknessModel&&typeof getThicknessView()?.render==='function'?getThicknessView().render(options.thicknessModel):'';
+    return `<div class="month-dashboard-heading"><h2>ยอดขาย · ${esc(month)}</h2><span>ทุกความหนา · ไม่ตามตัวกรองรายการด้านล่าง</span></div>${sourceLabel(model,options)}${!hasModel?'<p class="sg-warning" role="status">ยังโหลดตัวสรุป 3 กลุ่มไม่ครบ · ไม่ใช้ยอดเก่าหรือศูนย์แทน โปรดโหลดหน้าใหม่</p>':''}${model?.status==='pending'?'<p class="sg-warning" role="status">ยังมีข้อมูลที่ต้องตรวจ · ส่วนที่ยังไม่ยืนยันไม่ใช่ศูนย์ และไม่รวมรายการจัดกลุ่มไม่ได้ในยอด 3 กลุ่ม</p>':''}${warningMarkup(blocking)}${options.warning?`<p class="sg-warning">${esc(options.warning)}</p>`:''}<div class="sg-grid">${cards}</div>${thicknessHTML}${outside}<p class="sg-footnote">${Number.isSafeInteger(model?.sourceLineCount)?`เก็บรายการต้นทาง ${count(model.sourceLineCount)} บรรทัด · `:''}สามกลุ่มนี้ใช้สถานะการขาย ไม่ใช่ลำดับจองคลัง · กลุ่ม 1 = โหลดแล้ว + รอโหลด · เงินรับใช้หลักฐานแต่ละงวดแยกจากสถานะการขาย</p><p class="sg-footnote">รายละเอียดเรียง ETD ที่ตรวจรูปแบบได้ก่อน–หลัง แล้ววันที่ไม่ทราบ/ต้องตรวจไว้ท้าย · คงวันที่ต้นทาง ไม่ใช้ ETD ตัดสินว่าโหลดแล้วหรือรับเงินแล้ว</p>`;
   }
   return Object.freeze({render,parseETD,sortedRows});
 });
