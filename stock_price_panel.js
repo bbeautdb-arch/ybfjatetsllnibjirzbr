@@ -77,7 +77,9 @@
     if(!host)return null;
     if(instances.has(host)){const instance=instances.get(host);instance.updateContext(options.context);return instance;}
     const service=options.service,doc=host.ownerDocument;
-    let context=options.context||null,state={loaded:false,rows:[],canEdit:false},mode='all',modeChosen=false,working=false,message='',preview=null;
+    // This is the normal catalog editor: retained zero rows and already-priced
+    // specs must stay visible. Missing-only views are an explicit user choice.
+    let context=options.context||null,state={loaded:false,rows:[],canEdit:false},mode='all',working=false,message='',preview=null;
     const drafts=new Map();
     host.innerHTML=`<style>${css}</style><details class="ss-price-panel" data-stock-price-panel><summary>ตรวจ / แก้ราคาสต๊อก <small data-spp-coverage></small></summary><div class="spp-body"><p class="spp-help">ใช้ราคาสต๊อกที่บันทึกตามสเปก ไม่ใช่ราคาขายจริง · กรอกราคาได้ตามสิทธิ์เดิม · USD ใช้เรท ธปท. ที่ระบบอ่านยืนยัน</p><div data-spp-content></div><div class="spp-status" role="status" aria-live="polite" data-spp-status></div><div data-spp-review></div></div></details>`;
     const details=host.querySelector('[data-stock-price-panel]'),content=host.querySelector('[data-spp-content]'),status=host.querySelector('[data-spp-status]'),review=host.querySelector('[data-spp-review]');
@@ -112,13 +114,13 @@
       updateCoverage();
       if(!state.loaded){content.innerHTML='<button type="button" data-spp-load>อ่านราคาล่าสุด</button>';actions();return;}
       const c=coverage(state.rows),rows=visibleRows(state.rows,mode);
-      content.innerHTML=`<div class="spp-toolbar"><label>แสดง <select data-spp-mode><option value="missing" ${mode==='missing'?'selected':''}>ขาดราคาและมียอด (${num(c.active)})</option><option value="unpriced" ${mode==='unpriced'?'selected':''}>ยังไม่มีราคาทั้งหมด (${num(c.all)})</option><option value="all" ${mode==='all'?'selected':''}>ทุกสเปก (${num(state.rows.length)})</option></select></label><button type="button" data-spp-load>อ่านราคาล่าสุด</button><button type="button" data-spp-stage>ตรวจราคาก่อนบันทึก</button><button type="button" data-spp-discard hidden>ยกเลิกร่างราคา</button></div>${rows.length?`<div class="spp-table-wrap"><table><thead><tr><th>หนา / เกรด / ขนาด</th><th>สต๊อก</th><th>Free</th><th>ราคาสต๊อก / หน่วย</th><th>สกุลเงิน</th><th>สถานะราคา</th></tr></thead><tbody>${rows.map(row=>rowMarkup(row,drafts.get(row.key),!enabled())).join('')}</tbody></table></div>`:'<p class="spp-empty">ไม่มีรายการในกลุ่มนี้ · เลือกทุกสเปกเพื่อแก้ราคาที่บันทึกไว้</p>'}`;
+      content.innerHTML=`<div class="spp-toolbar"><label>แสดง <select data-spp-mode><option value="all" ${mode==='all'?'selected':''}>ทุกสเปก (${num(state.rows.length)})</option><option value="missing" ${mode==='missing'?'selected':''}>ขาดราคาและมียอด (${num(c.active)})</option><option value="unpriced" ${mode==='unpriced'?'selected':''}>ยังไม่มีราคาทั้งหมด (${num(c.all)})</option></select></label><button type="button" data-spp-load>อ่านราคาล่าสุด</button><button type="button" data-spp-stage>ตรวจราคาก่อนบันทึก</button><button type="button" data-spp-discard hidden>ยกเลิกร่างราคา</button></div>${rows.length?`<div class="spp-table-wrap"><table><thead><tr><th>หนา / เกรด / ขนาด</th><th>สต๊อก</th><th>Free</th><th>ราคาสต๊อก / หน่วย</th><th>สกุลเงิน</th><th>สถานะราคา</th></tr></thead><tbody>${rows.map(row=>rowMarkup(row,drafts.get(row.key),!enabled())).join('')}</tbody></table></div>`:'<p class="spp-empty">ไม่มีรายการในกลุ่มนี้ · เลือกทุกสเปกเพื่อแก้ราคาที่บันทึกไว้</p>'}`;
       review.innerHTML=preview?reviewMarkup(state.rows,preview):'';actions();
     }
     async function load(){
       if(working)return;
       working=true;message='';preview=null;actions();
-      try{if(!service?.load)throw new Error('ระบบแก้ราคายังไม่พร้อม กรุณาโหลดหน้าเว็บใหม่');await service.load();live();if(!modeChosen)mode=coverage(state.rows||[]).active?'missing':'all';if(drafts.size)message='อ่านราคาล่าสุดแล้ว · ร่างราคายังอยู่ กรุณาตรวจเทียบราคาเดิมและราคาใหม่ก่อนยืนยัน';}
+      try{if(!service?.load)throw new Error('ระบบแก้ราคายังไม่พร้อม กรุณาโหลดหน้าเว็บใหม่');await service.load();live();if(drafts.size)message='อ่านราคาล่าสุดแล้ว · ร่างราคายังอยู่ กรุณาตรวจเทียบราคาเดิมและราคาใหม่ก่อนยืนยัน';}
       catch(error){live();message=error?.message||'อ่านราคาไม่สำเร็จ กรุณาตรวจการเชื่อมต่อ';}
       finally{working=false;render();}
     }
@@ -132,7 +134,7 @@
     });
     host.addEventListener('change',event=>{
       const input=event.target;
-      if(input.matches?.('[data-spp-mode]')){mode=input.value;modeChosen=true;render();return;}
+      if(input.matches?.('[data-spp-mode]')){mode=input.value;render();return;}
       if(!input.matches?.('[data-spp-currency]')||!enabled()||preview)return;
       const tr=input.closest('[data-price-panel-key]');drafts.set(tr.dataset.pricePanelKey,{value:tr.querySelector('[data-spp-price]').value,currency:input.value});message='';actions();
     });

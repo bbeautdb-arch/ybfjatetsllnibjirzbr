@@ -243,6 +243,12 @@ main{background:var(--bg);color:var(--text)}
 .sg-receipt-events{list-style:none;margin:0;padding:0}.sg-receipt-events li{display:grid;gap:3px;padding:0 0 8px}.sg-receipt-events li+li{padding-top:8px;border-top:1px dashed var(--line)}
 .sg-receipt-events span{font-size:11px}.sg-card>summary:focus-visible,.sg-money-details>summary:focus-visible,.sg-subset>summary:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}
 @media(max-width:750px){.sg-money-row{grid-template-columns:1fr;gap:1px}.sg-money-row>strong{text-align:left;font-size:13px}}
+/* Embedded Section02 inherits its single outer card from stock_premium.css.
+   Standalone review, the three inner cards and pending/error states are intact. */
+@media screen {
+  .compact-chrome main { padding: 0 0 20px; }
+  .compact-chrome #month-dashboard { padding: 8px 0 20px; margin: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 @media(max-width:600px){.sg-money-row{grid-template-columns:minmax(80px,1fr) minmax(0,1.5fr);gap:8px}.sg-money-row>strong{text-align:right}.sg-money-detail-content{padding:9px}.sg-money-table{min-width:700px}}
 @media print{.sg-money-alert{border:1px solid currentColor}.sg-money-table{min-width:0}.sg-money-detail-content .sg-table-scroll{max-height:none;overflow:visible}}
 @media(forced-colors:active){.sg-money-alert,.sg-money-details{background:Canvas;color:CanvasText;border-color:CanvasText}.sg-money-coverage{color:CanvasText}.sg-card>summary:focus-visible,.sg-money-details>summary:focus-visible{outline-color:Highlight}}

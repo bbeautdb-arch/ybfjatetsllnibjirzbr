@@ -289,6 +289,33 @@
     const rows=m.rows.filter(r=>r.reservedProductionQty>0).map(r=>({key:r.key,w:Number(r.w),l:Number(r.l),t:Number(r.t),grade:r.grade,unit:r.unit,demand:r.committedQty,allocated:r.reservedInStockQty,shortage:r.reservedProductionQty})).sort((a,b)=>a.t-b.t||rank(a.grade)-rank(b.grade)||a.grade.localeCompare(b.grade)||a.w-b.w||a.l-b.l||a.unit.localeCompare(b.unit)||a.key.localeCompare(b.key));
     return {status:'saved-plan',byUnit,rows,thickness,fractional:rows.some(r=>!Number.isInteger(r.shortage))};
   }
+  function productionOrderDetails(group){
+    const pending=()=>({status:'pending',rows:[]});
+    if(!Array.isArray(group.orders))return pending();
+    const close=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<1e-6;
+    const parse=raw=>{
+      const text=raw.trim();if(!text||/^[-–—]+$/.test(text))return {status:'missing',date:null};
+      const m=text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);if(!m)return {status:'invalid',date:null};
+      let year=Number(m[3]);if(m[3].length===2)year=year<50?2000+year:2500+year-543;else if(year>=2400)year-=543;
+      const day=Number(m[1]),month=Number(m[2]),date=new Date(Date.UTC(year,month-1,day));
+      if(year<1900||year>2199||date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day)return {status:'invalid',date:null};
+      return {status:'dated',date:date.toISOString().slice(0,10)};
+    };
+    const specs=new Map(group.specs.map(s=>[s.key,s])),sums=new Map(),dateSums=new Map(),seen=new Set(),rows=[];
+    for(const order of group.orders){
+      if(!order||!Number.isSafeInteger(order.sourceRow)||order.sourceRow<0||!Number.isSafeInteger(order.itemIndex)||order.itemIndex<0||!specs.has(order.specKey)||!Number.isFinite(order.shortage)||order.shortage<=0||!/^\d{4}-(0[1-9]|1[0-2])$/.test(order.sourceMonth)||!['customer','document','sourceStatus','goodsStatus','etdRaw'].every(k=>typeof order[k]==='string'&&order[k].length<=4000))return pending();
+      const id=order.sourceRow+':'+order.itemIndex+':'+order.specKey,parsed=parse(order.etdRaw);
+      if(seen.has(id)||parsed.status!==order.dateStatus||parsed.date!==order.date)return pending();seen.add(id);
+      const sum=sums.get(order.specKey)||{shortage:0,dated:0,missing:0,invalid:0};sum.shortage+=order.shortage;sum[parsed.status]+=order.shortage;sums.set(order.specKey,sum);
+      if(order.date)dateSums.set(order.date,(dateSums.get(order.date)||0)+order.shortage);
+      const spec=specs.get(order.specKey);rows.push({...order,t:spec.t,grade:spec.grade,w:spec.w,l:spec.l,unit:spec.unit});
+    }
+    if(sums.size!==specs.size||group.dates.length!==dateSums.size)return pending();
+    for(const [key,spec]of specs){const sum=sums.get(key);if(!sum||!close(sum.shortage,spec.shortage)||!close(sum.dated,spec.datedQuantity)||!close(sum.missing,spec.missingQuantity)||!close(sum.invalid,spec.invalidQuantity))return pending();}
+    for(const date of group.dates)if(!close(date.quantity,dateSums.get(date.date)))return pending();
+    rows.sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999')||a.sourceRow-b.sourceRow||a.itemIndex-b.itemIndex||a.specKey.localeCompare(b.specKey));
+    return {status:'verified',rows};
+  }
   function productionDeadlines(m,view=allProduction(m),raw=m?.productionLoading){
     const pending=reason=>({status:'pending',reason,byThickness:{}}),fail=()=>pending('รอยืนยันแผนโหลดหน้า 09 ที่ตรงกับแผนจองชุดนี้');
     const allocation=window.AAFOrderHeader?.currentAllocationView?.(m?.currentAllocation,currentWarehouse(m),m?.currentMonthSold);
@@ -296,7 +323,7 @@
     const validDate=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
     if(view.status!=='saved-plan'||allocation?.status!=='verified-allocation'||raw?.version!==1||raw.status!=='verified'||raw.dateBasis!=='ETD LOAD'||raw.source?.page!==9||raw.source.sourceIsLive!==false||raw.source.checksum!==allocation.source?.checksum||raw.source.capturedAt!==allocation.source?.capturedAt||!Array.isArray(raw.byThickness)||JSON.stringify(raw.excludedGrades)!=='["B","F"]')return fail();
     for(const k of ['revision','reportDate','planChecksum','planCapturedAt'])if(raw.stock?.[k]!==allocation.stock?.[k])return fail();
-    const included=view.rows.filter(r=>!['B','F'].includes(r.grade.trim().toUpperCase())),expected=new Map(),seen=new Set(),byThickness={},sums={sheet:0,strip:0};
+    const included=view.rows.filter(r=>!['B','F'].includes(r.grade.trim().toUpperCase())),expected=new Map(),seen=new Set(),byThickness={},dateGroups=[],sums={sheet:0,strip:0};
     for(const r of included){const edges=[r.w,r.l].sort((a,b)=>a-b),key=[r.t,r.grade,...edges,r.unit].join('|'),prior=expected.get(key);if(prior)prior.shortage+=r.shortage;else expected.set(key,{...r,key,w:edges[0],l:edges[1]});}
     for(const u of ['sheet','strip']){
       const includeTotal=included.filter(r=>r.unit===u).reduce((n,r)=>n+r.shortage,0);
@@ -313,11 +340,13 @@
       const first=[...dateKeys].sort()[0]||null;
       if(!close(dateQty,dated)||group.earliestDate!==first||group.finishBeforeDate!==first)return fail();
       sums[group.unit]+=qty;
+      const detail={status:first?'dated':'pending',date:first,finishBeforeDate:first,datedQuantity:dated,missingQuantity:missing,invalidQuantity:invalid,dates:group.dates.map(d=>({date:d.date,quantity:d.quantity})),unit:group.unit,customerDetails:productionOrderDetails(group)};
+      dateGroups.push(detail);
       // Sheet deadlines cannot be borrowed by strip quantities at the same thickness.
-      if(group.unit==='sheet')byThickness[String(group.thickness)]={status:first?'dated':'pending',date:first,finishBeforeDate:first,datedQuantity:dated,missingQuantity:missing,invalidQuantity:invalid,dates:group.dates.map(d=>({date:d.date,quantity:d.quantity})),unit:group.unit};
+      if(group.unit==='sheet')byThickness[String(group.thickness)]=detail;
     }
     if(seen.size!==expected.size||['sheet','strip'].some(u=>!close(sums[u],raw.totals[u])))return fail();
-    return {status:'verified',source:{...raw.source},byThickness};
+    return {status:'verified',source:{...raw.source},byThickness,dateGroups};
   }
   const bangkokDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const productionDate=v=>new Date(v+'T00:00:00+07:00').toLocaleDateString('th-TH',{timeZone:'Asia/Bangkok',day:'numeric',month:'short',year:'2-digit'});
@@ -330,7 +359,18 @@
     if(!deadline)return '';
     const rows=deadline.dates.map(d=>`<li><span>${esc(productionDate(d.date))}${d.date<bangkokDay()?' · เลยกำหนด':''}</span><b>${number(d.quantity)} แผ่น</b></li>`).join('');
     const pending=[deadline.missingQuantity?`ไม่ระบุวัน ${number(deadline.missingQuantity)} แผ่น`:'',deadline.invalidQuantity?`รูปแบบวันไม่ถูกต้อง ${number(deadline.invalidQuantity)} แผ่น`:''].filter(Boolean).join(' · ');
-    return `<details class="ss-production-dates"><summary>วันโหลดที่พบ · ETD LOAD</summary>${rows?`<ul>${rows}</ul>`:'<p>ยังไม่พบวันที่ยืนยันได้</p>'}${pending?`<p>${pending}</p>`:''}<small>จำนวนเป็นส่วนที่ขาดของแผนนี้ ไม่ใช่ยอดโหลดทั้งหมด</small></details>`;
+    const orders=deadline.customerDetails;
+    return `<details class="ss-production-dates"><summary>วันโหลดที่พบ · ETD LOAD</summary>${rows?`<ul>${rows}</ul>`:'<p>ยังไม่พบวันที่ยืนยันได้</p>'}${pending?`<p>${pending}</p>`:''}<small>จำนวนเป็นส่วนที่ขาดของแผนนี้ ไม่ใช่ยอดโหลดทั้งหมด</small>${orders?.status==='verified'?productionOrderTableHTML(orders.rows):'<p>รายละเอียดลูกค้า / เอกสารยังรอชุดยืนยัน · ไม่เดาจากความหนา</p>'}</details>`;
+  }
+  function productionOrderTableHTML(rows){
+    return `<div class="ss-production-orders-scroll" role="region" tabindex="0" aria-label="ลูกค้าและวันโหลดต้นทางของรายการที่ขาด"><table class="ss-production-orders"><thead><tr><th scope="col">ลูกค้า / เอกสาร</th><th scope="col">สินค้าที่ขาด</th><th scope="col">ETD LOAD ต้นทาง</th><th scope="col">เดือน / สถานะต้นทาง</th><th scope="col">จำนวนที่ขาด</th></tr></thead><tbody>${rows.map(r=>`<tr data-production-order="${esc(r.sourceRow+':'+r.itemIndex+':'+r.specKey)}"><th scope="row">${esc(r.customer||'ยังไม่ระบุลูกค้า')}<small>${esc(r.document||'ยังไม่ระบุเอกสาร')}</small></th><td>${number(r.t)} มม. · ${esc(r.grade)}<small>${number(r.w)} × ${number(r.l)} มม.</small></td><td>${esc(r.etdRaw.trim()?r.etdRaw:'ไม่ระบุ')}<small>${r.dateStatus==='dated'?(r.date<bangkokDay()?'เลยวันโหลดตามต้นทาง · ตรวจยืนยันกับฝ่ายขาย':'วันตามแผนต้นทาง'):r.dateStatus==='missing'?'ยังไม่ระบุวันโหลด':'รูปแบบวันต้นทางต้องตรวจ · ไม่แก้ปีให้เอง'}</small></td><td>${esc(r.sourceMonth)}<small>${esc(r.sourceStatus||'ยังไม่ระบุสถานะ')} · ${esc(({ready:'พร้อมโหลด',waiting:'รอผลิต',loaded:'โหลดแล้ว'})[r.goodsStatus]||r.goodsStatus||'ยังไม่ระบุสถานะสินค้า')}</small></td><td class="ss-num">${number(r.shortage)}<small>${r.unit==='sheet'?'แผ่น':'ชิ้นไม้แถบ'}</small></td></tr>`).join('')}</tbody></table></div>`;
+  }
+  function productionDateWarningsHTML(dates){
+    if(dates.status!=='verified')return '';
+    const groups=dates.dateGroups||Object.values(dates.byThickness),rows=groups.flatMap(g=>g.customerDetails?.status==='verified'?g.customerDetails.rows.filter(r=>r.dateStatus!=='dated'||r.date<bangkokDay()):[]);
+    const pending=groups.some(g=>g.customerDetails?.status!=='verified'&&(g.date&&g.date<bangkokDay()||g.missingQuantity+g.invalidQuantity>0));
+    if(!rows.length&&!pending)return '';
+    return `<section class="ss-production-date-check" aria-label="รายการวันโหลดที่ควรตรวจยืนยันกับฝ่ายขาย"><h4>ตรวจวันโหลดกับฝ่ายขาย${rows.length?' · '+rows.length+' บรรทัดที่ขาด':''}</h4><p>วันที่เลยกำหนดอาจเป็นงานค้างหรือแผนที่ยังไม่ได้ปรับ ไม่ได้ยืนยันว่าลงวันผิด · คง ETD ต้นทางและวันแรกที่ต้องเสร็จไว้ ไม่เปลี่ยนสถานะโหลด</p>${rows.length?productionOrderTableHTML(rows):''}${pending?'<p role="status">บางความหนายังรอรายละเอียดลูกค้า / เอกสารที่ผูกกับแผนนี้ · ยังคงแสดงวันเก่าและยอดไม่ระบุวัน ไม่ใช้ชื่อจากรายการอื่นแทน</p>':''}</section>`;
   }
   function productionResultsHTML(m,settings=productionSettings,raw=m?.productionLoading){
     const original=allProduction(m),dates=productionDeadlines(m,original,raw),planner=window.AAFProductionPlanner;
@@ -342,7 +382,7 @@
     const chips=view.thickness.map(t=>`<div class="ss-all-production-thickness"><b>${number(t.t)} มม.</b><span>${productionQuantity(t.byUnit)}</span>${productionDateHTML(t.deadline)}${productionDatesDetailHTML(t.deadline)}</div>`).join('');
     const table=view.rows.length?`<div class="ss-all-production-scroll" role="region" tabindex="0" aria-label="รายการวางแผนผลิตและประมาณการค่าไม้เชื้อเพลิง เลื่อนแนวนอนได้"><table class="ss-production-cost-table"><caption>รายละเอียดวางแผนผลิต · ${view.rows.length} สเปก · ไม่รวมเกรด B / F</caption><thead><tr><th scope="col">หนา / เกรด / ขนาด</th><th scope="col" class="ss-num">ต้องผลิตเพิ่ม</th><th scope="col">ต้องเสร็จ / วันโหลดแรก</th><th scope="col" class="ss-num">เทียบ 4×8<br>หนา 2.5</th><th scope="col" class="ss-num">ไม้ยูคา<br>ตัน</th><th scope="col" class="ss-num">เงินค่าไม้<br>บาท</th><th scope="col" class="ss-num">วันผลิต</th><th scope="col" class="ss-num">เชื้อเพลิง<br>ตัน</th><th scope="col" class="ss-num">เงินเชื้อเพลิง<br>บาท</th></tr></thead><tbody>${view.rows.map(r=>`<tr data-all-production-row="${esc(r.key)}"><th scope="row"><b>${number(r.t,3)} มม. · ${esc(r.grade)}</b><small>${number(r.w,3)} × ${number(r.l,3)} มม.</small></th><td class="ss-num ss-all-production-need">${number(r.shortage)}<small>${units(r.unit)}</small></td><td class="ss-production-date">${r.unit==='sheet'?productionDateHTML(r.deadline):'<span class="ss-production-date-pending">รอฐานไม้แถบ</span>'}</td><td class="ss-num">${metric(r,'eq2_5')}</td><td class="ss-num">${metric(r,'woodTonnes',3)}</td><td class="ss-num">${metric(r,'woodCost')}</td><td class="ss-num">${metric(r,'productionDays',3)}</td><td class="ss-num">${metric(r,'fuelTonnes',3)}</td><td class="ss-num">${metric(r,'fuelCost')}</td></tr>`).join('')}</tbody><tfoot><tr data-all-production-unit="sheet"><th scope="row">รวมประมาณการ · แผ่น</th><td class="ss-num">${number(view.byUnit.sheet)}</td><td></td><td class="ss-num">${number(total.eq2_5)}</td><td class="ss-num">${number(total.woodTonnes,3)}</td><td class="ss-num">${number(total.woodCost)}</td><td class="ss-num">${number(total.productionDays,3)}</td><td class="ss-num">${number(total.fuelTonnes,3)}</td><td class="ss-num">${number(total.fuelCost)}</td></tr>${view.byUnit.strip?`<tr data-all-production-unit="strip"><th scope="row">ไม้แถบแยกต่างหาก</th><td class="ss-num">${number(view.byUnit.strip)} ชิ้น</td><td colspan="7">ยังไม่รวมไม้แถบในประมาณการเงิน · รอฐานแปลงที่ยืนยัน</td></tr>`:''}</tfoot></table></div>`:'<p class="ss-all-production-empty">ไม่มีรายการต้องผลิตเพิ่มหลังแยกเกรด B / F ออกจากกล่องนี้</p>';
     const cash=`<div class="ss-production-cash"><div><span>เงินค่าไม้ยูคา</span><strong data-production-total="woodCost">฿ ${number(total.woodCost)}</strong><small>${number(total.woodTonnes,3)} ตัน × ${number(view.settings.woodPricePerTonne)} บาท</small></div><div><span>เงินค่าเชื้อเพลิง</span><strong data-production-total="fuelCost">฿ ${number(total.fuelCost)}</strong><small>${number(total.productionDays,3)} วัน × ${number(view.settings.fuelTonnesPerDay)} ตัน/วัน × ${number(view.settings.fuelPricePerTonne)} บาท</small></div><div class="ss-production-cash-total"><span>${view.pendingStripCount?'รวมส่วนแผ่นที่คำนวณได้':'เงินที่ต้องใช้รวม'}</span><strong data-production-total="totalCost">฿ ${number(total.totalCost)}</strong><small>ค่าไม้ยูคา + ค่าเชื้อเพลิง${view.pendingStripCount?' · ยังไม่ใช่ยอดครบทั้งกล่อง':''}</small></div></div>`;
-    return `<p class="ss-production-exclusion">${excluded}</p>${stats}<p class="ss-all-production-warning" data-all-production-warning role="status">${esc(thicknessProductionWarning(m))}</p><p class="ss-production-date-source">${dates.status==='verified'?'แผนโหลดหน้า 09 อ่านเมื่อ '+esc(when(dates.source.capturedAt))+' · ใช้วัน ETD LOAD แรกของความหนาที่ขาด · ไม่ใช่ฟีดสด':esc(dates.reason)}</p>${chips?`<div class="ss-all-production-thicknesses" aria-label="ยอดต้องผลิตแยกความหนาและวันโหลด">${chips}</div>`:''}${table}${cash}<p class="ss-all-production-note">ประมาณการเฉพาะค่าไม้และเชื้อเพลิง ไม่ใช่ต้นทุนผลิตทั้งหมด · วันผลิตเป็นทศนิยมตามกำลังผลิต ไม่ปัดขึ้น และยังไม่ใช่ตารางเดินเครื่อง</p><details class="ss-production-formula"><summary>ดูสูตรคำนวณ</summary><p>แผ่นเทียบ = จำนวนที่ขาด × กว้าง × ยาว ÷ (1,220 × 2,440) × ความหนา ÷ 2.5<br>ไม้ยูคา (ตัน) = แผ่นเทียบ × 7.29 ÷ 1,000 × 2.45<br>วันผลิต = แผ่นเทียบ ÷ กำลังผลิตต่อวัน · เงินเชื้อเพลิง = วันผลิต × เชื้อเพลิงต่อวัน × ราคาเชื้อเพลิง</p></details>`;
+    return `<p class="ss-production-exclusion">${excluded}</p>${stats}<p class="ss-all-production-warning" data-all-production-warning role="status">${esc(thicknessProductionWarning(m))}</p><p class="ss-production-date-source">${dates.status==='verified'?'แผนโหลดหน้า 09 อ่านเมื่อ '+esc(when(dates.source.capturedAt))+' · ใช้วัน ETD LOAD แรกของความหนาที่ขาด · ไม่ใช่ฟีดสด':esc(dates.reason)}</p>${productionDateWarningsHTML(dates)}${chips?`<div class="ss-all-production-thicknesses" aria-label="ยอดต้องผลิตแยกความหนาและวันโหลด">${chips}</div>`:''}${table}${cash}<p class="ss-all-production-note">ประมาณการเฉพาะค่าไม้และเชื้อเพลิง ไม่ใช่ต้นทุนผลิตทั้งหมด · วันผลิตเป็นทศนิยมตามกำลังผลิต ไม่ปัดขึ้น และยังไม่ใช่ตารางเดินเครื่อง</p><details class="ss-production-formula"><summary>ดูสูตรคำนวณ</summary><p>แผ่นเทียบ = จำนวนที่ขาด × กว้าง × ยาว ÷ (1,220 × 2,440) × ความหนา ÷ 2.5<br>ไม้ยูคา (ตัน) = แผ่นเทียบ × 7.29 ÷ 1,000 × 2.45<br>วันผลิต = แผ่นเทียบ ÷ กำลังผลิตต่อวัน · เงินเชื้อเพลิง = วันผลิต × เชื้อเพลิงต่อวัน × ราคาเชื้อเพลิง</p></details>`;
   }
   function allProductionHTML(m,context={}){
     const settings=context.settings||productionSettings,raw=Object.hasOwn(context,'productionLoading')?context.productionLoading:m?.productionLoading;
@@ -906,6 +946,16 @@
     [data-aaf-stock-summary] .ss-production-date small,[data-aaf-stock-summary] .ss-production-cost-table th small,[data-aaf-stock-summary] .ss-production-cost-table td small{display:block;font-size:10px;font-weight:400;color:#7c816f;line-height:1.5;margin-top:3px}
     [data-aaf-stock-summary] .ss-production-overdue{color:#b04830}
     [data-aaf-stock-summary] .ss-production-date-pending{color:#9b6f27;font-size:11px}
+    [data-aaf-stock-summary] .ss-production-date-check{margin:12px 0 16px;padding:14px;border:1px solid #ddc6a4;border-radius:12px;background:#fff8ed;color:#654923}
+    [data-aaf-stock-summary] .ss-production-date-check h4{margin:0 0 6px;font-size:14px;color:#6d451b}
+    [data-aaf-stock-summary] .ss-production-date-check>p{margin:5px 0 10px;font-size:11px;line-height:1.7}
+    [data-aaf-stock-summary] .ss-production-orders-scroll{max-width:100%;overflow-x:auto;scrollbar-gutter:stable;border:1px solid #e3d6c1;border-radius:9px;background:#fffdf8}
+    [data-aaf-stock-summary] .ss-production-orders{width:100%;min-width:690px;border-collapse:collapse;font-size:11px}
+    [data-aaf-stock-summary] .ss-production-orders th,[data-aaf-stock-summary] .ss-production-orders td{padding:9px 10px;text-align:left;vertical-align:top;white-space:normal;border-bottom:1px solid #e9dfce;max-width:250px;overflow-wrap:anywhere}
+    [data-aaf-stock-summary] .ss-production-orders thead{background:#f4ead7;color:#654923}
+    [data-aaf-stock-summary] .ss-production-orders .ss-num{text-align:right;white-space:nowrap}
+    [data-aaf-stock-summary] .ss-production-orders small{display:block;font-size:10px;font-weight:400;margin-top:4px;color:#765f3b;line-height:1.5;white-space:pre-wrap}
+    [data-aaf-stock-summary] .ss-production-dates .ss-production-orders-scroll{max-width:460px;margin-top:8px}
     [data-aaf-stock-summary] .ss-all-production-thickness{display:grid;grid-template-columns:auto auto;align-items:baseline;gap:3px 10px;min-width:150px}
     [data-aaf-stock-summary] .ss-all-production-thickness>strong,[data-aaf-stock-summary] .ss-all-production-thickness>small{grid-column:1/-1;font-size:10px}
     [data-aaf-stock-summary] .ss-production-dates{grid-column:1/-1;margin-top:4px;font-size:10px;line-height:1.7}

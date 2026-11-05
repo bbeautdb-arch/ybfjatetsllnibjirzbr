@@ -153,14 +153,16 @@
     const legacy=[1,2].includes(catalog?.version)&&/^\d{4}-\d{2}-\d{2}\|[\d.]+\|(THB-)?per-sheet$/.test(catalog?.context||'');
     if(!catalog||!(legacy||catalog.version===3&&catalog.context==='aaf-sales-stock-preview|free-price-catalog')||!plain(catalog.prices)||catalog.currencies!==undefined&&!plain(catalog.currencies)||catalog.notesBySpec!==undefined&&!plain(catalog.notesBySpec)||catalog.notesByThickness!==undefined&&!plain(catalog.notesByThickness))throw readError('read-unavailable');
     const owns=key=>Object.hasOwn(catalog.prices,key)||Object.hasOwn(catalog.currencies||{},key);
-    const lookup=key=>{const price=catalog.prices[key],code=catalog.currencies?.[key];return {price:positive(price)?price:null,currency:code===undefined?'THB':['THB','USD'].includes(code)?code:null};};
+    // A saved numeric price is not evidence of its currency. Keep the same
+    // unknown-currency state as the price editor; never silently value it as THB.
+    const lookup=key=>{const price=catalog.prices[key],code=catalog.currencies?.[key],supported=['THB','USD'].includes(code);return {price:positive(price)&&(code===undefined||supported)?price:null,currency:supported?code:null};};
     const rows=stock.rows.map(row=>{
       const direct=[row.t,row.grade,row.w,row.l,row.unit].join('|'),reverse=[row.t,row.grade,row.l,row.w,row.unit].join('|');
       let price=null,currency=null,priceStatus='ยังไม่มีราคาที่บันทึก';
       const chosen=owns(direct)?direct:owns(reverse)?reverse:null;
       if(chosen){const value=lookup(chosen);price=value.price;currency=value.currency;
         if(direct!==reverse&&owns(direct)&&owns(reverse)&&!sameSavedValue(lookup(direct),lookup(reverse))){price=null;currency=null;priceStatus='ราคา/สกุลเงินขนาดกลับด้านขัดกัน · รอตรวจ';}
-        else if(price!==null&&currency===null){price=null;priceStatus='ยังยืนยันสกุลเงินไม่ได้';}
+        else if(price!==null&&currency===null){priceStatus='ยังยืนยันสกุลเงินไม่ได้';}
         else if(price!==null)priceStatus='ราคาที่บันทึกตามสเปก · ไม่ใช่ราคาขายรายออเดอร์';
       }
       return {...row,price,currency,priceStatus,specNote:typeof catalog.notesBySpec?.[exactKey(row)]==='string'?catalog.notesBySpec[exactKey(row)]:'',thicknessNote:typeof catalog.notesByThickness?.[String(row.t)]==='string'?catalog.notesByThickness[String(row.t)]:''};

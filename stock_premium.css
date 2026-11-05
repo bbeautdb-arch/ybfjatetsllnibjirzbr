@@ -228,4 +228,16 @@
     body[data-aaf-premium] #stock-summary :is(.ss-hero,.ss-overview-header,.ss-kpi[data-stock-card],.ss-readiness,.ss-section-title,.stock-order-toolbar,.ss-aging,.ss-footer,.ss-overview-footer,.ss-group) { background: Canvas; color: CanvasText; border-color: CanvasText; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
     body[data-aaf-premium] :is(button,a,select,input,textarea,summary):focus-visible { outline-color: Highlight; }
   }
+  /* Section02 is one surface: its heading, month controls and three-group
+     dashboard share this wrapper. Keep all inner groups and warnings visible. */
+  body[data-aaf-premium] #stock-summary .ss-sales-block { margin: 28px 0; padding: 20px; border: 1px solid #ffffffdf; border-radius: 24px; background: rgba(250,253,245,.96); box-shadow: 0 14px 42px #173e321c, inset 0 1px 0 #ffffff; }
+  body[data-aaf-premium] #stock-summary .ss-sales-block>.ss-section-title { margin: 0; padding: 0 0 16px; border: 0; border-bottom: 1px solid #cddccb; border-radius: 0; background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  body[data-aaf-premium] #stock-summary .ss-sales-block .stock-order-toolbar { padding: 4px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  @media (max-width: 650px) {
+    body[data-aaf-premium] #stock-summary .ss-sales-block { padding: 16px 12px; border-radius: 18px; }
+  }
+  @media (forced-colors: active) {
+    body[data-aaf-premium] #stock-summary .ss-sales-block { background: Canvas; color: CanvasText; border-color: CanvasText; box-shadow: none; }
+    body[data-aaf-premium] #stock-summary .ss-sales-block>.ss-section-title { border-bottom-color: CanvasText; }
+  }
 }
