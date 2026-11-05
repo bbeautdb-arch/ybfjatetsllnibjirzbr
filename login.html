@@ -207,7 +207,8 @@ async function doLogin() {
       });
       const result = await response.json();
       const returnedUsername = String(result.user?.username || '').trim().toLowerCase();
-      if (!response.ok || !result.ok || !result.user || !result.bridgeSessionToken ||
+      if (!response.ok || result.ok !== true || !result.user ||
+          typeof result.bridgeSessionToken !== 'string' || !result.bridgeSessionToken.trim() ||
           returnedUsername !== user || result.user.role !== (configured.serverRole || configured.role)) {
         found = null;
       } else {
@@ -240,6 +241,12 @@ async function doLogin() {
     stockSessionToken: authSource === 'stock' ? bridgeSessionToken : null,
     authSource: authSource,
   }));
+
+  // Only an explicit, verified named server login leaves a read-only stock
+  // link. Preserve that isolation on page load, failed auth or a failed write.
+  if (configured?.serverAuth && bridgeSessionToken) {
+    sessionStorage.removeItem('aaf_stock_sales_link_v1');
+  }
 
   const target = loginDestination(found.role);
   setTimeout(()=>{ window.location.href = target; }, 300);

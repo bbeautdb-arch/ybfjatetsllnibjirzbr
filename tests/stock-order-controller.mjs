@@ -95,6 +95,15 @@ async function mountOwner(h,f=authenticatedOwnerFixture(),extra={}){
   h.api.setAccess({...binding(),ok:f.stock.ok,actor:f.stock.actor,permissions:f.stock.permissions,annotationAccess:f.stock.annotationAccess,...extra});
   h.responses.push(report());await h.api.attach(new Node());return h.mounted[0].services;
 }
+test('contextual account entry delegates only an explicit clean read-only action to existing access exit without copying credentials or writing',async()=>{
+  const h=browser();let exits=0;h.win.AAFStockAccess.exit=()=>{exits++;return true;};
+  const services=await mountOwner(h,authenticatedOwnerFixture(),{notesReadOnly:true}),beforeCalls=h.calls.length,token=h.win.AAFStockAccess.token();
+  assert.equal(services.getAnnotationAccess().eligible,false);assert.equal(services.useNormalAccount(),true);assert.equal(exits,1);assert.equal(h.calls.length,beforeCalls);assert.equal(h.win.AAFStockAccess.token(),token);assert.equal(h.mounted[0].v.destroyed,false);
+  h.mounted[0].v.dirty=true;assert.throws(()=>services.useNormalAccount(),e=>e.code==='draft-pending');assert.equal(exits,1);assert.equal(h.mounted[0].v.dirty,true);
+  h.mounted[0].v.dirty=false;h.mounted[0].v.hasPendingAnnotationWork=()=>true;assert.throws(()=>services.useNormalAccount(),e=>e.code==='draft-pending');assert.equal(exits,1,'unconfirmed import or save stays in current page');
+  h.mounted[0].v.hasPendingAnnotationWork=()=>false;delete h.win.AAFStockAccess.exit;assert.throws(()=>services.useNormalAccount(),e=>e.code==='account-entry-unavailable');assert.equal(h.calls.length,beforeCalls);
+  const owner=browser();let ownerExits=0;owner.win.AAFStockAccess.exit=()=>{ownerExits++;};const ownerServices=await mountOwner(owner);assert.equal(ownerServices.useNormalAccount(),false);assert.equal(ownerExits,0);assert.equal(ownerServices.getAnnotationAccess().owner,true);
+});
 test('root controller accepts verified owner without staff code, revalidates dual CAS and commits annotations once with no unlock header',async()=>{
   const h=browser(),f=authenticatedOwnerFixture(),before=copy(f),services=await mountOwner(h,f);
   assert.equal(services.getAnnotationAccess().owner,true);assert.equal(services.getAnnotationAccess().unlocked,true);

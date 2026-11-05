@@ -251,6 +251,14 @@
           const existingView=!!view;
           if(view)view.update(review);else view=win.AAFOrderReviewUI.mount(body,review,{compactChrome:true,
             getAnnotationAccess:()=>access?.notesReadOnly?{eligible:false,unlocked:false,owner:false,message:'รายงานนี้อ่านอย่างเดียว'}:annotationUnlock.getAccess(),
+            useNormalAccount:()=>{
+              if(view?.hasDirty?.()||view?.hasPendingAnnotationWork?.()||notes.isBusy()||notes.isUncertain())fail('draft-pending','ยังมีร่างหรือผลบันทึกรอตรวจ · ไม่เปลี่ยนบัญชีและไม่ทิ้งร่าง');
+              if(!access?.notesReadOnly&&annotationUnlock.getAccess().eligible)return false;
+              if(typeof win.AAFStockAccess?.exit!=='function')fail('account-entry-unavailable','ยังไม่มีทางเข้าบัญชี AAF ที่ยืนยันแล้ว');
+              // Explicit owner action only. Existing access routing owns the
+              // capability exit and normal login; never copy or replace tokens.
+              return win.AAFStockAccess.exit();
+            },
             unlockAnnotations:async code=>{await annotationUnlock.unlock(code);const snapshot=await notes.readNotes();return {access:annotationUnlock.getAccess(),snapshot};},
             lockAnnotations:()=>{annotationUnlock.lock();return {access:annotationUnlock.getAccess()};},
             prepareAnnotationsFile:notes.prepareAnnotationsFile,

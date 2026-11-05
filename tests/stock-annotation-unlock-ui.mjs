@@ -17,10 +17,12 @@ const locked=()=>({unlocked:false,eligible:true,expiresAt:null,message:''});
 const ownerAccess=()=>({unlocked:true,eligible:true,owner:true,mode:'owner',expiresAt:null,message:''});
 function upperHost(h){
   const target=new (h.nodes.get('stock-table').constructor)(),special=new Map(),originalQuery=target.querySelector.bind(target);
+  const html=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target),'innerHTML');
+  Object.defineProperty(target,'innerHTML',{get(){return html.get.call(this);},set(value){special.clear();html.set.call(this,value);}});
   target.querySelector=selector=>{
-    if(['[data-upper-free-stage]','[data-upper-free-status]'].includes(selector)){
+    if(['[data-upper-free-stage]','[data-upper-free-status]','[data-upper-free-account]','[data-upper-free-account-status]'].includes(selector)){
       if(!target.innerHTML.includes(selector.slice(1,-1)))return null;
-      if(!special.has(selector))special.set(selector,new target.constructor(selector.includes('stage')?'button':'span'));
+      if(!special.has(selector))special.set(selector,new target.constructor(selector.endsWith('status]')?'span':'button'));
       return special.get(selector);
     }
     return originalQuery(selector);
@@ -139,5 +141,39 @@ test('owner labels never override denied capability or denied snapshot permissio
   access=ownerAccess();h.api.applyNotesSnapshot(clone(remote));assert.match(status.textContent,/ผู้ดูแล/);assert.equal(h.input().disabled,false);assert.equal(upperNotes(target)[0].disabled,false);
   upperNotes(target)[0].value='owner draft survives session loss';await upperNotes(target)[0].dispatch('input');await target.querySelector('[data-upper-free-stage]').click();
   access={unlocked:false,eligible:false,owner:false,expiresAt:null,message:'Synthetic session expired'};await h.nodes.get('notes-confirm').click();
-  assert.equal(writes,0);assert.equal(h.api.hasDirty(),true);assert.equal(h.input().disabled,true);assert.equal(upperNotes(target)[0].disabled,true);assert.equal(h.input().value,'owner draft survives session loss');assert.equal(h.nodes.get('annotations-unlock').hidden,false);assert.match(h.nodes.get('annotations-access-status').textContent,/session expired/);h.api.destroy();
+  assert.equal(writes,0);assert.equal(h.api.hasDirty(),true);assert.equal(h.input().disabled,true);assert.equal(upperNotes(target)[0].disabled,true);assert.equal(h.input().value,'owner draft survives session loss');assert.equal(h.nodes.get('annotations-unlock').hidden,true);assert.equal(h.nodes.get('annotations-account').hidden,false);assert.match(h.nodes.get('annotations-access-status').textContent,/session expired/);h.api.destroy();
+});
+
+test('read-only capability offers explicit normal-account entry beside both editor surfaces, never a staff-code form',async()=>{
+  let access={eligible:false,unlocked:false,owner:false,message:'Synthetic shared Sales04'},exits=0,unlocks=0,writes=0;
+  const remote=registrySnapshot(),before=clone(remote);
+  const h=harness({getAnnotationAccess:()=>access,readNotes:async()=>clone(remote),useNormalAccount:()=>{exits++;return true;},unlockAnnotations:async()=>{unlocks++;},saveChanges:async()=>{writes++;}}),target=upperHost(h);
+  await tick();h.api.attachFreeSurface(target,stockIdentity(remote));
+  for(const button of [h.nodes.get('annotations-account'),target.querySelector('[data-upper-free-account]')]){assert.equal(button.hidden,false);assert.equal(button.disabled,false);}
+  assert.equal(h.nodes.get('annotations-unlock').hidden,true);assert.equal(h.nodes.get('annotations-unlock').disabled,true);assert.equal(h.nodes.get('annotations-unlock-form').hidden,true);assert.equal(h.nodes.get('annotations-code').disabled,true);
+  assert.match(h.nodes.get('annotations-access-status').textContent,/บัญชี AAF ปกติ/);assert.match(target.innerHTML,/ผู้ดูแลไม่ต้องใส่รหัสฝ่ายขาย/);
+  assert.equal(h.input().disabled,true);assert.equal(upperFollowups(target)[0].disabled,true);
+  await h.nodes.get('annotations-account').click();await target.querySelector('[data-upper-free-account]').click();assert.equal(exits,2);assert.equal(unlocks,0);assert.equal(writes,0);assert.deepEqual(clone(remote),before);
+  access=locked();h.api.applyNotesSnapshot(clone(remote));assert.equal(h.nodes.get('annotations-account').hidden,true);assert.equal(target.querySelector('[data-upper-free-account]').hidden,true);assert.equal(h.nodes.get('annotations-unlock').hidden,false);assert.equal(h.nodes.get('annotations-access-status').hidden,true);
+  await h.nodes.get('annotations-account').click();assert.equal(exits,2,'eligible staff cannot accidentally exit through an old contextual action');
+  access=ownerAccess();h.api.applyNotesSnapshot(clone(remote));assert.equal(h.nodes.get('annotations-account').hidden,true);assert.equal(h.nodes.get('annotations-unlock').hidden,true);assert.equal(h.input().disabled,false);assert.equal(upperNotes(target)[0].disabled,false);h.api.destroy();
+});
+
+test('normal-account entry never drops notes, follow-up drafts or an unconfirmed Excel preview',async()=>{
+  const remote=registrySnapshot();let access=ownerAccess(),exits=0;
+  const h=harness({getAnnotationAccess:()=>access,readNotes:async()=>clone(remote),useNormalAccount:()=>{exits++;}}),target=upperHost(h);await tick();h.api.attachFreeSurface(target,stockIdentity(remote));
+  const note=upperNotes(target)[0],followup=upperFollowups(target)[0];note.value='unsaved note';await note.dispatch('input');followup.value='unsaved followup';await followup.dispatch('input');
+  access={eligible:false,unlocked:false,message:'Synthetic expired'};h.api.applyNotesSnapshot(clone(remote));
+  await h.nodes.get('annotations-account').click();await target.querySelector('[data-upper-free-account]').click();assert.equal(exits,0);assert.equal(h.api.hasDirty(),true);assert.equal(h.input().value,'unsaved note');assert.equal(upperFollowups(target)[0].value,'unsaved followup');assert.match(h.nodes.get('notes-status').textContent,/ยังไม่เปลี่ยนบัญชี/);h.api.destroy();
+  let previewAccess=ownerAccess(),previewExits=0;const p=harness({getAnnotationAccess:()=>previewAccess,readNotes:async()=>trackingSnapshot(),useNormalAccount:()=>{previewExits++;},prepareAnnotationsFile:async()=>({snapshot:trackingSnapshot(),canApply:true,notesChanges:[{key,before:'before synthetic',after:'pending Excel note'}],followupChanges:[],issues:[]})});await tick();
+  p.nodes.get('notes-file').files=[{name:'synthetic.xlsx'}];await p.nodes.get('notes-file').dispatch('change');assert.equal(p.api.hasDirty(),false);assert.equal(p.api.hasPendingAnnotationWork(),true);
+  previewAccess={eligible:false,unlocked:false};p.api.applyNotesSnapshot(trackingSnapshot());await p.nodes.get('annotations-account').click();assert.equal(previewExits,0);assert.match(p.nodes.get('notes-import-preview').innerHTML,/pending Excel note/);
+  await p.nodes.get('annotations-import-cancel').click();assert.equal(p.api.hasPendingAnnotationWork(),false);await p.nodes.get('annotations-account').click();assert.equal(previewExits,1);p.api.destroy();
+});
+
+test('missing or failing account routing fails closed, and repeated clicks cannot start parallel account entry',async()=>{
+  const access={eligible:false,unlocked:false};
+  const unavailable=harness({getAnnotationAccess:()=>access,readNotes:async()=>trackingSnapshot()});await tick();assert.equal(unavailable.nodes.get('annotations-account').disabled,true);await unavailable.nodes.get('annotations-account').click();assert.match(unavailable.nodes.get('notes-status').textContent,/ยังเปิดทางเข้า/);unavailable.api.destroy();
+  let finish,exits=0;const h=harness({getAnnotationAccess:()=>access,readNotes:async()=>trackingSnapshot(),useNormalAccount:()=>{exits++;return new Promise((resolve,reject)=>{finish=()=>reject(Error('SYNTHETIC-PRIVATE-ROUTING-DETAIL'));});}});await tick();
+  const first=h.nodes.get('annotations-account').click();assert.equal(h.nodes.get('annotations-account').disabled,true);await h.nodes.get('annotations-account').click();assert.equal(exits,1);finish();await first;assert.equal(h.nodes.get('annotations-account').disabled,false);assert.doesNotMatch(h.nodes.get('notes-status').textContent,/PRIVATE/);assert.equal(h.input().disabled,true);h.api.destroy();
 });
