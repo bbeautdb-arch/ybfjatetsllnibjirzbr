@@ -13,6 +13,18 @@
    if(page==='history_database'&&identity.user.role==='sales'){location.replace('sales_analytics.html');return;}
    const response=await fetch(base+'/page?name='+encodeURIComponent(page),{...options,signal:AbortSignal.timeout(30000)});
    if(!response.ok){const e=await response.json();throw Error(e.error||'โหลดข้อมูลไม่สำเร็จ');}
-   const html=await response.text();document.open();document.write(html);document.close();
+   let html=await response.text();
+   if(page==='production_plan'){
+     const root=new URL('.', location.href);
+     const cssHref=new URL('assets/production_plan.premium.css', root).href;
+     const hookSrc=new URL('assets/production_plan.visual-hooks.js', root).href;
+     const cssTag='<link rel="stylesheet" href="'+cssHref+'" data-aaf-premium-c-depth="css">';
+     const hookTag='<script src="'+hookSrc+'" data-aaf-premium-c-depth="hooks"></script>';
+     if(html.indexOf('data-aaf-premium-c-depth')===-1){
+       if(/<\/head>/i.test(html)) html=html.replace(/<\/head>/i, cssTag+'\n</head>');
+       if(/<\/body>/i.test(html)) html=html.replace(/<\/body>/i, hookTag+'\n</body>');
+     }
+   }
+   document.open();document.write(html);document.close();
  }catch(error){status.textContent=error.message+' · ลองรีเฟรชหน้านี้อีกครั้ง';}
 })();

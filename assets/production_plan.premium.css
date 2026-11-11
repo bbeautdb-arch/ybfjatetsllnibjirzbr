@@ -1,0 +1,958 @@
+/* C-depth — Premium Industrial, daylight, more dimension
+   Builds on C-light: elevated line slabs, soft multi-level shadows,
+   brushed-metal bevels, embossed controls, raised totals and today column.
+   Light surfaces only — no black or near-black backgrounds. Tasteful, not kitsch. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --font: 'IBM Plex Sans Thai', 'IBM Plex Sans', sans-serif;
+  --font-num: 'IBM Plex Mono', 'IBM Plex Sans Thai', monospace;
+
+  --bg: #e3e5e8;
+  --bg-elev: #eef0f2;
+  --panel: #f6f6f4;
+  --metal: #e8eaec;
+  --metal-2: #d9dce0;
+  --ink: #1c3144;
+  --ink-strong: #152536;
+  --forest: #2a4a38;
+  --sub: #5c6b74;
+  --edge: rgba(28,49,68,.14);
+  --edge-strong: rgba(28,49,68,.22);
+  --shine: rgba(255,255,255,.72);
+  --shadow: 0 10px 28px rgba(28,49,68,.07), 0 1px 2px rgba(28,49,68,.05);
+  --line1: #b56a2c;
+  --line2: #2a7388;
+  --line3: #3a7a4a;
+  --glow: #9a7018;
+  --today: #f4e7c2;
+  --danger: #a44338;
+  --ok: #2f6a45;
+  --amber: #9a7018;
+}
+
+html{ color-scheme: light; }
+*{ box-sizing: border-box; }
+html, body{
+  margin: 0;
+  font-family: var(--font) !important;
+  background: var(--bg) !important;
+  color: var(--ink) !important;
+  -webkit-font-smoothing: antialiased;
+}
+body{
+  background-image:
+    linear-gradient(180deg, #eceef0 0%, var(--bg) 180px),
+    repeating-linear-gradient(
+      118deg,
+      rgba(255,255,255,.28) 0px,
+      rgba(255,255,255,.28) 1px,
+      transparent 1px,
+      transparent 5px
+    ) !important;
+  background-color: var(--bg) !important;
+}
+
+/* Frosted light glass header */
+header{
+  padding: 12px 22px 10px !important;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(244,245,247,.76) !important;
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  border-bottom: 1px solid var(--edge) !important;
+  box-shadow:
+    inset 0 1px 0 var(--shine),
+    0 1px 0 rgba(255,255,255,.5),
+    0 12px 28px rgba(28,49,68,.08) !important;
+}
+header .top{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+h1{
+  margin: 0;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  letter-spacing: -.01em !important;
+  color: var(--ink-strong) !important;
+}
+h1 small{
+  display:block;
+  margin-top: 3px;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase;
+  color: var(--sub) !important;
+}
+#clock{
+  font-family: var(--font-num) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  font-size: 11px !important;
+  color: var(--forest) !important;
+  letter-spacing: .04em;
+}
+.userbar{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--sub); }
+.userbar b{ color: var(--ink-strong); font-weight: 600; }
+.badge{
+  padding: 2px 8px !important;
+  border-radius: 99px !important;
+  background: rgba(255,255,255,.55) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--edge);
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* Brushed-metal chips — not pastel pills */
+.toolbar{ display:flex; gap:8px; align-items:center; margin-top:10px !important; flex-wrap:wrap; }
+.btn, header > button{
+  border: 1px solid var(--edge-strong) !important;
+  background: linear-gradient(180deg, #fbfbfc, #e4e7ea) !important;
+  color: var(--ink) !important;
+  padding: 5px 12px !important;
+  border-radius: 5px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  font-family: inherit !important;
+  box-shadow: inset 0 1px 0 var(--shine), 0 1px 1px rgba(28,49,68,.06) !important;
+  cursor: pointer;
+}
+.btn:hover, header > button:hover{
+  border-color: rgba(28,49,68,.38) !important;
+  color: var(--ink-strong) !important;
+}
+.btn.primary, .pagebtn.active, .btn.pagebtn.active{
+  background: linear-gradient(180deg, #f7f3e8, #ece4d0) !important;
+  border-color: rgba(154,112,24,.45) !important;
+  color: var(--ink-strong) !important;
+  box-shadow:
+    inset 0 1px 0 var(--shine),
+    inset 0 -2px 0 var(--glow) !important;
+}
+.btn.danger{ color: var(--danger) !important; border-color: rgba(164,67,56,.4) !important; background: transparent !important; box-shadow:none !important; }
+.pagenav{ display:flex; gap:6px; }
+
+.toolbar input[type=month],
+.toolbar input[type=date],
+.toolbar select{
+  background: linear-gradient(180deg, #fbfbfc, #eef0f2) !important;
+  border: 1px solid var(--edge) !important;
+  border-radius: 5px !important;
+  color: var(--ink-strong) !important;
+  font-family: var(--font-num) !important;
+  font-size: 12px !important;
+  padding: 5px 8px !important;
+  box-shadow: inset 0 1px 2px rgba(28,49,68,.06) !important;
+  font-variant-numeric: tabular-nums;
+}
+.tabs{ display:flex; gap:6px; }
+.tab{
+  border: 1px solid var(--edge) !important;
+  background: linear-gradient(180deg, #fbfbfc, #eceef0) !important;
+  color: var(--sub) !important;
+  padding: 4px 12px !important;
+  border-radius: 5px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  box-shadow: inset 0 1px 0 var(--shine) !important;
+  display:flex; align-items:center; gap:7px;
+}
+.tab .dot{ width:6px; height:14px; border-radius:1px; }
+.tab[data-line="Line 1"] .dot{ background: var(--line1); }
+.tab[data-line="Line 2"] .dot{ background: var(--line2); }
+.tab[data-line="Line 3"] .dot{ background: var(--line3); }
+.tab.active{ color: var(--ink-strong) !important; background: #f7f5f0 !important; border-color: var(--edge-strong) !important; }
+.tab[data-line="Line 1"].active{ box-shadow: inset 3px 0 0 var(--line1), inset 0 1px 0 var(--shine) !important; }
+.tab[data-line="Line 2"].active{ box-shadow: inset 3px 0 0 var(--line2), inset 0 1px 0 var(--shine) !important; }
+.tab[data-line="Line 3"].active{ box-shadow: inset 3px 0 0 var(--line3), inset 0 1px 0 var(--shine) !important; }
+
+#syncstatus,
+#syncstatus.ok,
+#syncstatus.saving,
+#syncstatus.err{
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  font-size: 11px;
+  font-family: var(--font-num);
+  color: var(--sub);
+}
+#syncstatus.ok{ color: var(--ok) !important; }
+#syncstatus.saving{ color: var(--glow) !important; }
+#syncstatus.err{ color: var(--danger) !important; }
+#revBadge{
+  color: var(--forest) !important;
+  font-family: var(--font-num) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .06em;
+}
+
+main#main, main{ padding: 18px 22px 56px !important; }
+footer{
+  padding: 14px 22px 32px !important;
+  color: var(--sub) !important;
+  font-size: 11px !important;
+  border-top: 1px solid var(--edge) !important;
+  background: transparent !important;
+}
+
+.summary{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin-bottom:18px; }
+.card, .previewbox, .daycard{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,0) 36%),
+    var(--panel) !important;
+  border: 1px solid var(--edge) !important;
+  border-radius: 8px !important;
+  box-shadow:
+    inset 0 1px 0 var(--shine),
+    var(--shadow) !important;
+}
+.card{ padding: 12px 14px !important; }
+.card .label{
+  font-size: 10px !important;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--sub) !important;
+  font-weight: 500;
+}
+.card .value{
+  font-family: var(--font-num) !important;
+  font-size: 22px !important;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  color: var(--ink-strong);
+  margin-top: 4px;
+}
+.card .value span{ font-size:11px; color:var(--sub); font-weight:400; }
+
+.previewbox{ padding: 0 !important; margin-bottom: 18px !important; overflow:hidden; }
+.previewhead{
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 11px 16px !important;
+  margin: 0 !important;
+  border-bottom: 1px solid var(--edge) !important;
+  background: linear-gradient(180deg, #f8f8f6, #eceef0) !important;
+}
+.previewhead b,
+.previewbox > .previewhead b{
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: .04em !important;
+  color: var(--ink-strong) !important;
+}
+
+.tablewrap{
+  overflow: auto !important;
+  max-height: calc(100vh - var(--header-h, 128px) - 48px);
+  border: none !important;
+  border-radius: 0 0 8px 8px !important;
+  background: var(--panel);
+}
+
+table.preview-table,
+table.production-overview-grid{
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  font-size: 11.5px !important;
+  font-family: var(--font-num) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' !important;
+  color: var(--ink);
+  white-space: nowrap;
+}
+table.preview-table th,
+table.preview-table td,
+table.production-overview-grid th,
+table.production-overview-grid td{
+  border-bottom: 1px solid var(--edge) !important;
+  border-right: 1px solid rgba(28,49,68,.08) !important;
+  padding: 5px 8px !important;
+  text-align: center;
+  background: transparent !important;
+  color: var(--ink) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+table.preview-table thead th,
+table.production-overview-grid thead th{
+  position: sticky; top: 0; z-index: 6;
+  background: linear-gradient(180deg, #f5f6f7, #e6e8eb) !important;
+  color: var(--sub) !important;
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: .08em;
+  border-bottom: 1px solid var(--edge-strong) !important;
+  box-shadow: inset 0 1px 0 var(--shine);
+  backdrop-filter: blur(10px);
+}
+table.preview-table th.rowlabel-corner{
+  position: sticky; left:0; top:0; z-index:8;
+  background: linear-gradient(180deg, #f5f6f7, #e6e8eb) !important;
+  text-align: left !important;
+  color: var(--ink) !important;
+  min-width: 136px;
+  box-shadow: 6px 0 12px rgba(28,49,68,.06);
+}
+table.preview-table tbody th,
+table.production-overview-grid tbody th{
+  text-align: left !important;
+  position: sticky; left:0; z-index:3;
+  background: #eef0f2 !important;
+  color: var(--sub) !important;
+  font-family: var(--font) !important;
+  font-weight: 400;
+  font-size: 11.5px;
+  box-shadow: 6px 0 12px rgba(28,49,68,.05);
+}
+
+/* Slim vertical spines per Line */
+table.preview-table tr.line-sep th{
+  font-family: var(--font) !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase;
+  padding: 9px 10px 8px 14px !important;
+  border-top: 1px solid var(--edge-strong) !important;
+  background: #e9ebed !important;
+}
+table.preview-table tr.line-sep.l1 th{
+  color: var(--line1) !important;
+  box-shadow: inset 3px 0 0 var(--line1);
+}
+table.preview-table tr.line-sep.l2 th{
+  color: var(--line2) !important;
+  box-shadow: inset 3px 0 0 var(--line2);
+}
+table.preview-table tr.line-sep.l3 th{
+  color: var(--line3) !important;
+  box-shadow: inset 3px 0 0 var(--line3);
+}
+tr.in-line-1 th{ box-shadow: inset 3px 0 0 var(--line1), 6px 0 12px rgba(28,49,68,.05) !important; }
+tr.in-line-2 th{ box-shadow: inset 3px 0 0 var(--line2), 6px 0 12px rgba(28,49,68,.05) !important; }
+tr.in-line-3 th{ box-shadow: inset 3px 0 0 var(--line3), 6px 0 12px rgba(28,49,68,.05) !important; }
+table.preview-table td.l1{ color: var(--line1) !important; }
+table.preview-table td.l2{ color: var(--line2) !important; }
+table.preview-table td.l3{ color: var(--line3) !important; }
+
+.day-even{ background: rgba(28,49,68,.018) !important; }
+td.day-start, th.day-start{ border-left: 1px solid rgba(28,49,68,.10) !important; }
+td.day-end, th.day-end{ border-right: 1px solid rgba(28,49,68,.10) !important; }
+
+/* Today — light instrument-dial glow, no pulse */
+@keyframes today-pulse { 0%,100%{ box-shadow:none; } }
+th.today-col-header,
+.today-col-header,
+th.is-today{
+  background: linear-gradient(180deg, #fbf3dc, var(--today)) !important;
+  color: #6d4e0c !important;
+  animation: none !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(154,112,24,.35),
+    inset 0 0 18px rgba(154,112,24,.16),
+    inset 0 -2px 0 var(--glow) !important;
+  font-weight: 600 !important;
+}
+td.is-today, td.today-col{
+  background: #f7edd0 !important;
+  box-shadow:
+    inset 0 0 14px rgba(154,112,24,.10),
+    inset 0 0 0 1px rgba(154,112,24,.18) !important;
+}
+
+th.is-weekend, td.is-weekend{ background: rgba(28,49,68,.035) !important; }
+th.is-holiday, td.is-holiday{ background: rgba(164,67,56,.06) !important; }
+th.is-weekend.today-col-header, th.is-holiday.today-col-header{
+  background: linear-gradient(180deg, #fbf3dc, var(--today)) !important;
+}
+
+/* Totals — light metal plate, navy rule, strong numerals */
+tr.production-daily-eq25-total th,
+tr.production-daily-eq25-total td{
+  background:
+    linear-gradient(180deg, #f4f5f6, #e3e6ea) !important;
+  font-weight: 700 !important;
+  color: var(--ink-strong) !important;
+  border-top: 2px solid var(--ink) !important;
+  border-bottom: 1px solid var(--edge-strong) !important;
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
+  font-family: var(--font-num) !important;
+  font-size: 12.5px !important;
+  box-shadow: inset 0 1px 0 var(--shine), inset 0 -1px 0 rgba(28,49,68,.06);
+}
+tr.production-daily-eff th, tr.production-daily-eff td,
+tr.production-daily-adjusted th, tr.production-daily-adjusted td,
+tr.production-daily-loaded th, tr.production-daily-loaded td,
+tr.production-daily-balance th, tr.production-daily-balance td{
+  background: #eef0f2 !important;
+  font-weight: 500;
+  color: var(--ink) !important;
+}
+tr.production-daily-eq25-total th,
+tr.production-daily-eff th,
+tr.production-daily-adjusted th,
+tr.production-daily-loaded th,
+tr.production-daily-balance th{
+  position:sticky; left:0; z-index:3;
+  font-family: var(--font) !important;
+  background: #e6e9ec !important;
+}
+
+tr.is-plan-row td{ color: var(--sub) !important; font-weight: 400; }
+tr.is-actual-row td{ color: var(--ink-strong) !important; font-weight: 600 !important; }
+tr.is-actual-row th{ color: var(--forest) !important; }
+
+td.is-zero-cell, th.is-zero-cell,
+td.is-zero-cell .bd-count, td.is-zero-cell .bd-size,
+td.is-zero-cell.l1, td.is-zero-cell.l2, td.is-zero-cell.l3{
+  color: color-mix(in srgb, var(--sub) 38%, transparent) !important;
+  font-weight: 400 !important;
+  opacity: 1 !important;
+}
+td.is-empty-input, td.is-empty-input input{
+  color: transparent !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+/* Inputs as data cells until focused */
+input.pv-input, input.pv-note, input.hr-input, input.note-input,
+select.thickness-sel, .std-input,
+table.preview-table input[type=number],
+table.preview-table input[type=text],
+table.preview-table select{
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--ink-strong) !important;
+  font-family: var(--font-num) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  font-size: 11.5px !important;
+  padding: 1px 2px !important;
+  width: auto;
+  min-width: 42px;
+  text-align: center;
+}
+input.pv-note, input.note-input{ text-align:left; min-width:76px; font-family: var(--font) !important; color: var(--sub) !important; }
+input:focus, select:focus, input.pv-input:focus, .std-input:focus{
+  outline: none !important;
+  background: #fffef9 !important;
+  border-bottom: 1px solid var(--glow) !important;
+  box-shadow: 0 0 0 1px rgba(154,112,24,.16), 0 0 10px rgba(154,112,24,.10) !important;
+}
+
+.bd-size{ font-size:9px; color:var(--sub); }
+.bd-count{ font-size:11.5px; font-weight:500; font-family:var(--font-num); }
+tr.bd-row td{ padding: 3px 8px !important; }
+
+.day-ctl{ display:flex; gap:3px; justify-content:center; margin-top:2px; }
+thead .pv-add-btn, thead .pv-rm-btn{
+  width:15px; height:15px; font-size:10px;
+  border-radius:3px; border:1px solid var(--edge);
+  background:transparent; color:var(--sub); cursor:pointer;
+}
+.rm-btn{ background:none; border:none; color:var(--danger); cursor:pointer; }
+
+@keyframes blink-warn { 0%,100%{ box-shadow: 0 0 0 1px rgba(164,67,56,.45); } }
+input.not-std, td.not-std, div.not-std{ animation:none !important; box-shadow: 0 0 0 1px rgba(164,67,56,.45) !important; }
+
+#floatingDayHeader{
+  display: none !important; /* wrap already has sticky thead; the window-clone misaligns */
+  background: rgba(247,245,240,.94) !important;
+  border-bottom: 1px solid var(--edge-strong) !important;
+  box-shadow: 0 10px 22px rgba(28,49,68,.10) !important;
+  backdrop-filter: blur(12px);
+}
+#floatingDayHeader th{ color:var(--sub) !important; font-family:var(--font-num); }
+#floatingDayHeader th.today-col-header, #floatingDayHeader .today-col-header, #floatingDayHeader th.is-today{
+  color:#6d4e0c !important;
+  background: linear-gradient(180deg, #fbf3dc, var(--today)) !important;
+  animation:none !important;
+}
+
+.std-table th, .size-table th, .std-table td, .size-table td{ color: var(--ink) !important; }
+.std-table thead th, .size-table thead th{
+  background:#f1eee8 !important; color:var(--sub) !important;
+}
+
+.shipment-order-card, details{
+  background: var(--panel) !important;
+  border: 1px solid var(--edge) !important;
+  border-radius: 8px !important;
+  color: var(--ink) !important;
+}
+
+@media (max-width: 900px){
+  header{ padding: 10px 12px !important; }
+  main#main, main{ padding: 12px 10px 40px !important; }
+}
+html.aaf-preview body::before{
+  content: 'ตัวอย่างภายใน — Premium Industrial · โทนสว่าง · ไม่ได้เชื่อมเซิร์ฟเวอร์จริง';
+  display:block; background: var(--ink-strong); color:#f6f3ed;
+  font-family:var(--font-num); font-size:10px; letter-spacing:.12em;
+  text-transform:uppercase; padding:5px 16px; text-align:center;
+  border-bottom:1px solid var(--edge);
+}
+html.shot body::before{ display:none !important; }
+
+
+/* ========================================================================
+   Depth layer — elevation, bevel, emboss, slabs. Tasteful, still light.
+   ======================================================================== */
+
+:root{
+  --shadow-soft: 0 1px 2px rgba(28,49,68,.05), 0 8px 18px rgba(28,49,68,.06);
+  --shadow-slab:
+    0 1px 1px rgba(28,49,68,.04),
+    0 6px 14px rgba(28,49,68,.07),
+    0 18px 36px rgba(28,49,68,.08);
+  --bevel-top: inset 0 1px 0 rgba(255,255,255,.92);
+  --bevel-bot: inset 0 -1px 0 rgba(28,49,68,.10);
+  --metal-grad: linear-gradient(180deg, #fbfcfd 0%, #eef0f3 48%, #e4e7eb 100%);
+  --metal-plate: linear-gradient(180deg, #f8f8f6 0%, #f3f3f1 55%, #ececea 100%);
+}
+
+/* Subtle page depth: soft top wash, faint radial, hairline brush */
+html, body{
+  background: var(--bg) !important;
+}
+body{
+  background-color: var(--bg) !important;
+  background-image:
+    radial-gradient(1200px 420px at 50% -40px, rgba(255,255,255,.55), transparent 70%),
+    linear-gradient(180deg, #edeff2 0%, #e3e5e8 220px, #dfe1e4 100%),
+    repeating-linear-gradient(
+      118deg,
+      rgba(255,255,255,.22) 0px,
+      rgba(255,255,255,.22) 1px,
+      transparent 1px,
+      transparent 6px
+    ) !important;
+}
+
+/* Frosted sticky header: brushed metal + bevel + stronger drop shadow */
+header{
+  background-color: rgba(244,245,247,.88) !important;
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,.82) 0%, rgba(236,239,243,.72) 100%) !important;
+  backdrop-filter: blur(22px) saturate(1.18);
+  -webkit-backdrop-filter: blur(22px) saturate(1.18);
+  border-bottom: 0 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -1px 0 rgba(28,49,68,.12),
+    0 1px 0 rgba(255,255,255,.4),
+    0 10px 28px rgba(28,49,68,.12),
+    0 2px 6px rgba(28,49,68,.06) !important;
+}
+
+/* Let the page field show between floating slabs */
+.previewbox{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 4px 0 8px !important;
+}
+.tablewrap{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 12px 28px !important;
+  border-radius: 0 !important;
+  overflow: auto !important;
+  max-height: calc(100vh - var(--header-h, 128px) - 24px);
+}
+.previewbox{
+  overflow: visible !important;
+}
+
+/* Day header as a slim raised metal bar */
+table.preview-table thead th,
+table.production-overview-grid thead th{
+  background: var(--metal-grad) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -1px 0 rgba(28,49,68,.10) !important;
+}
+table.preview-table thead tr:first-child th:first-child,
+table.production-overview-grid thead tr:first-child th:first-child{
+  border-top-left-radius: 10px;
+}
+table.preview-table thead tr:first-child th:last-child,
+table.production-overview-grid thead tr:first-child th:last-child{
+  border-top-right-radius: 10px;
+}
+table.preview-table thead,
+table.production-overview-grid thead{
+  box-shadow:
+    0 8px 20px rgba(28,49,68,.08),
+    0 1px 2px rgba(28,49,68,.05);
+}
+
+/* ---- Line slabs: floating elevated cards with a gap between lines ---- */
+tr.is-slab-start th{
+  background: var(--metal-grad) !important;
+  border-top: 14px solid var(--bg) !important;
+  border-radius: 12px 12px 0 0 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -1px 0 rgba(28,49,68,.10),
+    0 -1px 0 rgba(255,255,255,.4) !important;
+  color: var(--ink-strong) !important;
+}
+/* First line sits a little closer to the day header */
+tr.is-slab-start.l1 th{
+  border-top-width: 12px !important;
+}
+
+/* Shared plate fill for rows inside a line */
+tr.in-line-1 th,
+tr.in-line-2 th,
+tr.in-line-3 th,
+tr.in-line-1 td,
+tr.in-line-2 td,
+tr.in-line-3 td{
+  background-color: var(--panel) !important;
+}
+
+/* Soft side shadow on the sticky first column + right edge of the slab */
+tr.in-line-1 th,
+tr.in-line-2 th,
+tr.in-line-3 th,
+tr.is-slab-start th{
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.0);
+}
+tr.in-line-1 th{
+  box-shadow: 4px 0 0 transparent, -6px 0 16px rgba(28,49,68,.06) !important;
+}
+tr.in-line-2 th{
+  box-shadow: 4px 0 0 transparent, -6px 0 16px rgba(28,49,68,.06) !important;
+}
+tr.in-line-3 th{
+  box-shadow: 4px 0 0 transparent, -6px 0 16px rgba(28,49,68,.06) !important;
+}
+
+/* Restore line color spines on top of the side shadow */
+table.preview-table tr.in-line-1 th,
+table.production-overview-grid tr.in-line-1 th{
+  box-shadow:
+    inset 3px 0 0 var(--line1),
+    -6px 0 16px rgba(28,49,68,.06) !important;
+}
+table.preview-table tr.in-line-2 th,
+table.production-overview-grid tr.in-line-2 th{
+  box-shadow:
+    inset 3px 0 0 var(--line2),
+    -6px 0 16px rgba(28,49,68,.06) !important;
+}
+table.preview-table tr.in-line-3 th,
+table.production-overview-grid tr.in-line-3 th{
+  box-shadow:
+    inset 3px 0 0 var(--line3),
+    -6px 0 16px rgba(28,49,68,.06) !important;
+}
+
+/* Slab end: bottom radius + layered drop shadow (the “card” lift) */
+tr.is-slab-end th{
+  border-bottom-left-radius: 12px !important;
+  box-shadow:
+    inset 3px 0 0 currentColor,
+    inset 0 -1px 0 rgba(28,49,68,.08),
+    -6px 10px 22px rgba(28,49,68,.07),
+    0 16px 32px rgba(28,49,68,.08) !important;
+}
+tr.in-line-1.is-slab-end th{ box-shadow:
+  inset 3px 0 0 var(--line1),
+  inset 0 -1px 0 rgba(28,49,68,.08),
+  -6px 10px 22px rgba(28,49,68,.07),
+  0 16px 32px rgba(28,49,68,.08) !important; }
+tr.in-line-2.is-slab-end th{ box-shadow:
+  inset 3px 0 0 var(--line2),
+  inset 0 -1px 0 rgba(28,49,68,.08),
+  -6px 10px 22px rgba(28,49,68,.07),
+  0 16px 32px rgba(28,49,68,.08) !important; }
+tr.in-line-3.is-slab-end th{ box-shadow:
+  inset 3px 0 0 var(--line3),
+  inset 0 -1px 0 rgba(28,49,68,.08),
+  -6px 10px 22px rgba(28,49,68,.07),
+  0 16px 32px rgba(28,49,68,.08) !important; }
+
+tr.is-slab-end td{
+  box-shadow:
+    inset 0 -1px 0 rgba(28,49,68,.08),
+    0 16px 32px rgba(28,49,68,.08),
+    0 4px 8px rgba(28,49,68,.05) !important;
+}
+tr.is-slab-end td:last-child{
+  border-bottom-right-radius: 12px !important;
+}
+
+/* ---- Today column: raised forward, gold rim, stronger shadow ---- */
+th.today-col-header,
+td.is-today,
+th.is-today{
+  position: relative;
+  z-index: 3;
+  background: linear-gradient(180deg, #fbf3dc 0%, var(--today) 55%, #ead9a8 100%) !important;
+  box-shadow:
+    0 0 0 1.5px rgba(154,112,24,.48),
+    0 8px 18px rgba(154,112,24,.20),
+    0 2px 4px rgba(28,49,68,.08),
+    inset 0 1px 0 rgba(255,255,255,.72) !important;
+}
+thead th.today-col-header{
+  box-shadow:
+    0 0 0 1.5px rgba(154,112,24,.48),
+    0 8px 18px rgba(154,112,24,.20),
+    inset 0 1px 0 rgba(255,255,255,.9),
+    inset 0 -1px 0 rgba(154,112,24,.18) !important;
+}
+
+/* ---- Totals band: raised metal plate with bevel ---- */
+tr.is-totals-start th,
+tr.is-totals-start td{
+  border-top: 16px solid var(--bg) !important;
+  border-top-left-radius: 12px;
+}
+tr.is-totals-start th{ border-top-left-radius: 12px !important; }
+tr.is-totals-start td:last-child{ border-top-right-radius: 12px !important; }
+
+tr[class*="production-daily-"] th,
+tr[class*="production-daily-"] td{
+  background: linear-gradient(180deg, #f7f8f9 0%, #e8ebef 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.85),
+    inset 0 -1px 0 rgba(28,49,68,.06) !important;
+}
+tr.is-totals-start th,
+tr.is-totals-start td{
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -1px 0 rgba(28,49,68,.06) !important;
+}
+tr.is-totals-end th{
+  border-bottom-left-radius: 12px !important;
+  box-shadow:
+    inset 0 -1px 0 rgba(28,49,68,.12),
+    inset 0 1px 0 rgba(255,255,255,.4),
+    -6px 10px 22px rgba(28,49,68,.07),
+    0 16px 32px rgba(28,49,68,.10) !important;
+  background: linear-gradient(180deg, #f3f5f7 0%, #e2e5e9 100%) !important;
+}
+tr.is-totals-end td{
+  box-shadow:
+    inset 0 -1px 0 rgba(28,49,68,.12),
+    0 16px 32px rgba(28,49,68,.10),
+    0 4px 8px rgba(28,49,68,.05) !important;
+  background: linear-gradient(180deg, #f3f5f7 0%, #e2e5e9 100%) !important;
+}
+tr.is-totals-end td:last-child{ border-bottom-right-radius: 12px !important; }
+
+/* Today cell inside the totals plate keeps the gold rim */
+tr[class*="production-daily-"] td.is-today{
+  background: linear-gradient(180deg, #fbf3dc 0%, #f0dfb0 100%) !important;
+  box-shadow:
+    0 0 0 1.5px rgba(154,112,24,.48),
+    0 8px 18px rgba(154,112,24,.20),
+    0 2px 4px rgba(28,49,68,.08),
+    inset 0 1px 0 rgba(255,255,255,.72) !important;
+}
+
+/* ---- Shipment footnote: stay in view, wrap, no clip ---- */
+tr.production-shipment-pending td,
+tr.production-shipment-pending th{
+  background: transparent !important;
+  color: var(--sub) !important;
+  white-space: normal !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  text-align: left !important;
+  vertical-align: top !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding-top: 12px !important;
+  padding-bottom: 10px !important;
+}
+
+/* ---- Inputs: soft embossed metal, inset when focused ---- */
+input.pv-input,
+input[type="number"],
+input[type="text"],
+select, textarea{
+  background: linear-gradient(180deg, #fbfbfa 0%, #f3f3f1 100%) !important;
+  border: 1px solid rgba(28,49,68,.16) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.9),
+    inset 0 -1px 0 rgba(28,49,68,.06),
+    0 1px 1px rgba(28,49,68,.04) !important;
+}
+input.pv-input:focus,
+input[type="number"]:focus,
+input[type="text"]:focus,
+select:focus, textarea:focus{
+  background: #f4f4f2 !important;
+  border-color: rgba(154,112,24,.45) !important;
+  box-shadow:
+    inset 0 2px 5px rgba(28,49,68,.14),
+    inset 0 1px 0 rgba(28,49,68,.06),
+    0 0 0 1px rgba(154,112,24,.22) !important;
+  outline: none !important;
+}
+
+/* ---- Buttons: soft embossed metal, pressed inset ---- */
+.btn, button, .toolbar button, header button,
+a.btn, .chip-btn{
+  background: linear-gradient(180deg, #fcfcfd 0%, #e6e8ec 100%) !important;
+  border: 1px solid rgba(28,49,68,.16) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -1px 0 rgba(28,49,68,.10),
+    0 1px 2px rgba(28,49,68,.08) !important;
+}
+.btn:hover, button:hover, .toolbar button:hover, header button:hover{
+  background: linear-gradient(180deg, #ffffff 0%, #eceef1 100%) !important;
+}
+.btn:active, button:active, .toolbar button:active, header button:active,
+.btn:focus, button:focus{
+  background: linear-gradient(180deg, #e4e6e9 0%, #eceef0 100%) !important;
+  box-shadow:
+    inset 0 2px 5px rgba(28,49,68,.16),
+    inset 0 1px 0 rgba(28,49,68,.08) !important;
+}
+/* Primary / save still forest ink, but metal-beveled, not flat */
+.btn-primary, button.primary, .btn.save, button[data-action="save"]{
+  background: linear-gradient(180deg, #3b5c4a 0%, #2a4a38 100%) !important;
+  color: #f4f6f4 !important;
+  border-color: rgba(21,37,24,.28) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -1px 0 rgba(0,0,0,.18),
+    0 1px 2px rgba(28,49,68,.12) !important;
+}
+
+/* Toolbar / summary chips stay slightly raised metal */
+.toolbar, .summary, .metal-chip, .status-chip, #planmeta, .revbox{
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.9),
+    inset 0 -1px 0 rgba(28,49,68,.08),
+    0 4px 12px rgba(28,49,68,.07) !important;
+}
+
+/* Other line-sep section headers (wood / steam) share the metal bevel */
+tr.line-sep:not(.l1):not(.l2):not(.l3) th{
+  background: var(--metal-grad) !important;
+  border-top: 14px solid var(--bg) !important;
+  border-radius: 12px 12px 0 0 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -1px 0 rgba(28,49,68,.10) !important;
+}
+
+/* Keep the floating-day clone hidden — wrap already has a sticky thead */
+#floatingDayHeader{ display: none !important; }
+
+
+/* ---- Iteration: stacking, continuous slab lift, no per-cell tiles ---- */
+table.preview-table thead th,
+table.production-overview-grid thead th{
+  background-color: #eef0f3 !important;
+  background-image: var(--metal-grad) !important;
+  z-index: 8 !important;
+}
+table.preview-table th.rowlabel-corner,
+table.production-overview-grid th.rowlabel-corner{
+  z-index: 10 !important;
+  background-color: #eef0f3 !important;
+  background-image: var(--metal-grad) !important;
+}
+table.preview-table tbody th,
+table.production-overview-grid tbody th{
+  z-index: 4 !important;
+  background-color: var(--panel) !important;
+}
+
+/* Per-cell outer shadows made every totals/end cell look like a loose tile.
+   Lift the whole row instead; keep only a 1px bevel on the cells. */
+tr.is-slab-end{
+  box-shadow:
+    0 10px 18px rgba(28,49,68,.08),
+    0 22px 36px rgba(28,49,68,.08) !important;
+}
+tr.is-slab-end th,
+tr.is-slab-end td{
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  box-shadow: inset 0 -1px 0 rgba(28,49,68,.08) !important;
+}
+tr.in-line-1.is-slab-end th{
+  box-shadow:
+    inset 3px 0 0 var(--line1),
+    inset 0 -1px 0 rgba(28,49,68,.08) !important;
+  border-bottom-left-radius: 10px !important;
+}
+tr.in-line-2.is-slab-end th{
+  box-shadow:
+    inset 3px 0 0 var(--line2),
+    inset 0 -1px 0 rgba(28,49,68,.08) !important;
+  border-bottom-left-radius: 10px !important;
+}
+tr.in-line-3.is-slab-end th{
+  box-shadow:
+    inset 3px 0 0 var(--line3),
+    inset 0 -1px 0 rgba(28,49,68,.08) !important;
+  border-bottom-left-radius: 10px !important;
+}
+tr.is-slab-end td:last-child{
+  border-bottom-right-radius: 10px !important;
+}
+
+/* Totals: one plate, not a row of rounded tiles */
+tr.is-totals-start th,
+tr.is-totals-start td{
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+tr.is-totals-start th{
+  border-top-left-radius: 12px !important;
+}
+tr.is-totals-start td:last-child{
+  border-top-right-radius: 12px !important;
+}
+tr.is-totals-end{
+  box-shadow:
+    0 10px 18px rgba(28,49,68,.08),
+    0 22px 36px rgba(28,49,68,.10) !important;
+}
+tr.is-totals-end th,
+tr.is-totals-end td{
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  box-shadow:
+    inset 0 -1px 0 rgba(28,49,68,.12) !important;
+}
+tr.is-totals-end th{ border-bottom-left-radius: 12px !important; }
+tr.is-totals-end td:last-child{ border-bottom-right-radius: 12px !important; }
+
+/* Solid plate fill so gradients don't compute as transparent holes */
+tr.in-line-1 td, tr.in-line-2 td, tr.in-line-3 td,
+tr.in-line-1 th, tr.in-line-2 th, tr.in-line-3 th{
+  background-color: var(--panel) !important;
+}
+tr[class*="production-daily-"] th,
+tr[class*="production-daily-"] td{
+  background-color: #e8ebef !important;
+}
