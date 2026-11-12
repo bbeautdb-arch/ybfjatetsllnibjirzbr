@@ -18,7 +18,7 @@
   var f=function(n){return fin(n)?(typeof num==='function'?num(n,2):n.toFixed(2)):'—';};
   var pc=function(n){return fin(n)?(typeof num==='function'?num(n,1):n.toFixed(1))+'%':'—';};
   var tone=function(n){return n===null?'':n<-1e-6?'is-behind':n>1e-6?'is-ahead':'';};
-  var dm=function(iso){return Number(iso.slice(8))+'/'+Number(iso.slice(5,7));};
+  var dm=function(iso){return typeof iso==='string'&&iso.length>=10?Number(iso.slice(8))+'/'+Number(iso.slice(5,7)):'—';};
   function row(label,valueHtml,cls){var d=document.createElement('div');d.className='production-pace-row'+(cls?' '+cls:'');d.innerHTML='<span>'+label+'</span><b>'+valueHtml+'</b>';return d;}
   function enhance(html,card){
     var p=card&&card.pace;if(!p||!card.actual)return html;
@@ -67,7 +67,7 @@
     var r2=row('เป้าทั้งเดือน'+(planInc?'*':''),f(plan));r2.querySelector('b').classList.add('pace-target');box.appendChild(r2);
     box.appendChild(row('ต่างจากเป้า',fgap===null?'—':(fgap<0?'ต่ำกว่าเป้า −':fgap>0?'เกินเป้า +':'ตามเป้า ')+f(Math.abs(fgap)),'production-pace-gap '+tone(fgap)));
     if(fpct!==null){var s2=document.createElement('div');s2.className='production-pace-sub '+tone(fgap);s2.textContent='ทำได้ '+pc(fpct)+' ของเป้าเดือน';box.appendChild(s2);}
-    var n=document.createElement('div');n.className='production-pace-note';n.textContent='= จริงสะสม + เฉลี่ย/วัน × '+p.forecastAvailableDays+' วันที่เหลือ';box.appendChild(n);
+    var n=document.createElement('div');n.className='production-pace-note';n.textContent='= จริงสะสม + เฉลี่ย/วัน × '+(fin(p.forecastAvailableDays)?p.forecastAvailableDays:'—')+' วันที่เหลือ';box.appendChild(n);
     status.before(box);
     if(p.forecastStatus==='evidence-pending'&&fgap!==null){
       status.textContent=(fgap<0?'ที่ความเร็วนี้ยังไม่ทันเป้า':'ที่ความเร็วนี้ทันเป้า')+' · ชั่วคราว* (วันนี้ยังไม่มีรายงานครบ)';
