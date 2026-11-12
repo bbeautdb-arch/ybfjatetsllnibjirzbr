@@ -85,3 +85,4 @@ jobs:
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
 # redeploy trigger 2026-11-12 (no-op, retry 2)
+# redeploy 2026-11-13
