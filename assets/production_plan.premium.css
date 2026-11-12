@@ -4007,3 +4007,100 @@ html body #main table.production-overview-grid tr.rm-sup-total > td{
   html body #main table.production-overview-grid tr.rm-sup > th.rm-sup-th{ font-size: 10px !important; padding: 3px 4px 3px 9px !important; }
   html body #main table.production-overview-grid tr.rm-sup > td{ font-size: 10.5px !important; }
 }
+
+/* ===== line-detail-v3 (appended; visual only) =====
+   Multi-lane days: equal sub-columns, one per thickness lane, divider through every detail row. */
+html body #main table.production-overview-grid{--gm3-line:#b9c6d3;--gm3-w:112px}
+html body #main table.production-overview-grid td.gm3-lane{width:var(--gm3-w);min-width:var(--gm3-w);max-width:var(--gm3-w);box-sizing:border-box;padding-left:5px;padding-right:5px}
+html body #main table.production-overview-grid td.gm3-lane.gm3-notlast{box-shadow:inset -1px 0 0 var(--gm3-line)}
+html body #main table.production-overview-grid td.gm3-lane input{width:100% !important;min-width:0;box-sizing:border-box}
+html body #main table.production-overview-grid td.gm3-lane .bd-size,
+html body #main table.production-overview-grid td.gm3-lane .bd-count{text-align:center}
+html body #main table.production-overview-grid td.gm3-cell{padding:0 !important;width:calc(var(--n) * var(--gm3-w));min-width:calc(var(--n) * var(--gm3-w));vertical-align:top;
+  background-image:repeating-linear-gradient(to right,transparent 0,transparent calc(100% / var(--n) - 1px),var(--gm3-line) calc(100% / var(--n) - 1px),var(--gm3-line) calc(100% / var(--n))) !important}
+html body #main table.production-overview-grid td.gm3-cell .gm3-cols{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr))}
+html body #main table.production-overview-grid td.gm3-cell .gm3-sub{display:flex;align-items:center;justify-content:space-between;gap:3px;padding:6px 6px;min-width:0;min-height:32px;box-sizing:border-box;font-variant-numeric:tabular-nums;font-size:12px}
+html body #main table.production-overview-grid td.gm3-cell .gm3-sub > *{min-width:0}
+html body #main table.production-overview-grid td.gm3-cell .gm3-sub .mail-metric-goal{color:var(--ink-soft,#5d6f80);font-weight:500}
+html body #main table.production-overview-grid td.gm3-cell .gm3-sub .mail-metric-actual{margin-left:auto}
+html body #main table.production-overview-grid td.gm3-cell .gm3-sub-v{justify-content:center;font-size:11px}
+html body #main table.production-overview-grid td.gm3-cell .gm3-sub-v small{display:block;text-align:center}
+html body #main table.production-overview-grid td.gm3-cell .gm3-sub-v .gm2-pv{font-size:11px;font-weight:600;color:#305a46}
+html body #main table.production-overview-grid td.gm3-cell .gm3-sub-h{flex-direction:column;gap:2px;padding:6px 5px}
+html body #main table.production-overview-grid td.gm3-cell .gm3-sub-h .gm3-hp{display:block;width:100%}
+html body #main table.production-overview-grid td.gm3-cell .gm3-sub-h input.pv-hr{width:100% !important;box-sizing:border-box;text-align:center}
+html body #main table.production-overview-grid td.gm3-cell .gm3-ha{font-size:11px;font-weight:700;color:#176345;text-align:center}
+html body #main table.production-overview-grid td.gm3-cell .gm3-empty{color:#a3b0a7;font-weight:400}
+html body #main table.production-overview-grid td.gm3-cell .gm3-total{border-top:1px solid var(--gm3-line);padding:4px 8px;margin:0;background:rgba(255,255,255,.55)}
+html body #main table.production-overview-grid td.gm3-cell .gm3-total .mail-metric-head{display:none !important}
+html body #main table.production-overview-grid td.gm3-cell .gm3-day-total{display:flex;gap:6px;justify-content:center;align-items:center;border-top:1px solid var(--gm3-line);padding:4px 6px;background:rgba(255,255,255,.55)}
+html body #main table.production-overview-grid td.gm3-cell .gm3-orph{border-top:1px dashed var(--gm3-line);padding:3px 8px;background:rgba(255,255,255,.55)}
+html body #main table.production-overview-grid td.gm3-cell .gm3-orph-row{display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:11px;padding:1px 0;color:#4d5f70}
+/* v3: source nodes the app may rewrite stay in place but hidden; mirrored columns show them */
+html body #main table.production-overview-grid td.gm3-cell .mail-metric-run-label{display:none !important}
+html body #main table.production-overview-grid td.gm3-cell .mail-metric-grid.gm3-total > .mail-metric-label:not(.mail-metric-total),
+html body #main table.production-overview-grid td.gm3-cell .mail-metric-grid.gm3-total > .mail-metric-goal:not(.mail-metric-total),
+html body #main table.production-overview-grid td.gm3-cell .mail-metric-grid.gm3-total > .mail-metric-actual:not(.mail-metric-total){display:none !important}
+html body #main table.production-overview-grid td.gm3-cell .mail-inline-metric-stack > small.mail-inline-presses{display:none !important}
+html body #main table.production-overview-grid td.gm3-cell .gm3-ol{font-weight:600;color:#53677a}
+/* v3 dividers: drawn as overlays/borders so row backgrounds cannot hide them */
+html body #main table.production-overview-grid td.gm3-lane.gm3-notlast{box-shadow:none !important;border-right:1px solid var(--gm3-line) !important}
+html body #main table.production-overview-grid td.gm3-cell{position:relative;background-image:none !important}
+html body #main table.production-overview-grid td.gm3-cell::before{content:"";position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;z-index:1;
+  background:repeating-linear-gradient(to right,transparent 0,transparent calc(100% / var(--n) - 1px),var(--gm3-line) calc(100% / var(--n) - 1px),var(--gm3-line) calc(100% / var(--n)))}
+html body #main table.production-overview-grid td.gm3-cell .gm3-day-total{width:auto !important;max-width:none !important;overflow:visible;position:static;transform:none;margin:0;font-size:11px;white-space:nowrap}
+@media (max-width:700px){html body #main table.production-overview-grid{--gm3-w:88px}
+  html body #main table.production-overview-grid td.gm3-cell .gm3-sub{padding:6px 4px;font-size:11px}}
+
+/* ===== line-detail-v4 (appended; visual only) =====
+   Multi-lane days follow the owner's Excel mock-up: a day split into N thickness columns,
+   spanning "รวม" rows on top of each block, per-column plan/actual pairs, grid lines everywhere.
+   Single-lane days are untouched. */
+html body #main table.production-overview-grid{--gm4-line:#8ea3b8;--gm3-line:#8ea3b8}
+html body #main table.production-overview-grid td.gm3-cell::before{display:none !important}
+html body #main table.production-overview-grid td.gm3-cell{background-image:none !important}
+html body #main table.production-overview-grid td.gm3-cell > * + *{border-top:1px solid var(--gm4-line)}
+html body #main table.production-overview-grid td.gm3-cell .gm3-total{border-top:0;padding:5px 8px;display:flex;justify-content:center;align-items:center;gap:8px}
+html body #main table.production-overview-grid td.gm3-cell .gm3-cols{background:transparent}
+html body #main table.production-overview-grid td.gm3-cell .gm3-cols > .gm3-sub + .gm3-sub{border-left:1px solid var(--gm4-line)}
+html body #main table.production-overview-grid td.gm3-lane.gm3-notlast{border-right:1px solid var(--gm4-line) !important}
+html body #main table.production-overview-grid td.gm3-cell .gm3-day-total{border-top:1px solid var(--gm4-line)}
+html body #main table.production-overview-grid td.gm3-cell .gm3-orph{border-top:1px dashed var(--gm4-line)}
+/* spanning รวม row on qty/phr (the page's own pair) */
+html body #main table.production-overview-grid td.gm3-cell > .mail-inline-pair{display:flex;justify-content:center;align-items:center;gap:6px;padding:5px 8px;width:100%;box-sizing:border-box}
+/* per-column plan / actual pair */
+html body #main table.production-overview-grid td.gm3-cell .gm4-pair{justify-content:center;gap:4px;flex-wrap:nowrap;white-space:nowrap}
+html body #main table.production-overview-grid td.gm3-cell .gm4-p{color:#5d6f80;font-weight:500}
+html body #main table.production-overview-grid td.gm3-cell .gm4-s{color:#9aa9b8}
+html body #main table.production-overview-grid td.gm3-cell .gm4-a{color:#12392b;font-weight:700}
+/* จริง − แผน row */
+html body #main table.production-overview-grid td.gm3-cell .gm4-var{padding:0}
+html body #main table.production-overview-grid td.gm3-cell .gm4-cap{display:block;font-size:9.5px;line-height:1.2;color:#5d6f80;padding:3px 6px 0;letter-spacing:.01em}
+html body #main table.production-overview-grid td.gm3-cell .gm4-var-cells{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+html body #main table.production-overview-grid td.gm3-cell .gm4-var-cells > .gm4-one{justify-content:center;text-align:center;min-height:24px;padding:3px 4px;font-weight:700;font-size:12px;white-space:nowrap}
+html body #main table.production-overview-grid td.gm3-cell .gm4-var-cells > .gm4-one + .gm4-one{border-left:1px solid var(--gm4-line)}
+html body #main table.production-overview-grid td.gm3-cell .gm4-neg{color:#b3261e}
+html body #main table.production-overview-grid td.gm3-cell .gm4-pos{color:#176345}
+html body #main table.production-overview-grid td.gm3-cell .gm4-var-cells > .gm3-empty{font-weight:400;color:#a3b0a7}
+/* left label of the qty block visually continues over the size/count row below it */
+html body #main table.production-overview-grid tr.bd-row th{border-top-color:transparent}
+@media (max-width:700px){
+  html body #main table.production-overview-grid{--gm3-w:80px}
+  html body #main table.production-overview-grid td.gm3-lane{padding-left:3px;padding-right:3px}
+  /* the page gives a multi-lane day header min-width = lanes x 92px (inline); at 390px let it follow the lane width so 3 lanes fit */
+  html body #main table.production-overview-grid td.gm3-lane input.pv-input{font-size:11px !important;padding-left:3px !important;padding-right:3px !important;text-overflow:clip}
+  html body #main table.production-overview-grid td.gm3-lane input.pv-size{font-size:10px !important}
+  html body #main table.production-overview-grid td.gm3-lane .bd-size{font-size:9px;white-space:nowrap;letter-spacing:-.02em}
+  html body #main table.production-overview-grid thead th[colspan="2"]{min-width:calc(2 * var(--gm3-w)) !important}
+  html body #main table.production-overview-grid thead th[colspan="3"]{min-width:calc(3 * var(--gm3-w)) !important}
+  html body #main table.production-overview-grid thead th[colspan="4"]{min-width:calc(4 * var(--gm3-w)) !important}
+  html body #main table.production-overview-grid td.gm3-cell > .mail-inline-pair{gap:3px;padding:4px 3px;min-width:0}
+  html body #main table.production-overview-grid td.gm3-cell .mail-inline-goal,
+  html body #main table.production-overview-grid td.gm3-cell .mail-inline-actual,
+  html body #main table.production-overview-grid td.gm3-cell .mail-metric-goal,
+  html body #main table.production-overview-grid td.gm3-cell .mail-metric-actual{min-width:0 !important;width:auto !important;font-size:11px}
+  html body #main table.production-overview-grid td.gm3-cell .gm3-total{padding:4px 3px;gap:3px}
+  html body #main table.production-overview-grid td.gm3-cell .gm3-day-total{padding:4px 3px}
+  html body #main table.production-overview-grid td.gm3-cell .gm4-pair{gap:2px;font-size:10px;letter-spacing:-.01em}
+  html body #main table.production-overview-grid td.gm3-cell .gm4-var-cells > .gm4-one{font-size:10.5px;padding:3px 2px}
+}
