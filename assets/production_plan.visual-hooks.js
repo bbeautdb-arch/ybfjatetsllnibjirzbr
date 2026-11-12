@@ -13,7 +13,6 @@
     });
   }
 
-  
   function tagLineSections(table) {
     let current = null;
     table.querySelectorAll('tbody tr').forEach(function (tr) {
@@ -76,19 +75,55 @@
           }
         });
         tagEmptyOrZero(cell.el);
+        if (cell.el.querySelector && cell.el.querySelector('.stock-override')) {
+          cell.el.classList.add('is-actual-cell');
+        }
       });
     });
   }
+
+  /* Mapping is documented in premium-D-fit/MAPPING.md.
+     Actual = labels that the page itself marks as ของจริง / รับเข้าจริง / etc.
+     Target/plan = labels with เป้า, Target, แผน, คาดการณ์, ประมาณ, or schedule inputs. */
+  const ACTUAL_RE = /รับเข้าจริง|ราคาจริง|ใช้จริง|การใช้จริง|คงเหลือจริง|ผลจริง|ผลิตจริง|ของจริง|งบที่ใช้จริง|สะสมถึงตอนนี้|นับจริง/;
+  const PLAN_RE = /เป้า|Target|target|แผนรับเข้า|ราคาแผน|แผนออก|คาดการณ์|เป้ารับ|เป้าราคา|P\/hr|Density มาตรฐาน|≈ มาตรฐาน|มาตรฐาน 2\.5|ประมาณการใช้|เบิกใช้|ผลผลิต 2\.5|ผลผลิตคาดการณ์|ประสิทธิภาพรวม|ชม\.ผลิต|^ความหนา$|^ขนาด$|เงินที่ต้องเตรียม|รวมงบ|รวมเป้า|ยิวการใช้ไม้/;
 
   function tagRowKind(tr) {
     const labelEl = tr.querySelector('th');
     const label = ((labelEl && labelEl.textContent) || '').replace(/\s+/g, ' ').trim();
     if (!label) return;
-    if (/รับเข้าจริง|ราคาจริง|ใช้จริง|คงเหลือจริง|ผลจริง|ผลิตจริง|ของจริง/.test(label)) {
+    tr.classList.remove('is-actual-row', 'is-plan-row');
+    if (ACTUAL_RE.test(label)) {
       tr.classList.add('is-actual-row');
-    } else if (/เป้า|แผน |แผน$|เป้ารับ|เป้าราคา|P\/hr เป้า|เป้าแผ่น/.test(label)) {
+    } else if (PLAN_RE.test(label)) {
       tr.classList.add('is-plan-row');
+      if (/≈ มาตรฐาน|มาตรฐาน 2\.5|ผลผลิต 2\.5 รวม/.test(label)) {
+        tr.classList.add('is-plan-emphasis');
+      }
     }
+  }
+
+  function tagCards() {
+    document.querySelectorAll('.card').forEach(function (card) {
+      const lab = (((card.querySelector('.label') || {}).textContent) || '').replace(/\s+/g, ' ').trim();
+      if (!lab) return;
+      card.classList.remove('is-actual-card', 'is-plan-card');
+      if (ACTUAL_RE.test(lab) || /งบที่ใช้จริง|สะสมถึงตอนนี้/.test(lab)) {
+        card.classList.add('is-actual-card');
+      } else if (PLAN_RE.test(lab) || /เตรียม|รวมงบ|รวมเป้า|^Line [123]$|^LINE [123]$/.test(lab)) {
+        card.classList.add('is-plan-card');
+      }
+    });
+  }
+
+
+  function tagLabeledFields() {
+    document.querySelectorAll('label, .wood-cfg label, .cfg-grid label, [class*="wood"] label').forEach(function (lab) {
+      const t = (lab.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!t) return;
+      if (ACTUAL_RE.test(t)) lab.classList.add('is-actual-label');
+      else if (PLAN_RE.test(t) || /Target|เป้า|เป้าหมาย/.test(t)) lab.classList.add('is-plan-label');
+    });
   }
 
   function tagEmptyOrZero(el) {
@@ -107,11 +142,27 @@
     }
   }
 
+  function ensureLegend() {
+    if (document.querySelector('.aaf-value-legend')) return;
+    const el = document.createElement('div');
+    el.className = 'aaf-value-legend';
+    el.setAttribute('role', 'note');
+    el.innerHTML = '<span class="lg-chip lg-actual">ค่าจริง</span>' +
+      '<span class="lg-chip lg-target">ค่าตามเป้า</span>';
+    const host = document.querySelector('header .toolbar') || document.querySelector('header');
+    if (host) host.appendChild(el);
+    else document.body.appendChild(el);
+  }
+
   function tagAll() {
     const ym = (document.getElementById('monthPicker') || {}).value;
     if (!ym) return;
-    document.querySelectorAll('table.preview-table, table.production-overview-grid').forEach(function (t) {
-      tagTable(t, ym);
+    document.querySelectorAll('table.preview-table, table.production-overview-grid, table.std-table, table.size-table').forEach(function (t) {
+      if (t.classList.contains('preview-table') || t.classList.contains('production-overview-grid')) {
+        tagTable(t, ym);
+      } else {
+        t.querySelectorAll('tbody tr').forEach(tagRowKind);
+      }
     });
     document.querySelectorAll('.daycard').forEach(function (card) {
       const num = card.querySelector('.dayhead .num, .num');
@@ -120,6 +171,9 @@
       const date = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, d);
       if (date.getDay() === 0 || date.getDay() === 6) card.classList.add('is-weekend');
     });
+    tagCards();
+    tagLabeledFields();
+    ensureLegend();
   }
 
   let scheduled = false;
