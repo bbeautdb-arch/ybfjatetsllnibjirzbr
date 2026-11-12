@@ -3285,3 +3285,725 @@ html[data-production-grid-density="compact"] table.production-overview-grid .mai
 .production-summary-pace > .production-pace-status{
   display: none !important;
 }
+
+/* ===== grid-modern-v2 (append-only, visual only, 2026-11-12) =====
+   Owner: "ปรับกล่องให้เท่ากัน" + "แบ่งช่องย่อยลงมาตามความหนา" +
+          "ตัวอักษร หัวข้อ ช่องกว้าง/ใหญ่ ขนาด ยังไม่ OK".
+   No markup/data/formula/save changes. Scoped with #main so it wins over the
+   older layered rules without touching them.
+   Type scale  : 9.5 hint · 10.5 meta · 11.5 data · 12 labels/inputs · 15 day number.
+   Fonts       : Prompt (Thai/labels) · Sora (numerals), tabular figures.
+   Dividers    : day = 2px solid slate-blue · lane/sub = 1px dashed pale · stack row = 1px solid paler.
+   Day width   : 1 lane 132 · 2 lanes 210 · 3 lanes 276 · 4 lanes 350. */
+
+/* ---------- A. Summary card pairs: equal width, equal height, aligned rows ---------- */
+html body #main .production-thickness-pair{
+  align-items: stretch !important;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important;
+  gap: 14px !important;
+}
+html body #main .production-thickness-pair > .production-thickness-plan,
+html body #main .production-thickness-pair > .production-thickness-actual{
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+  padding: 12px 12px 10px !important;
+  height: auto !important;
+}
+html body #main .production-thickness-pair > .production-thickness-plan > div{
+  flex: 1 1 auto;
+  margin-bottom: 0 !important;
+  display: flex;
+  flex-direction: column;
+}
+/* one heading band of the same height on both sides */
+html body #main .production-thickness-pair .production-thickness-heading,
+html body #main .production-thickness-pair > .production-thickness-plan > div > div:first-child{
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center !important;
+  align-content: center;
+  column-gap: .5em;
+  box-sizing: border-box !important;
+  min-height: 38px !important;
+  height: 38px !important;
+  margin: 0 0 6px !important;
+  font-size: 13px !important;
+  line-height: 1.25 !important;
+  overflow: hidden;
+}
+html body #main .production-thickness-pair .production-thickness-heading small{ font-size: 10px !important; }
+html body #main .production-thickness-pair .tablewrap{
+  flex: 1 1 auto;
+  max-height: none !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  margin: 0 !important;
+}
+html body #main .production-thickness-pair .std-table{
+  width: 100% !important;
+  min-width: 100% !important;
+  table-layout: auto;
+  font-size: 11px !important;
+}
+html body #main .production-thickness-pair .std-table th,
+html body #main .production-thickness-pair .std-table td{
+  padding: 4px 3px !important;
+  line-height: 1.25;
+  box-sizing: border-box;
+}
+html body #main .production-thickness-pair .std-table input{
+  width: 40px !important; padding: 2px 3px !important; font-size: 11px !important; height: 22px !important;
+}
+/* identical row heights on both sides so the lines run straight across */
+html body #main .production-thickness-pair:not(.production-zone-pair) .std-table thead tr{ height: 64px !important; }
+html body #main .production-thickness-pair.production-zone-pair .std-table thead tr{ height: 40px !important; }
+html body #main .production-thickness-pair .std-table tbody tr{ height: 34px !important; }
+html body #main .production-thickness-pair .std-table tbody tr[data-plan-thickness-total],
+html body #main .production-thickness-pair .std-table tbody tr.production-thickness-total{ height: 42px !important; }
+@media (max-width: 1100px){
+  html body #main .production-thickness-pair{ grid-template-columns: 1fr !important; }
+  html body #main .production-thickness-pair .production-thickness-heading,
+  html body #main .production-thickness-pair > .production-thickness-plan > div > div:first-child{
+    height: auto !important; min-height: 30px !important;
+  }
+}
+
+/* ---------- B. Line 1/2/3 grid: type, headers, widths, rhythm ---------- */
+html body #main table.production-overview-grid{
+  --g2-ink: #1b2f42;
+  --g2-sub: #5a6e82;
+  --g2-hint: #8494a5;
+  --g2-day: #8da2b8;
+  --g2-lane: #dde5ee;
+  --g2-row: #e9eef4;
+  --g2-chip: #f3f6fa;
+  --g2-pad-x: 6px;
+  --g2-pad-y: 4px;
+  --g2-label-w: 108px;
+  --g2-fs: 11.5px;
+  font-family: "Prompt","Sora","Noto Sans Thai",sans-serif !important;
+  font-size: var(--g2-fs) !important;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+html[data-production-grid-density="full"] body #main table.production-overview-grid,
+html body #main table.production-overview-grid[data-gm2-density="full"]{ --g2-pad-y: 6px; }
+html[data-production-grid-density="compact"] body #main table.production-overview-grid{ --g2-pad-y: 3px; }
+
+/* cells: one padding, one border language */
+html body #main table.production-overview-grid > tbody > tr > td,
+html body #main table.production-overview-grid > thead > tr > th:not(.rowlabel-corner){
+  padding: var(--g2-pad-y) var(--g2-pad-x) !important;
+  font-size: var(--g2-fs) !important;
+  vertical-align: middle;
+  text-align: center;
+  border-bottom: 1px solid var(--g2-row) !important;
+  border-right: 1px dashed var(--g2-lane) !important;
+  white-space: nowrap;
+}
+html body #main table.production-overview-grid > tbody > tr > td.day-end,
+html body #main table.production-overview-grid > thead > tr > th.day-end{
+  border-right: 2px solid var(--g2-day) !important;
+}
+html body #main table.production-overview-grid > tbody > tr > td.day-start:not(:first-of-type){ border-left: 0 !important; }
+
+/* day column widths by lane count (header cell drives the column) */
+html body #main table.production-overview-grid > thead > tr > th[colspan="1"]{ min-width: 132px; }
+html body #main table.production-overview-grid > thead > tr > th[colspan="2"]{ min-width: 210px; }
+html body #main table.production-overview-grid > thead > tr > th[colspan="3"]{ min-width: 276px; }
+html body #main table.production-overview-grid > thead > tr > th[colspan="4"]{ min-width: 350px; }
+html body #main table.production-overview-grid > thead > tr > th[colspan]:not([colspan="1"]):not([colspan="2"]):not([colspan="3"]):not([colspan="4"]){ min-width: 420px; }
+
+/* header: day number + weekday on one baseline, controls underneath */
+html body #main table.production-overview-grid > thead > tr > th:not(.rowlabel-corner){
+  padding: 6px 4px 5px !important;
+  letter-spacing: 0 !important;
+  line-height: 1.2;
+}
+html body #main table.production-overview-grid .production-calendar-day{
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+}
+html body #main table.production-overview-grid .production-calendar-day b{
+  font-family: "Sora","Prompt",sans-serif !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--g2-ink);
+  line-height: 1.1;
+}
+html body #main table.production-overview-grid .production-calendar-day small,
+html body #main table.production-overview-grid .production-calendar-weekday{
+  font-family: "Prompt",sans-serif !important;
+  font-size: 10.5px !important;
+  font-weight: 500;
+  color: var(--g2-sub);
+  letter-spacing: 0;
+}
+html body #main table.production-overview-grid .production-calendar-weekend b,
+html body #main table.production-overview-grid .production-calendar-weekend small,
+html body #main table.production-overview-grid .production-calendar-red-day b,
+html body #main table.production-overview-grid .production-calendar-red-day small{ color: #b0403a !important; }
+html body #main table.production-overview-grid .day-ctl{
+  display: flex; justify-content: center; gap: 4px; margin-top: 3px;
+}
+html body #main table.production-overview-grid .day-ctl button{
+  width: 20px; height: 18px; min-width: 20px; padding: 0 !important;
+  font-size: 12px !important; line-height: 16px; border-radius: 5px;
+}
+html body #main table.production-overview-grid .gm2-lanes{
+  display: block;
+  margin: 3px auto 0;
+  width: max-content;
+  padding: 0 7px;
+  font-family: "Prompt",sans-serif;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 15px;
+  color: #3d5a78;
+  background: #e5edf6;
+  border: 1px solid #c8d6e6;
+  border-radius: 999px;
+}
+
+/* row labels: label 12/600 + one-line hint */
+html body #main table.production-overview-grid > tbody > tr > th:not([colspan]),
+html body #main table.production-overview-grid th.rowlabel-corner{
+  width: var(--g2-label-w) !important;
+  min-width: var(--g2-label-w) !important;
+  max-width: var(--g2-label-w) !important;
+  padding: var(--g2-pad-y) 8px !important;
+  text-align: left !important;
+  font-family: "Prompt",sans-serif !important;
+  white-space: normal !important;
+  line-height: 1.25;
+}
+html body #main table.production-overview-grid th.rowlabel-corner{
+  font-size: 11px !important; font-weight: 600 !important; color: var(--g2-sub) !important; letter-spacing: 0 !important;
+}
+html body #main table.production-overview-grid .gm-row-label{
+  display: block;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--g2-ink) !important;
+  letter-spacing: 0;
+}
+html body #main table.production-overview-grid tr[data-mail-plan-metric] > th .mail-inline-legend{ display: none !important; }
+html body #main table.production-overview-grid tr[data-mail-plan-metric] > th::after{
+  content: "เป้า │ จริง";
+  display: block;
+  margin-top: 1px;
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--g2-hint);
+  letter-spacing: .02em;
+}
+html body #main table.production-overview-grid tr[data-mail-plan-metric="hours"] > th::after{ content: "ชม. เป้า │ จริง"; }
+
+/* inputs: one size, centred numerals */
+html body #main table.production-overview-grid input.pv-input{
+  box-sizing: border-box !important;
+  height: 26px !important;
+  padding: 0 6px !important;
+  width: 100% !important;
+  max-width: 92px !important;
+  min-width: 52px;
+  font-family: "Sora","Prompt",sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  text-align: center !important;
+  color: var(--g2-ink) !important;
+  background: #fff !important;
+  border: 1px solid #ccd6e2 !important;
+  border-radius: 6px !important;
+}
+html body #main table.production-overview-grid input.pv-input:focus{
+  border-color: #3b6ea5 !important;
+  box-shadow: 0 0 0 2px rgba(59,110,165,.18) !important;
+}
+html body #main table.production-overview-grid input.pv-size{ max-width: 100px !important; font-family: "Prompt","Sora",sans-serif !important; font-weight: 500; }
+html body #main table.production-overview-grid input.pv-note{ max-width: none !important; text-align: left !important; font-family: "Prompt",sans-serif !important; font-weight: 400; font-size: 11.5px !important; }
+
+/* per-lane size breakdown line (1.22×2.44 m. / 10,304) */
+html body #main table.production-overview-grid tr.bd-row .bd-size{ display:block; font-size: 10px; font-weight: 400; color: var(--g2-sub); }
+html body #main table.production-overview-grid tr.bd-row .bd-count{
+  display:block; font-family:"Sora",sans-serif !important; font-size: 11.5px; font-weight: 600; color: var(--g2-ink) !important;
+}
+
+/* ---------- C. Metric cells: one mini-table language [label | เป้า | จริง] ---------- */
+html body #main table.production-overview-grid tr[data-mail-plan-metric] > td{ text-align: left; }
+html body #main table.production-overview-grid tr[data-mail-plan-metric="qty"] > td,
+html body #main table.production-overview-grid tr[data-mail-plan-metric="phr"] > td{ padding: var(--g2-pad-y) 5px !important; }
+
+html body #main table.production-overview-grid .mail-inline-slash{ display: none !important; }
+html body #main table.production-overview-grid .mail-inline-goal,
+html body #main table.production-overview-grid .mail-metric-goal,
+html body #main table.production-overview-grid .mail-metric-actual,
+html body #main table.production-overview-grid .mail-inline-actual,
+html body #main table.production-overview-grid .mail-inline-actual b,
+html body #main table.production-overview-grid .gm2-hp,
+html body #main table.production-overview-grid .gm2-ha{
+  font-family: "Sora","Prompt",sans-serif !important;
+  font-size: var(--g2-fs) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* qty + P/hr: pair becomes the same 3-col mini table */
+html body #main table.production-overview-grid tr[data-mail-plan-metric="qty"] .mail-inline-pair,
+html body #main table.production-overview-grid tr[data-mail-plan-metric="phr"] .mail-inline-pair{
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  border: 1px solid var(--g2-lane);
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+}
+html body #main table.production-overview-grid td:not([colspan="1"]) .mail-inline-pair{
+  grid-template-columns: 42px minmax(0,1fr) minmax(0,1fr) !important;
+}
+html body #main table.production-overview-grid .mail-inline-pair > .gm2-tl{
+  align-self: stretch;
+  display: flex; align-items: center;
+  padding: 3px 6px;
+  font-family: "Prompt",sans-serif;
+  font-size: 10.5px; font-weight: 600; color: var(--g2-ink);
+  background: var(--g2-chip);
+  border-right: 1px solid var(--g2-row);
+}
+html body #main table.production-overview-grid tr[data-mail-plan-metric="qty"] [data-mail-inline-metric],
+html body #main table.production-overview-grid tr[data-mail-plan-metric="phr"] [data-mail-inline-metric],
+html body #main table.production-overview-grid tr[data-mail-plan-metric="qty"] .mail-inline-metric-stack,
+html body #main table.production-overview-grid tr[data-mail-plan-metric="phr"] .mail-inline-metric-stack{ display: contents !important; }
+html body #main table.production-overview-grid tr[data-mail-plan-metric="qty"] .mail-inline-goal,
+html body #main table.production-overview-grid tr[data-mail-plan-metric="phr"] .mail-inline-goal{
+  padding: 3px 7px; text-align: right; color: var(--g2-sub); font-weight: 500;
+}
+html body #main table.production-overview-grid tr[data-mail-plan-metric="qty"] .mail-inline-actual,
+html body #main table.production-overview-grid tr[data-mail-plan-metric="phr"] .mail-inline-actual{
+  margin: 2px 4px 2px 0; padding: 1px 6px !important; text-align: right; justify-self: stretch;
+  border-radius: 5px; font-weight: 700;
+}
+html body #main table.production-overview-grid .mail-inline-actual{ cursor: pointer; }
+/* per-thickness press lines become labelled sub-rows */
+html body #main table.production-overview-grid .mail-inline-presses{
+  grid-column: 1 / -1;
+  display: flex !important;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin: 0 !important;
+  padding: 3px 7px;
+  border-top: 1px solid var(--g2-row);
+  background: #fafcfd;
+  font-size: 10.5px !important;
+  line-height: 1.25;
+  color: #2f6a45;
+  white-space: nowrap;
+}
+html body #main table.production-overview-grid .mail-inline-presses .gm2-pl{ font-weight: 600; color: var(--g2-ink); }
+html body #main table.production-overview-grid .mail-inline-presses .gm2-pv{ font-family:"Sora","Prompt",sans-serif; font-weight: 600; }
+
+/* 2.5-equivalent grid: [label | เป้า | จริง], รวมวัน separated at the bottom */
+html body #main table.production-overview-grid .mail-metric-grid{
+  display: grid !important;
+  grid-template-columns: 44px minmax(0,1fr) minmax(0,1fr) !important;
+  gap: 0 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: var(--g2-fs) !important;
+  background: #fff;
+  border: 1px solid var(--g2-lane);
+  border-radius: 6px;
+  overflow: hidden;
+  align-items: stretch;
+}
+html body #main table.production-overview-grid .mail-metric-grid > span{
+  display: flex !important;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 22px;
+  margin: 0 !important;
+  padding: 3px 6px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--g2-row) !important;
+  background: transparent;
+  white-space: nowrap;
+  text-align: right;
+  justify-content: flex-end;
+}
+html body #main table.production-overview-grid .mail-metric-grid > .mail-metric-head{
+  order: -1; min-height: 16px; padding: 1px 6px !important;
+  font-family: "Prompt",sans-serif !important;
+  font-size: 9.5px !important; font-weight: 600; color: var(--g2-hint);
+  background: var(--g2-chip); letter-spacing: .03em;
+}
+html body #main table.production-overview-grid .mail-metric-grid > .mail-metric-label{
+  justify-content: flex-start;
+  font-family: "Prompt",sans-serif !important;
+  font-size: 10.5px !important; font-weight: 600; color: var(--g2-ink);
+  background: var(--g2-chip);
+  border-right: 1px solid var(--g2-row) !important;
+}
+html body #main table.production-overview-grid .mail-metric-grid > .mail-metric-goal{ color: var(--g2-sub); font-weight: 500; }
+html body #main table.production-overview-grid .mail-metric-grid > .mail-metric-actual{ font-weight: 700; }
+html body #main table.production-overview-grid .mail-metric-grid > .mail-metric-actual button{
+  width: 100%; text-align: right; padding: 0 !important; border: 0; background: transparent;
+}
+html body #main table.production-overview-grid .mail-metric-grid > .mail-metric-total{
+  order: 50;
+  font-weight: 700 !important;
+  background: #edf2f8 !important;
+  border-top: 2px solid #aebdd0 !important;
+  border-bottom: 0 !important;
+  color: var(--g2-ink);
+}
+html body #main table.production-overview-grid .mail-metric-grid > .gm-progress{
+  order: 60; grid-column: 1 / -1; display: block !important; min-height: 0; padding: 0 !important; height: 3px;
+  border: 0 !important; background: #e3eaf1; border-radius: 0;
+}
+html body #main table.production-overview-grid .mail-metric-grid > .gm-progress i{ display:block; height: 3px; }
+/* one thickness only → no header, no label column, no duplicate row */
+html body #main table.production-overview-grid .mail-metric-grid.gm2-solo > .mail-metric-label:not(.mail-metric-total),
+html body #main table.production-overview-grid .mail-metric-grid.gm2-solo > .mail-metric-goal:not(.mail-metric-total),
+html body #main table.production-overview-grid .mail-metric-grid.gm2-solo > .mail-metric-actual:not(.mail-metric-total){ display: none !important; }
+html body #main table.production-overview-grid .mail-metric-grid.gm2-solo > .mail-metric-total{ border-top: 0 !important; }
+html body #main table.production-overview-grid .mail-metric-grid.gm2-single{ grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important; }
+html body #main table.production-overview-grid .mail-metric-grid.gm2-single > .mail-metric-label,
+html body #main table.production-overview-grid .mail-metric-grid.gm2-single > .mail-metric-head:first-child{ display: none !important; }
+html body #main table.production-overview-grid .mail-metric-grid.gm2-single > .mail-metric-head{ display: none !important; }
+
+/* hours: stacked sub-rows, one per thickness, input sits in its own cell */
+html body #main table.production-overview-grid .gm2-hrs{
+  display: block; width: 100%;
+  background: #fff;
+  border: 1px solid var(--g2-lane);
+  border-radius: 6px;
+  overflow: hidden;
+}
+html body #main table.production-overview-grid .gm2-hr{
+  display: grid;
+  grid-template-columns: 44px minmax(0,1fr) minmax(0,1fr);
+  align-items: stretch;
+  border-bottom: 1px solid var(--g2-row);
+}
+html body #main table.production-overview-grid .gm2-hr:last-child{ border-bottom: 0; }
+html body #main table.production-overview-grid .gm2-hrs.gm2-single .gm2-hr{ grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+html body #main table.production-overview-grid .gm2-hrs.gm2-single .gm2-hl{ display: none; }
+html body #main table.production-overview-grid .gm2-hh{ background: var(--g2-chip); min-height: 16px; }
+html body #main table.production-overview-grid .gm2-hrs.gm2-single .gm2-hh{ display: none; }
+html body #main table.production-overview-grid .gm2-hh > span{
+  padding: 1px 6px; text-align: right; font-size: 9.5px; font-weight: 600; color: var(--g2-hint); letter-spacing: .03em;
+}
+html body #main table.production-overview-grid .gm2-hh > span:empty{ padding: 0; }
+html body #main table.production-overview-grid .gm2-hl{
+  display: flex; align-items: center;
+  padding: 3px 6px;
+  font-family: "Prompt",sans-serif !important;
+  font-size: 10.5px !important; font-weight: 600; color: var(--g2-ink);
+  background: var(--g2-chip);
+  border-right: 1px solid var(--g2-row);
+  white-space: nowrap;
+  margin: 0 !important;
+}
+html body #main table.production-overview-grid .gm2-hp,
+html body #main table.production-overview-grid .gm2-ha{
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: 3px 6px; min-width: 0;
+}
+html body #main table.production-overview-grid .gm2-hp{ justify-content: center; }
+html body #main table.production-overview-grid .gm2-hp input.pv-input{ max-width: 100% !important; min-width: 0; height: 24px !important; }
+html body #main table.production-overview-grid .gm2-ha{ font-weight: 700; color: #2f6a45; }
+html body #main table.production-overview-grid .gm2-ha [data-mail-inline-metric],
+html body #main table.production-overview-grid .gm2-ha .mail-inline-metric-stack{ display: contents !important; }
+html body #main table.production-overview-grid .gm2-ha .mail-inline-actual{ padding: 1px 6px !important; border-radius: 5px; }
+html body #main table.production-overview-grid .gm2-htot{
+  background: #edf2f8;
+  border-top: 2px solid #aebdd0;
+  font-weight: 700;
+}
+html body #main table.production-overview-grid .gm2-htot .gm2-hl{ background: #e2eaf3; }
+html body #main table.production-overview-grid .gm2-htot .gm2-hp{ justify-content: flex-end; font-family:"Sora",sans-serif; font-weight: 700; color: var(--g2-ink); }
+html body #main table.production-overview-grid .gm2-empty{ color: var(--g2-hint); font-weight: 400; }
+
+/* ---------- D. Line banners + mobile ---------- */
+html body #main table.production-overview-grid tr.line-sep th{
+  font-family: "Prompt",sans-serif !important;
+  font-size: 12px !important;
+  letter-spacing: .04em;
+  padding: 5px 10px !important;
+}
+@media (max-width: 440px){
+  html body #main table.production-overview-grid{ --g2-label-w: 92px; --g2-fs: 11px; }
+  html body #main table.production-overview-grid .gm-row-label{ font-size: 11px !important; }
+  html body #main table.production-overview-grid > thead > tr > th[colspan="1"]{ min-width: 128px; }
+}
+
+/* plan table (12 cols) must fit the half-width card: wrap headers, tighter cells */
+html body #main .production-thickness-pair .std-table th{
+  white-space: normal !important;
+  font-size: 10px !important;
+  line-height: 1.2;
+  padding: 4px 2px !important;
+}
+html body #main .production-thickness-pair .std-table td{ font-size: 10.5px !important; padding: 4px 2px !important; }
+html body #main .production-thickness-pair .std-table input{ width: 34px !important; padding: 2px 2px !important; font-size: 10.5px !important; }
+
+/* qty / P-hr mini-table: neutralise the older explicit grid-column placements */
+html body #main table.production-overview-grid tr[data-mail-plan-metric="qty"] .mail-inline-pair > .mail-inline-goal,
+html body #main table.production-overview-grid tr[data-mail-plan-metric="phr"] .mail-inline-pair > .mail-inline-goal,
+html body #main table.production-overview-grid tr[data-mail-plan-metric="qty"] .mail-inline-pair .mail-inline-actual,
+html body #main table.production-overview-grid tr[data-mail-plan-metric="phr"] .mail-inline-pair .mail-inline-actual{ grid-column: auto !important; }
+html body #main table.production-overview-grid .mail-inline-pair > .gm2-tl{ grid-column: auto; }
+
+/* fixed column plan for the half-width tables so all 12 / 9 columns are visible, no scrollbar (wide screens only; narrower = scroll) */
+@media (min-width: 1240px){
+html body #main .production-thickness-pair:not(.production-zone-pair) .std-table{ table-layout: fixed !important; }
+html body #main #production-thickness-plan .std-table thead th:nth-child(1){ width: 6.5% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(2),
+html body #main #production-thickness-plan .std-table thead th:nth-child(3),
+html body #main #production-thickness-plan .std-table thead th:nth-child(4){ width: 8.6% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(5){ width: 9.2% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(6),
+html body #main #production-thickness-plan .std-table thead th:nth-child(7),
+html body #main #production-thickness-plan .std-table thead th:nth-child(8){ width: 6.6% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(9){ width: 9.5% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(10){ width: 9.2% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(11){ width: 8.2% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(12){ width: 8.6% }
+html body #main #production-thickness-actual .std-table thead th:nth-child(1){ width: 10% }
+html body #main #production-thickness-actual .std-table thead th:nth-child(2),
+html body #main #production-thickness-actual .std-table thead th:nth-child(3),
+html body #main #production-thickness-actual .std-table thead th:nth-child(4){ width: 10.5% }
+html body #main #production-thickness-actual .std-table thead th:nth-child(5){ width: 11.5% }
+html body #main #production-thickness-actual .std-table thead th:nth-child(6),
+html body #main #production-thickness-actual .std-table thead th:nth-child(7){ width: 14% }
+html body #main #production-thickness-actual .std-table thead th:nth-child(8){ width: 10% }
+html body #main #production-thickness-actual .std-table thead th:nth-child(9){ width: 9% }
+}
+@media (min-width: 1240px){
+html body #main .production-thickness-pair .std-table td,
+html body #main .production-thickness-pair .std-table th{ overflow: hidden; text-overflow: clip; }
+}
+
+html body #main table.production-overview-grid .mail-inline-pair > .mail-inline-presses,
+html body #main table.production-overview-grid .mail-inline-pair .mail-inline-presses{
+  justify-self: stretch !important; width: 100% !important; max-width: none !important; min-width: 0 !important; box-sizing: border-box;
+}
+/* header text of the two card tables must not be clipped */
+html body #main .production-thickness-pair .std-table th{ font-size: 9.5px !important; letter-spacing: 0 !important; }
+html body #main #production-thickness-plan .std-table thead th:nth-child(1){ width: 6.4% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(2),
+html body #main #production-thickness-plan .std-table thead th:nth-child(3),
+html body #main #production-thickness-plan .std-table thead th:nth-child(4){ width: 8.1% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(5){ width: 8.8% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(9){ width: 10.6% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(10){ width: 9.2% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(11){ width: 10.6% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(12){ width: 9.7% }
+html body #main #production-thickness-actual .std-table thead th:nth-child(5){ width: 10% }
+html body #main #production-thickness-actual .std-table thead th:nth-child(6),
+html body #main #production-thickness-actual .std-table thead th:nth-child(7){ width: 14.5% }
+html body #main #production-thickness-actual .std-table thead th:nth-child(8){ width: 12% }
+html body #main #production-thickness-actual .std-table thead th:nth-child(9){ width: 10% }
+html body #main .production-thickness-pair .std-table td:last-child{ overflow: visible; }
+
+html body #main #production-thickness-plan .std-table thead th:nth-child(6),
+html body #main #production-thickness-plan .std-table thead th:nth-child(7),
+html body #main #production-thickness-plan .std-table thead th:nth-child(8){ width: 7.4% }
+html body #main #production-thickness-plan .std-table thead th:nth-child(9),
+html body #main #production-thickness-plan .std-table thead th:nth-child(11){ width: 10% }
+html body #main .production-thickness-pair .std-table input{ width: 38px !important; }
+
+@media (max-width: 1239px){
+  html body #main .production-thickness-pair .std-table{ table-layout: auto !important; min-width: 600px !important; }
+  html body #main .production-thickness-pair .std-table th,
+  html body #main .production-thickness-pair .std-table td{ padding: 4px 6px !important; white-space: nowrap !important; }
+  html body #main .production-thickness-pair .std-table th{ white-space: normal !important; }
+}
+/* metric rows: every cell starts at the same top line */
+html body #main table.production-overview-grid tr[data-mail-plan-metric] > td{ vertical-align: top; }
+/* lane (sub-day) divider stays pale + dashed in both density modes; only day-end carries the strong line */
+html body #main table.production-overview-grid > tbody > tr > td:not(.day-start){ border-left: 0 !important; }
+html body #main table.production-overview-grid > thead > tr > th:not(.rowlabel-corner):not(.day-start){ border-left: 0 !important; }
+/* today column outline: only the outer edges of the day, not between its lanes */
+html body #main table.production-overview-grid > tbody > tr > td.is-today{ box-shadow: none !important; }
+html body #main table.production-overview-grid > tbody > tr > td.is-today.day-start{ box-shadow: inset 2px 0 0 #2a5d6e !important; }
+html body #main table.production-overview-grid > tbody > tr > td.is-today.day-end{ box-shadow: inset -2px 0 0 #2a5d6e !important; }
+html body #main table.production-overview-grid > tbody > tr > td.is-today.day-start.day-end{ box-shadow: inset 2px 0 0 #2a5d6e, inset -2px 0 0 #2a5d6e !important; }
+
+/* --- fix: decimal point in thickness labels (Prompt's tabular "." collapses: 4.5 read as 45) --- */
+html body #main table.production-overview-grid .mail-metric-label,
+html body #main table.production-overview-grid .mail-metric-run-label,
+html body #main table.production-overview-grid .gm2-hl,
+html body #main table.production-overview-grid .gm2-pl,
+html body #main table.production-overview-grid .gm2-tl{
+  font-family: "Sora","Prompt",sans-serif !important;
+  font-variant-numeric: normal !important;
+  font-feature-settings: normal !important;
+  letter-spacing: .01em;
+}
+
+/* --- fix: %B / %F / %REJ inputs in the plan card header show the full value --- */
+@media (min-width: 1240px){
+  html body #main #production-thickness-plan .std-table thead th:nth-child(1){ width: 6.2% }
+  html body #main #production-thickness-plan .std-table thead th:nth-child(2),
+  html body #main #production-thickness-plan .std-table thead th:nth-child(3),
+  html body #main #production-thickness-plan .std-table thead th:nth-child(4){ width: 7.8% }
+  html body #main #production-thickness-plan .std-table thead th:nth-child(5){ width: 8.6% }
+  html body #main #production-thickness-plan .std-table thead th:nth-child(6),
+  html body #main #production-thickness-plan .std-table thead th:nth-child(7),
+  html body #main #production-thickness-plan .std-table thead th:nth-child(8){ width: 8.4% }
+  html body #main #production-thickness-plan .std-table thead th:nth-child(9),
+  html body #main #production-thickness-plan .std-table thead th:nth-child(11){ width: 9.2% }
+  html body #main #production-thickness-plan .std-table thead th:nth-child(10){ width: 8.6% }
+  html body #main #production-thickness-plan .std-table thead th:nth-child(12){ width: 9.4% }
+}
+html body #main #production-thickness-plan .std-table thead input{
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 38px;
+  max-width: 48px !important;
+  height: 22px !important;
+  padding: 0 1px !important;
+  font-size: 10.5px !important;
+  text-align: center !important;
+  text-overflow: clip;
+  letter-spacing: 0;
+}
+html body #main table.production-overview-grid .mail-metric-grid > .mail-metric-label,
+html body #main table.production-overview-grid .gm2-hrs .gm2-hl,
+html body #main table.production-overview-grid .mail-inline-presses .gm2-pl,
+html body #main table.production-overview-grid .mail-inline-pair > .gm2-tl{
+  font-family: "Sora","Prompt",sans-serif !important;
+  font-variant-numeric: normal !important;
+  font-feature-settings: normal !important;
+  letter-spacing: .01em;
+}
+
+/* ==========================================================================
+   raw-material-v1 (append-only; light theme; visual only)
+   1) hide the collapsible "รายละเอียดวัตถุดิบ / ผู้ส่ง" section (markup, data and JS untouched)
+   2) per-supplier receipt sub-rows under "ไม้ยูคาลิปตัส รับเข้า" (drawn by grid-modern.js,
+      names come from runtime data only)
+   ========================================================================== */
+html body #main #production-materials-details,
+html body #production-materials-details.materials-overview-details{
+  display: none !important;
+}
+
+html body #main table.production-overview-grid tr.rm-sup.rm-hide{ display: none !important; }
+
+html body #main table.production-overview-grid tr.rm-sup > th.rm-sup-th{
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 4 !important;
+  box-sizing: border-box;
+  background: #f4f8f4 !important;
+  color: #2c4a39 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  text-align: left !important;
+  padding: 3px 6px 3px 12px !important;
+  white-space: normal !important;
+  word-break: break-word;
+  border-top: 1px solid #e3ece5 !important;
+  box-shadow: 1px 0 #cbded1, inset 3px 0 0 #bcd6c4 !important;
+}
+html body #main table.production-overview-grid tr.rm-sup-head > th.rm-sup-th{
+  background: #e9f2ea !important;
+  color: #1f4a34 !important;
+  padding: 4px 6px !important;
+  box-shadow: 1px 0 #cbded1, inset 3px 0 0 #7fb08f !important;
+}
+html body #main table.production-overview-grid tr.rm-sup-head > th.rm-sup-th small{
+  display: block;
+  font-size: 9px;
+  font-weight: 400;
+  color: #5c7667;
+  margin-top: 1px;
+}
+html body #main table.production-overview-grid tr.rm-sup .rm-toggle{
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1f4a34;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: 5px;
+}
+html body #main table.production-overview-grid tr.rm-sup .rm-toggle:hover{ background: #d9eadd; }
+html body #main table.production-overview-grid tr.rm-sup .rm-toggle:focus-visible{ outline: 2px solid #2f6a45; outline-offset: 1px; }
+
+html body #main table.production-overview-grid tr.rm-sup > td{
+  background: #f9fcf9 !important;
+  border-top: 1px solid #e8f0ea !important;
+  padding: 2px 3px !important;
+  font-size: 11px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  height: 22px;
+}
+html body #main table.production-overview-grid tr.rm-sup > td.is-weekend,
+html body #main table.production-overview-grid tr.rm-sup > td.gm-weekend{ background: #f1f4f6 !important; }
+html body #main table.production-overview-grid tr.rm-sup > td.gm-holiday{ background: #f6f0f0 !important; }
+html body #main table.production-overview-grid tr.rm-sup > td.gm-today{ background: #f6f0da !important; }
+html body #main table.production-overview-grid tr.rm-sup-head > td.rm-sup-note{
+  background: #eef5ee !important;
+  color: #5c7667 !important;
+  font-size: 10px !important;
+  text-align: left !important;
+  padding: 4px 8px !important;
+  white-space: nowrap !important;
+}
+html body #main table.production-overview-grid tr.rm-sup-head > td.rm-sup-note:before{ content: none !important; }
+
+html body #main table.production-overview-grid tr.rm-sup .rm-pair{
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+html body #main table.production-overview-grid tr.rm-sup .rm-plan{ color: #315b8e; }
+html body #main table.production-overview-grid tr.rm-sup .rm-act{ color: #176345; font-weight: 700; }
+html body #main table.production-overview-grid tr.rm-sup .rm-div{ color: #9aaa9f; font-style: normal; }
+html body #main table.production-overview-grid tr.rm-sup .rm-na{ color: #a3b0a7; font-weight: 400; }
+html body #main table.production-overview-grid tr.rm-sup .rm-empty{ display: block; min-height: 14px; }
+html body #main table.production-overview-grid tr.rm-sup .rm-gap{
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  color: #8a5b1e;
+  background: #f4ead8;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+html body #main table.production-overview-grid tr.rm-sup-total > th.rm-sup-th{
+  background: #e9f2ea !important;
+  border-top: 1px solid #b9d3c0 !important;
+  color: #1f4a34 !important;
+}
+html body #main table.production-overview-grid tr.rm-sup-total > td{
+  background: #eef5ee !important;
+  border-top: 1px solid #b9d3c0 !important;
+  font-weight: 700;
+}
+@media (max-width: 700px){
+  html body #main table.production-overview-grid tr.rm-sup > th.rm-sup-th{ font-size: 10px !important; padding: 3px 4px 3px 9px !important; }
+  html body #main table.production-overview-grid tr.rm-sup > td{ font-size: 10.5px !important; }
+}
