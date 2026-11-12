@@ -1,8 +1,12 @@
+/* AAF production_plan — premium G3 (Prompt + Sora), light theme. Visual only: no data/logic.
+   Fonts: Prompt (Thai + Latin UI), Sora (numerals), loaded via @import (must stay first). */
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Sora:wght@300;400;500;600;700&display=swap');
+
+/* ===== G instrument layer (F-luxe + G) ===== */
 /* C-depth — Premium Industrial, daylight, more dimension
    Builds on C-light: elevated line slabs, soft multi-level shadows,
    brushed-metal bevels, embossed controls, raised totals and today column.
    Light surfaces only — no black or near-black backgrounds. Tasteful, not kitsch. */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 :root{
   --font: 'IBM Plex Sans Thai', 'IBM Plex Sans', sans-serif;
@@ -2315,4 +2319,351 @@ main#main, main{
     font-size: 11px !important;
     line-height: 1.2 !important;
   }
+}
+
+/* ========================================================================
+   premium-G — hi-so / hi-tech precision instrument, on top of F-luxe.
+   Still LIGHT. No dark/black surfaces. Fonts come from typography-G*.css.
+   Target vs actual: same hues, color + weight only (no italic, no mono).
+   ======================================================================== */
+
+:root{
+  --g-platinum: #d8dce3;
+  --g-titanium: #e7eaee;
+  --g-hairline: rgba(70, 82, 96, .18);
+  --g-hairline-strong: rgba(55, 66, 80, .28);
+  --g-tick: #6a7380;
+  --g-today-line: #2a5d6e; /* navy-teal, not neon */
+  --g-today-wash: rgba(42, 93, 110, .07);
+}
+
+/* Shared typography behaviour — tabular lining figures, no italic numbers */
+html, body{
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+  font-optical-sizing: auto;
+}
+body, header, main, button, input, select, .btn, .tab, .card, .label{
+  font-family: var(--font) !important;
+}
+table.preview-table,
+table.production-overview-grid,
+table.std-table,
+table.size-table{
+  font-variant-numeric: tabular-nums lining-nums !important;
+  font-feature-settings: "tnum" 1, "lnum" 1 !important;
+  font-optical-sizing: auto;
+}
+table.preview-table td,
+table.production-overview-grid td,
+table.std-table td,
+table.size-table td,
+input.pv-input, input.num, #clock, .bd-count{
+  font-family: var(--font-num) !important;
+  font-variant-numeric: tabular-nums lining-nums !important;
+  font-feature-settings: "tnum" 1, "lnum" 1 !important;
+  font-style: normal !important;
+  letter-spacing: 0;
+}
+table.preview-table tbody th,
+table.production-overview-grid tbody th,
+table.std-table tbody th,
+table.size-table tbody th,
+thead th:first-child{
+  font-family: var(--font) !important;
+  font-variant-numeric: normal;
+  letter-spacing: .04em;
+  font-weight: 500 !important;
+}
+
+/* Elegant tracked labels (Latin small-caps; Thai stays upright, slightly tracked) */
+.card .label,
+h1 small,
+.previewhead,
+.previewhead b,
+.aaf-value-legend,
+thead tr.dayheader th:first-child,
+.budget-launch, #budget-launch{
+  letter-spacing: .14em !important;
+}
+h1 small{
+  font-weight: 400 !important;
+  font-size: 9px !important;
+  text-transform: uppercase;
+  letter-spacing: .22em !important;
+}
+h1{
+  font-weight: 500 !important;
+  letter-spacing: .01em !important;
+  font-size: 17.5px !important;
+}
+.btn, .tab, header > button, .pagebtn{
+  letter-spacing: .06em !important;
+  font-weight: 500 !important;
+  font-family: var(--font) !important;
+}
+#clock{
+  font-family: var(--font-num) !important;
+  font-variant-numeric: tabular-nums lining-nums !important;
+  letter-spacing: .04em;
+  font-weight: 500 !important;
+}
+
+/* Target vs actual: color + weight only. No italic, no mono costume. */
+table.preview-table tr.is-plan-row > th,
+table.preview-table tr.is-plan-row > td,
+table.production-overview-grid tr.is-plan-row > th,
+table.production-overview-grid tr.is-plan-row > td,
+table.std-table tr.is-plan-row > th,
+table.std-table tr.is-plan-row > td,
+.card.is-plan-card .value, .card.is-plan-card .value span,
+.aaf-value-legend .lg-target{
+  color: var(--target) !important;
+  font-style: normal !important;
+  font-weight: 400 !important;
+}
+table.preview-table tr.is-plan-row > td,
+table.production-overview-grid tr.is-plan-row > td,
+table.std-table tr.is-plan-row > td,
+.card.is-plan-card .value, .card.is-plan-card .value span{
+  font-weight: 400 !important;
+}
+/* Key planned totals stay a step heavier, still not italic */
+tr.production-daily-eq25-total.is-plan-row td,
+tr.is-totals-end.is-plan-row td,
+tr[class*="production-daily-"].is-plan-row td{
+  font-weight: 600 !important;
+  font-style: normal !important;
+  color: var(--target) !important;
+}
+table.preview-table tr.is-actual-row > th,
+table.preview-table tr.is-actual-row > td,
+table.production-overview-grid tr.is-actual-row > th,
+table.production-overview-grid tr.is-actual-row > td,
+table.std-table tr.is-actual-row > th,
+table.std-table tr.is-actual-row > td,
+.card.is-actual-card .value, .card.is-actual-card .value span,
+.aaf-value-legend .lg-actual{
+  color: var(--actual) !important;
+  font-style: normal !important;
+  font-weight: 700 !important;
+}
+
+/* ---- Header rhythm: platinum hairline between title and toolbar ---- */
+header .toolbar{
+  border-top: 1px solid rgba(176,137,58,.22) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.75);
+  margin-top: 3px !important;
+  padding-top: 4px !important;
+}
+@media (max-height: 850px){
+  header .toolbar{
+    margin-top: 2px !important;
+    padding-top: 3px !important;
+  }
+  h1{ font-size: 15px !important; }
+}
+
+/* ---- Slightly cooler platinum atmosphere, still pearl/champagne/sage ---- */
+html, body{
+  background-color: #e4e6ea !important;
+}
+body{
+  background-image:
+    radial-gradient(920px 540px at 8% -6%, rgba(243,239,230,.95), transparent 58%),
+    radial-gradient(780px 500px at 100% 2%, rgba(198,214,228,.7), transparent 56%),
+    radial-gradient(760px 520px at 72% 100%, rgba(207,224,212,.66), transparent 58%),
+    radial-gradient(640px 380px at 40% 48%, rgba(226,220,210,.38), transparent 62%),
+    radial-gradient(500px 300px at 18% 80%, rgba(201,218,232,.32), transparent 60%),
+    repeating-linear-gradient(118deg, rgba(255,255,255,.14) 0 1px, transparent 1px 8px),
+    linear-gradient(165deg, #ece8e0 0%, #e4e8ee 42%, #dfe6e3 72%, #e6e6ec 100%) !important;
+}
+
+/* ---- Precision hairline grid + micro-ticks on day heads ---- */
+table.production-overview-grid td,
+table.preview-table td,
+table.production-overview-grid tbody th,
+table.preview-table tbody th{
+  border-color: var(--g-hairline) !important;
+}
+table.production-overview-grid thead th,
+table.preview-table thead th{
+  border-color: var(--g-hairline-strong) !important;
+  position: relative;
+}
+/* Titanium satin thead */
+table.production-overview-grid thead th,
+table.preview-table thead th,
+table.std-table thead th,
+table.size-table thead th{
+  background-color: #e8eaee !important;
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(232,234,238,.94) 42%, rgba(220,224,230,.96) 100%) !important;
+  color: #243140 !important;
+  letter-spacing: .06em;
+  font-weight: 500 !important;
+  text-transform: uppercase;
+  font-size: 10.5px !important;
+}
+thead tr.dayheader th:first-child{
+  letter-spacing: .12em !important;
+  font-size: 9.5px !important;
+}
+/* Micro-tick at the top centre of each day column */
+thead tr.dayheader th:not(:first-child)::before{
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 7px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #5c6570, rgba(92,101,112,.12));
+  pointer-events: none;
+  z-index: 2;
+}
+thead tr.dayheader th:not(:first-child){
+  font-family: var(--font-num) !important;
+  font-variant-numeric: tabular-nums lining-nums !important;
+  letter-spacing: .04em;
+  text-transform: none;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+/* Precision bezel on LINE cards: sharper anodized rail + platinum top hairline */
+tr.is-slab-start.l1 th{
+  box-shadow:
+    inset 3px 0 0 #c37b3c,
+    inset 0 1px 0 rgba(255,255,255,.85) !important;
+}
+tr.is-slab-start.l2 th{
+  box-shadow:
+    inset 3px 0 0 #3f8eae,
+    inset 0 1px 0 rgba(255,255,255,.85) !important;
+}
+tr.is-slab-start.l3 th{
+  box-shadow:
+    inset 3px 0 0 #4e9a62,
+    inset 0 1px 0 rgba(255,255,255,.85) !important;
+}
+tr.is-slab-end th, tr.is-slab-end td{
+  box-shadow: inset 0 -1px 0 rgba(70,82,96,.14);
+}
+table.preview-table tr.line-sep th,
+tr.is-slab-start th{
+  letter-spacing: .14em !important;
+  font-weight: 600 !important;
+  font-size: 11px !important;
+  text-transform: uppercase;
+}
+
+/* Totals: platinum satin, not warm cardboard */
+tr.production-daily-eq25-total th,
+tr.production-daily-eq25-total td,
+tr[class*="production-daily-"] th,
+tr[class*="production-daily-"] td,
+tr.is-totals-start th, tr.is-totals-start td,
+tr.is-totals-end th, tr.is-totals-end td{
+  background-color: #e6e8ed !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.9), rgba(222,226,232,.94)) !important;
+  box-shadow: inset 0 1px 0 #fff, inset 0 1px 0 rgba(70,82,96,.12) !important;
+  font-family: var(--font-num) !important;
+}
+tr.production-daily-eq25-total th,
+tr.is-totals-start th,
+tr.is-totals-end th,
+tr[class*="production-daily-"] th{
+  font-family: var(--font) !important;
+  letter-spacing: .08em;
+}
+
+/* Today column: thin navy-teal instrument line + faint wash, no neon */
+th.today-col-header,
+.today-col-header,
+th.is-today,
+td.is-today,
+td.today-col{
+  box-shadow:
+    inset 1px 0 0 var(--g-today-line),
+    inset -1px 0 0 var(--g-today-line) !important;
+  background-image:
+    linear-gradient(180deg, rgba(42,93,110,.06), rgba(42,93,110,.03)) !important;
+}
+th.today-col-header,
+thead th.is-today,
+thead th.today-col-header{
+  box-shadow:
+    inset 1px 0 0 var(--g-today-line),
+    inset -1px 0 0 var(--g-today-line),
+    inset 0 2px 0 var(--g-today-line) !important;
+  background-color: #e4eef1 !important;
+}
+
+/* Faint iridescent sheen on active glass pills — champagne + pale teal, not neon */
+.btn.primary, .pagebtn.active, .btn.pagebtn.active,
+.tab.active{
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(255,255,255,.38) 48%, rgba(255,255,255,.55) 100%),
+    linear-gradient(115deg, rgba(196,220,232,.35), rgba(232,215,181,.28) 50%, rgba(200,208,230,.22)) !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -8px 12px rgba(255,255,255,.18),
+    0 0 0 1px rgba(42,93,110,.10),
+    0 0 16px rgba(176,137,58,.12),
+    0 3px 8px rgba(28,49,68,.08) !important;
+}
+
+/* Slightly denser, still glass, data cells stay crisp (no blur) */
+table.production-overview-grid td,
+table.preview-table td{
+  background-clip: padding-box;
+}
+
+/* Keep typographic metrics stable across G1/G2/G3 so 1280 fit holds */
+table.production-overview-grid,
+table.preview-table{
+  line-height: 1.24;
+}
+@media (max-height: 850px){
+  table.production-overview-grid,
+  table.preview-table{ line-height: 1.22 !important; }
+}
+
+/* G fit polish: chip clears หมายเหตุ at 1440; slightly tighter day padding so 7–13 fit */
+@media (min-height: 851px){
+  .budget-launch, button.budget-launch, #budget-launch{ bottom: 12px !important; }
+}
+table.production-overview-grid td,
+table.production-overview-grid thead th:not(:first-child){
+  padding-left: 5px !important;
+  padding-right: 5px !important;
+}
+
+/* ===== G3 typography ===== */
+/* G3 — Contemporary instrument
+   Thai: Prompt (Cadson Demak) — highly readable Thai, slightly soft terminals, full Thai + Latin.
+   Latin + numerals: Sora — modern geometric, distinctive but restrained figures, hi-tech without costume.
+   Sora has no Thai; Thai glyphs fall through to Prompt. */
+
+:root{
+  --font: "Prompt", "Sora", "Noto Sans Thai", sans-serif;
+  --font-num: "Sora", "Prompt", sans-serif;
+  --g-name: "G3";
+  --g-fonts: "Prompt + Sora";
+}
+html, body, button, input, select, textarea, header, .btn, .tab, .card, .label,
+#budget-launch, .budget-launch, #budget-lab{
+  font-family: var(--font) !important;
+}
+table.preview-table td,
+table.production-overview-grid td,
+table.std-table td,
+table.size-table td,
+#clock, .bd-count, #revBadge,
+thead tr.dayheader th:not(:first-child),
+tr.production-daily-eq25-total td,
+tr[class*="production-daily-"] td{
+  font-family: var(--font-num) !important;
+  font-feature-settings: "tnum" 1, "lnum" 1 !important;
 }

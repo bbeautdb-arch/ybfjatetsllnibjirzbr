@@ -18,11 +18,13 @@
      const root=new URL('.', location.href);
      const cssHref=new URL('assets/production_plan.premium.css', root).href;
      const hookSrc=new URL('assets/production_plan.visual-hooks.js', root).href;
+     const fcSrc=new URL('assets/production_plan.forecast.js', root).href;
+     const fcTag='<script src="'+fcSrc+'" data-aaf-forecast="js"></script>';
      const cssTag='<link rel="stylesheet" href="'+cssHref+'" data-aaf-premium-c-depth="css">';
      const hookTag='<script src="'+hookSrc+'" data-aaf-premium-c-depth="hooks"></script>';
      if(html.indexOf('data-aaf-premium-c-depth')===-1){
        if(/<\/head>/i.test(html)) html=html.replace(/<\/head>/i, cssTag+'\n</head>');
-       if(/<\/body>/i.test(html)) html=html.replace(/<\/body>/i, hookTag+'\n</body>');
+       if(/<\/body>/i.test(html)) html=html.replace(/<\/body>/i, hookTag+'\n'+fcTag+'\n</body>');
      }
    }
    document.open();document.write(html);document.close();
