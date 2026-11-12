@@ -73,7 +73,7 @@ jobs:
           cp ./icon.svg ./favicon.ico ./favicon-32.png ./apple-touch-icon.png ./icon-192.png ./icon-512.png ./manifest.webmanifest _site/
           mkdir -p _site/assets
           cp ./assets/aaf-factory-background.webp _site/assets/
-          cp ./assets/production_plan.premium.css ./assets/production_plan.visual-hooks.js ./assets/production_plan.forecast.js _site/assets/
+          cp ./assets/production_plan.premium.css ./assets/production_plan.visual-hooks.js ./assets/production_plan.forecast.js ./assets/production_plan.grid-clarity.js ./assets/production_plan.grid-modern.js _site/assets/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
