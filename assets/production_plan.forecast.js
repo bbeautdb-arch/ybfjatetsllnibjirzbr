@@ -57,7 +57,7 @@
     if(rq!==null&&av>0){
       var dd=rq-av,sg=dd>1e-6?'+':dd<-1e-6?'−':'';
       var s3=document.createElement('div');s3.className='production-pace-focus-pct '+(dd>1e-6?'is-behind':'is-ahead');
-      s3.textContent=sg+pc(Math.abs(dd)/av*100)+' จากเดิม';
+      s3.textContent=sg+pc(Math.abs(dd)/av*100)+' จากค่าเฉลี่ยที่ทำได้ปัจจุบัน';
       var strong=focus.querySelector('strong');
       if(strong)strong.after(s3);else focus.appendChild(s3);
     }
