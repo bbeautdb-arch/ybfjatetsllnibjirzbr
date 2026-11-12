@@ -2667,3 +2667,621 @@ tr[class*="production-daily-"] td{
   font-family: var(--font-num) !important;
   font-feature-settings: "tnum" 1, "lnum" 1 !important;
 }
+
+/* ===== Thickness heading compact + actual weight box + hide clutter notes
+   Visual only, 2026-11-12. No markup/JS/data changes.
+   Owner: subtitle on the same line after 2026-11, smaller, less empty space;
+   actual น้ำหนักความหนา total matches the plan boxed cell;
+   hide clutter notes under BOTH actual thickness cards; tighten bottom padding. ===== */
+
+/* Subtitle sits on the same line as the title; reserved 48px height removed
+   so the plan/actual pair stays level. Flex-wrap lets the small line drop
+   under the title on narrow widths. */
+.production-thickness-heading{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.5em;
+  row-gap: 0.15em;
+  height: auto !important;
+  min-height: 0 !important;
+  margin-bottom: 4px !important;
+  line-height: 1.35;
+}
+.production-thickness-heading small{
+  display: inline !important;
+  font-size: 10px !important;
+  font-weight: 400;
+  line-height: 1.35;
+  color: #506c5a;
+  white-space: normal;
+}
+/* Keep the plan-side title height in sync with the now single-line actual heading. */
+.production-thickness-plan > div > div:first-child{
+  height: auto !important;
+  margin-bottom: 4px !important;
+  line-height: 1.35;
+}
+
+/* Plan น้ำหนักความหนา total is an inline style on the last cell of
+   tr[data-plan-thickness-total]:
+     background:rgba(95,191,122,0.18);border:2px solid var(--ok);color:var(--ok);
+   Mirror that onto the actual table's last total cell only
+   (tr.production-thickness-total td:last-child). The zone actual table has
+   no total row, so it is untouched. */
+.production-thickness-actual-table tr.production-thickness-total td:last-child{
+  background: rgba(95,191,122,0.18) !important;
+  border: 2px solid var(--ok) !important;
+  color: var(--ok) !important;
+  font-weight: 800 !important;
+}
+
+/* Hide only the two unique note classes, and only inside the actual cards
+   (#production-thickness-actual and #production-zone-actual, both classed
+   .production-thickness-actual). These classes are not used elsewhere.
+     .production-thickness-scope  = "รวมเฉพาะที่ทราบ..." + report/shutdown line
+     .production-thickness-note   = "สัดส่วนและความหนาเฉลี่ย..." (thickness card)
+                                  / "% คิดจากพื้นที่เทียบ..." (zone card)
+   Other page notes are untouched. */
+.production-thickness-actual .production-thickness-scope,
+.production-thickness-actual .production-thickness-note{
+  display: none !important;
+}
+/* Notes used to add ~margin + two text lines under the table. With them gone,
+   pull the actual-card bottom padding in so the pair does not leave a gap. */
+.production-thickness-actual{
+  padding-bottom: 8px !important;
+}
+.production-thickness-actual .tablewrap{
+  margin-bottom: 0;
+}
+
+/* ===== Plan grid: sticky lock, day dividers, metric rows =====
+   Visual only, 2026-11-12. No data/JS/field-ID changes in this file.
+   1) Sticky header: G3 typography set `thead th { position: relative }` for
+      ::before ticks, which overrode earlier `position: sticky; top: 0`.
+      Only `.rowlabel-corner` stayed sticky, so the cream "LINE / วันที่"
+      cell locked alone and could slide over the density/calendar toolbars.
+      Sticky is still a containing block, so the ticks keep working.
+      Lock the whole thead at the top of the table wrap, and the first
+      column at left; never cover the toolbars above the wrap.
+   2) Day dividers vs intra-day sub-dividers (กะทัดรัด and แบบเต็ม).
+   3) Align เป้า / จริง pairs in the 2.5 and hours cells on a consistent grid.
+   ===== */
+
+/* --- Sticky header + frozen first column, contained in the wrap --- */
+#main .tablewrap:has(table.production-overview-grid){
+  overflow: auto !important;
+  isolation: isolate;
+}
+table.preview-table thead th,
+table.production-overview-grid thead th{
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+}
+table.preview-table th.rowlabel-corner,
+table.production-overview-grid th.rowlabel-corner,
+table.preview-table thead th:first-child,
+table.production-overview-grid thead th:first-child{
+  position: sticky !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 24 !important;
+}
+
+/* --- Dividers: strong between days, thin/pale inside a day --- */
+table.production-overview-grid th,
+table.production-overview-grid td,
+table.preview-table.production-overview-grid th,
+table.preview-table.production-overview-grid td{
+  border-right: 1px dotted #c3ccd5 !important;
+}
+table.production-overview-grid .day-start,
+table.preview-table.production-overview-grid .day-start,
+#floatingDayHeader .day-start{
+  border-left: 2px solid #3e4f61 !important;
+}
+/* Do not also thicken .day-end (would double up with the next day's start). */
+table.production-overview-grid .day-end,
+table.preview-table.production-overview-grid .day-end,
+#floatingDayHeader .day-end{
+  border-right: 1px dotted #c3ccd5 !important;
+}
+/* Frozen first column / sticky corner: same strong edge as a day divider. */
+table.production-overview-grid tbody th:not([colspan]),
+table.production-overview-grid .rowlabel-corner,
+table.production-overview-grid thead th:first-child,
+table.preview-table.production-overview-grid tbody th:not([colspan]),
+table.preview-table.production-overview-grid .rowlabel-corner,
+table.preview-table.production-overview-grid thead th:first-child,
+#floatingDayHeader th:first-child{
+  border-right: 2px solid #3e4f61 !important;
+}
+
+/* --- 2.5-eq and hours เป้า / จริง: aligned rows, tabular numbers --- */
+table.preview-table .mail-inline-pair,
+table.production-overview-grid .mail-inline-pair,
+table.preview-table .mail-hours-pair:has(.mail-inline-slash),
+table.preview-table .mail-hours-pair:has([data-mail-inline-metric]),
+table.production-overview-grid .mail-hours-pair:has(.mail-inline-slash),
+table.production-overview-grid .mail-hours-pair:has([data-mail-inline-metric]){
+  display: grid !important;
+  grid-template-columns: minmax(3.1em, 1fr) 0.7em minmax(3.1em, 1fr);
+  align-items: start;
+  justify-items: stretch;
+  column-gap: 2px;
+  row-gap: 1px;
+  white-space: nowrap;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+  text-align: inherit;
+}
+/* Multi-run days wrap only the run's hours input in .mail-hours-pair; keep it simple. */
+table.preview-table .mail-hours-pair:not(:has(.mail-inline-slash)):not(:has([data-mail-inline-metric])),
+table.production-overview-grid .mail-hours-pair:not(:has(.mail-inline-slash)):not(:has([data-mail-inline-metric])){
+  display: flex !important;
+  justify-content: flex-end;
+  width: 100%;
+}
+table.preview-table .mail-inline-goal,
+table.production-overview-grid .mail-inline-goal,
+table.preview-table .mail-hours-pair > .pv-hr,
+table.production-overview-grid .mail-hours-pair > .pv-hr{
+  grid-column: 1;
+  justify-self: stretch;
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+table.preview-table .mail-inline-slash,
+table.production-overview-grid .mail-inline-slash{
+  grid-column: 2;
+  text-align: center;
+  line-height: 1.35;
+}
+table.preview-table .mail-inline-pair > [data-mail-inline-metric],
+table.preview-table .mail-inline-pair .mail-inline-metric-stack,
+table.preview-table .mail-hours-pair > [data-mail-inline-metric],
+table.preview-table .mail-hours-pair .mail-inline-metric-stack,
+table.production-overview-grid .mail-inline-pair > [data-mail-inline-metric],
+table.production-overview-grid .mail-inline-pair .mail-inline-metric-stack{
+  grid-column: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  min-width: 0;
+}
+table.preview-table .mail-inline-actual,
+table.production-overview-grid .mail-inline-actual{
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+/* Thickness / press notes sit under the pair as their own left-aligned rows. */
+table.preview-table .mail-inline-presses,
+table.production-overview-grid .mail-inline-presses{
+  display: block !important;
+  align-self: stretch;
+  text-align: left !important;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+table.preview-table .mail-hours-day-total,
+table.production-overview-grid .mail-hours-day-total{
+  display: grid !important;
+  grid-template-columns: minmax(3.1em, auto) minmax(3.1em, 1fr) 0.7em minmax(3.1em, 1fr);
+  align-items: baseline;
+  column-gap: 2px;
+  margin-top: 5px !important;
+  padding-top: 3px;
+  border-top: 1px solid #c3ccd5;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+  text-align: right;
+}
+/* Optional JS add-on grid (fail-safe). Harmless if the add-on is absent. */
+html[data-production-grid-density="compact"] .mail-metric-grid{font-size:11.5px;column-gap:4px;}
+.mail-metric-grid{
+  display: grid !important;
+  grid-template-columns: minmax(3.6em, auto) minmax(3.2em, 1fr) minmax(3.2em, 1fr);
+  column-gap: 6px;
+  row-gap: 1px;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  line-height: 1.3;
+  width: 100%;
+}
+.mail-metric-grid .mail-metric-label,
+.mail-metric-grid .mail-metric-head:first-child{
+  text-align: left;
+  font-weight: 600;
+}
+.mail-metric-grid .mail-metric-head{
+  font-size: 9px;
+  font-weight: 600;
+  color: #5c6b74;
+  letter-spacing: .04em;
+  text-align: right;
+  border-bottom: 1px solid #d5dde4;
+  padding-bottom: 1px;
+  margin-bottom: 1px;
+}
+.mail-metric-grid .mail-metric-head:first-child{ text-align: left; }
+.mail-metric-grid .mail-metric-goal{ font-weight: 500; }
+.mail-metric-grid .mail-metric-actual{ color: #087b4c; font-weight: 800; }
+.mail-metric-grid .mail-metric-total{
+  border-top: 1px solid #3e4f61;
+  margin-top: 2px;
+  padding-top: 2px;
+  font-weight: 700;
+}
+
+/* Per-run thickness label (optional visual add-on) sits above the hours figure. */
+table.preview-table .mail-metric-run-label,
+table.production-overview-grid .mail-metric-run-label{
+  display: block;
+  text-align: left;
+  font-size: 9px;
+  font-weight: 700;
+  color: #3e4f61;
+  letter-spacing: .02em;
+  margin-bottom: 1px;
+  white-space: nowrap;
+}
+
+table.preview-table tbody th:not([colspan]),
+table.production-overview-grid tbody th:not([colspan]){
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 12 !important;
+}
+table.preview-table.production-overview-grid tbody td,
+table.production-overview-grid tbody td{
+  overflow: hidden;
+  max-width: 100%;
+}
+[data-mail-metric-source],
+.mail-inline-pair[hidden],
+.mail-metric-source-wrap{
+  display: none !important;
+}
+.mail-metric-grid{
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  font-size: 10.5px;
+}
+table.production-overview-grid tr[data-mail-plan-metric="eq25"] > td,
+table.preview-table tr[data-mail-plan-metric="eq25"] > td{
+  min-width: 14em !important;
+  vertical-align: top;
+}
+.mail-hours-day-total[data-mail-metric-enhanced="hours-total"]{
+  grid-template-columns: auto auto 0.7em auto;
+  justify-content: start;
+  font-size: 10px;
+  text-align: right;
+}
+.mail-hours-day-total [data-mail-inline-metric],
+.mail-hours-day-total .mail-inline-drilldown,
+.mail-metric-grid .mail-inline-drilldown,
+.mail-metric-grid .mail-inline-actual{
+  display: inline !important;
+  white-space: nowrap !important;
+}
+html[data-production-grid-density="compact"] .mail-metric-grid{
+  font-size: 10px;
+  column-gap: 3px;
+}
+
+/* ===== Grid modern: Line 1/2/3 plan grid =====
+   Visual only, 2026-11-12. Builds on the unpublished heading-compact bundle
+   (sticky lock, day vs intra-day dividers, เป้า|จริง rows).
+   Light Premium Industrial — pale brushed silver, navy + forest accents,
+   Prompt + Sora. No data, field-ID, input, formula, or save changes.
+   ===== */
+
+table.preview-table.production-overview-grid,
+table.production-overview-grid{
+  --gm-silver: #f3f5f7;
+  --gm-silver-2: #e7eaee;
+  --gm-navy: #1c3144;
+  --gm-navy-soft: #3e4f61;
+  --gm-forest: #2f6a45;
+  --gm-forest-soft: #e7f3eb;
+  --gm-amber: #8a5b1e;
+  --gm-amber-soft: #f4ead8;
+  --gm-behind: #8a4a3a;
+  --gm-behind-soft: #f4e6e2;
+  --gm-weekend: #eef1f5;
+  --gm-holiday: #f6eeee;
+  --gm-today: #f6eed8;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tighter, scannable cells. Keep inputs fully clickable and at least 22px tall. */
+table.production-overview-grid > tbody > tr > th:not([colspan]),
+table.production-overview-grid > tbody > tr > td,
+table.preview-table.production-overview-grid > tbody > tr > th:not([colspan]),
+table.preview-table.production-overview-grid > tbody > tr > td{
+  padding: 2px 5px !important;
+  line-height: 1.25 !important;
+  font-size: 11.5px !important;
+  vertical-align: middle;
+}
+table.production-overview-grid > thead > tr > th,
+table.preview-table.production-overview-grid > thead > tr > th{
+  padding: 3px 4px 4px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--gm-navy) !important;
+  background:
+    linear-gradient(180deg, #f8f9fb 0%, #eef1f4 100%) !important;
+}
+table.production-overview-grid .pv-input,
+table.preview-table.production-overview-grid .pv-input{
+  min-height: 22px !important;
+  height: 22px !important;
+  padding: 1px 4px !important;
+  font-size: 11.5px !important;
+  font-family: var(--font-num), "Sora", sans-serif !important;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  border-radius: 3px !important;
+  background: #fffeff !important;
+}
+table.production-overview-grid .pv-note{
+  text-align: left !important;
+  font-family: var(--font), "Prompt", sans-serif !important;
+  font-size: 10.5px !important;
+}
+table.production-overview-grid .pv-add-btn,
+table.production-overview-grid .pv-rm-btn,
+table.preview-table.production-overview-grid .pv-add-btn,
+table.preview-table.production-overview-grid .pv-rm-btn{
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px;
+  min-height: 18px;
+  font-size: 12px !important;
+  border-radius: 4px !important;
+  padding: 0 !important;
+}
+
+/* Frozen left labels: short, aligned, silver, navy ink. */
+table.production-overview-grid tbody th:not([colspan]),
+table.preview-table.production-overview-grid tbody th:not([colspan]){
+  font-family: var(--font), "Prompt", sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  text-align: left !important;
+  color: var(--gm-navy) !important;
+  background:
+    linear-gradient(90deg, #f4f6f8 0%, #eceff2 100%) !important;
+  background-color: #eef0f3 !important;
+  border-right: 2px solid #3e4f61 !important;
+  white-space: nowrap;
+}
+table.production-overview-grid tbody th:not([colspan]) .mail-inline-legend,
+table.preview-table.production-overview-grid tbody th:not([colspan]) .mail-inline-legend{
+  font-size: 9px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  color: #5c6b74 !important;
+  margin-top: 1px !important;
+}
+.gm-row-label{
+  display: block;
+  font-weight: 600;
+  color: var(--gm-navy);
+  line-height: 1.2;
+}
+
+/* LINE 1/2/3 header band: brushed silver + colored badge, sticky left. */
+table.production-overview-grid tr.line-sep.l1 th,
+table.production-overview-grid tr.line-sep.l2 th,
+table.production-overview-grid tr.line-sep.l3 th,
+table.preview-table.production-overview-grid tr.line-sep.l1 th,
+table.preview-table.production-overview-grid tr.line-sep.l2 th,
+table.preview-table.production-overview-grid tr.line-sep.l3 th{
+  height: 30px !important;
+  padding: 3px 10px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  text-align: left !important;
+  color: var(--gm-navy) !important;
+  background:
+    linear-gradient(180deg, #f7f8fa 0%, #e6e9ee 100%) !important;
+  background-color: #eceef1 !important;
+  border-top: 2px solid #3e4f61 !important;
+  border-bottom: 1px solid #c5ccd3 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 4px 0 0 var(--gm-line, #3e4f61) !important;
+  backdrop-filter: none !important;
+}
+table.production-overview-grid tr.line-sep.l1 th,
+table.preview-table.production-overview-grid tr.line-sep.l1 th{ --gm-line: var(--line1); }
+table.production-overview-grid tr.line-sep.l2 th,
+table.preview-table.production-overview-grid tr.line-sep.l2 th{ --gm-line: var(--line2); }
+table.production-overview-grid tr.line-sep.l3 th,
+table.preview-table.production-overview-grid tr.line-sep.l3 th{ --gm-line: var(--line3); }
+
+.line-badge,
+.line-title-sticky{
+  position: sticky;
+  left: 10px;
+  z-index: 13;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 7px;
+  height: 22px;
+  padding: 0 10px 0 7px;
+  border-radius: 999px;
+  background: #fffeff !important;
+  border: 1px solid rgba(28,49,68,.16);
+  box-shadow: 0 1px 2px rgba(28,49,68,.06), inset 0 1px 0 #fff;
+  font-family: var(--font), "Prompt", sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .04em;
+  color: var(--gm-navy) !important;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.line-badge-dot{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gm-line, currentColor);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gm-line) 22%, white);
+  flex: 0 0 auto;
+}
+tr.line-sep.l1 .line-badge, tr.line-sep.l1 .line-title-sticky{ --gm-line: var(--line1); }
+tr.line-sep.l2 .line-badge, tr.line-sep.l2 .line-title-sticky{ --gm-line: var(--line2); }
+tr.line-sep.l3 .line-badge, tr.line-sep.l3 .line-title-sticky{ --gm-line: var(--line3); }
+
+/* Numbers stay tabular and right-aligned in metric cells. */
+table.production-overview-grid [data-mail-plan-metric] td,
+table.production-overview-grid .mail-metric-grid,
+table.production-overview-grid .mail-inline-pair{
+  font-family: var(--font-num), "Sora", sans-serif !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Plan vs actual chips — tone set by the visual add-on. Default actual stays forest. */
+.mail-inline-actual,
+.mail-metric-actual,
+.gm-met .mail-inline-actual,
+.gm-met.mail-inline-actual,
+.mail-metric-grid .mail-metric-actual.gm-met,
+.gm-met{
+  /* default / met: forest chip */
+}
+.mail-inline-actual,
+.mail-metric-grid .mail-metric-actual .mail-inline-drilldown,
+.mail-metric-grid .mail-metric-actual{
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.gm-met .mail-inline-actual,
+.mail-inline-actual.gm-met,
+.mail-metric-actual.gm-met,
+.gm-met .mail-inline-drilldown{
+  color: var(--gm-forest) !important;
+  background: var(--gm-forest-soft) !important;
+  box-shadow: inset 0 0 0 1px rgba(47,106,69,.28);
+  font-weight: 700 !important;
+}
+.gm-behind .mail-inline-actual,
+.mail-inline-actual.gm-behind,
+.mail-metric-actual.gm-behind,
+.gm-behind .mail-inline-drilldown{
+  color: var(--gm-behind) !important;
+  background: var(--gm-behind-soft) !important;
+  box-shadow: inset 0 0 0 1px rgba(138,74,58,.28);
+  font-weight: 700 !important;
+}
+
+/* Slim progress under day total — decorative only. */
+.mail-metric-grid .gm-progress{ grid-column: 1 / -1; }
+.gm-progress{
+  display: block;
+  width: 100%;
+  height: 3px;
+  margin-top: 3px;
+  border-radius: 99px;
+  background: #dce1e6;
+  overflow: hidden;
+}
+.gm-progress > i{
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--gm-forest);
+  max-width: 100%;
+}
+.gm-progress.is-behind > i{ background: #c4894a; }
+.gm-progress.is-met > i{ background: var(--gm-forest); }
+
+/* Weekend / holiday / today column tints (classes added by the visual add-on). */
+table.production-overview-grid th.gm-weekend,
+table.production-overview-grid td.gm-weekend,
+table.production-overview-grid thead th:has(.production-calendar-weekend){
+  background-color: var(--gm-weekend) !important;
+  background-image: none !important;
+}
+table.production-overview-grid th.gm-holiday,
+table.production-overview-grid td.gm-holiday,
+table.production-overview-grid thead th:has(.production-calendar-red-day){
+  background-color: var(--gm-holiday) !important;
+  background-image: none !important;
+}
+table.production-overview-grid th.gm-today,
+table.production-overview-grid td.gm-today,
+table.production-overview-grid thead th.today-col-header,
+table.production-overview-grid thead th.gm-today{
+  background: linear-gradient(180deg, #fbf6e6, var(--gm-today)) !important;
+  box-shadow: inset 0 2px 0 #3e4f61;
+  animation: none !important;
+}
+/* Stopped / SD days: muted, still readable, inputs remain usable. */
+table.production-overview-grid td.gm-stopped,
+table.production-overview-grid th.gm-stopped{
+  background-color: #f0f1f3 !important;
+  color: #6a7380 !important;
+  opacity: .62;
+}
+table.production-overview-grid td.gm-stopped .pv-input{
+  opacity: .85;
+  background: #f4f5f6 !important;
+}
+
+/* Keep day dividers and sticky lock from the previous bundle. */
+/* Slightly calm the leftover today pulse on this grid only. */
+table.production-overview-grid th.today-col-header{
+  animation: none !important;
+}
+
+html[data-production-grid-density="compact"] table.production-overview-grid > tbody > tr > th:not([colspan]),
+html[data-production-grid-density="compact"] table.production-overview-grid > tbody > tr > td{
+  padding: 1px 4px !important;
+  font-size: 11px !important;
+}
+html[data-production-grid-density="compact"] table.production-overview-grid .mail-metric-grid{
+  font-size: 10px;
+}
+
+@media (max-width: 440px){
+  table.production-overview-grid tbody th:not([colspan]),
+  table.production-overview-grid .rowlabel-corner{
+    width: 112px !important;
+    min-width: 112px !important;
+    max-width: 112px !important;
+    font-size: 10.5px !important;
+  }
+  .line-badge, .line-title-sticky{ font-size: 10px !important; height: 20px; }
+}
+
+/* Owner: "เอาข้อความนี้ออกไปเลย" — hide the pace status line under every
+   3-Line / Line 1 / Line 2 / Line 3 summary card. That one element,
+   .production-pace-status, holds all of these variants:
+     ที่ความเร็วนี้ยังไม่ทันเป้า · ชั่วคราว* (วันนี้ยังไม่มีรายงานครบ)
+     ที่ความเร็วนี้ทันเป้า · ชั่วคราว* (วันนี้ยังไม่มีรายงานครบ)
+     and the original v139 sentences (ครบเป้าเดือนแล้ว, อัตรานี้มีแนวโน้มทันเป้า,
+     อัตรานี้ยังไม่ทันเป้า, รอรายงานครบเพื่อยืนยันแนวโน้ม, สิ้นเดือนแล้ว, ยังไม่เริ่มเดือน).
+   Do not hide .production-pace-note (the formula "= จริงสะสม + เฉลี่ย/วัน × …").
+   Do not replace the line with any other warning. */
+[data-production-summary-card] .production-pace-status,
+.production-summary-pace > .production-pace-status{
+  display: none !important;
+}
