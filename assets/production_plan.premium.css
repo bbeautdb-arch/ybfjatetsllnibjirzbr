@@ -956,3 +956,1363 @@ tr[class*="production-daily-"] th,
 tr[class*="production-daily-"] td{
   background-color: #e8ebef !important;
 }
+
+/* ========================================================================
+   D-fit — tighter Line 1–3 slabs so all three fit a laptop viewport,
+   Budget 2570 contrast, and actual vs target typography.
+   Still light premium-industrial. No dark/black surfaces.
+   ======================================================================== */
+
+:root{
+  --actual: #1A4D32;
+  --actual-soft: #e7f0ea;
+  --target: #355066;
+  --target-soft: #e7edf1;
+  --budget-ink: #14382C;
+  --budget-plate: #EEF3F0;
+}
+
+/* ---- Compact the Line 1/2/3 plan grid ---- */
+header{
+  padding: 6px 16px 6px !important;
+}
+h1{ font-size: 16px !important; }
+h1 small{ margin-top: 1px; font-size: 10px !important; }
+.toolbar{ margin-top: 4px !important; gap: 5px; }
+.tab{ padding: 3px 9px !important; }
+.btn, header > button{ padding: 4px 10px !important; }
+main#main, main{ padding: 10px 16px 28px !important; }
+
+.aaf-value-legend{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 2px 0 2px 10px;
+  font-size: 11px;
+  font-family: var(--font);
+  color: var(--sub);
+  white-space: nowrap;
+}
+.aaf-value-legend .lg-chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  letter-spacing: .04em;
+}
+.aaf-value-legend .lg-chip::before{
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.aaf-value-legend .lg-actual{
+  color: var(--actual);
+  font-weight: 700;
+}
+.aaf-value-legend .lg-actual::before{ background: var(--actual); }
+.aaf-value-legend .lg-target{
+  color: var(--target);
+  font-weight: 500;
+  font-style: italic;
+}
+.aaf-value-legend .lg-target::before{ background: var(--target); }
+
+.tablewrap{
+  padding: 0 0 12px 0 !important;
+  max-height: calc(100vh - var(--header-h, 118px) - 8px);
+}
+
+table.preview-table,
+table.production-overview-grid{
+  font-size: 11px !important;
+}
+table.preview-table th,
+table.preview-table td,
+table.production-overview-grid th,
+table.production-overview-grid td{
+  padding: 1px 6px !important;
+  line-height: 1.25 !important;
+}
+table.preview-table thead th,
+table.production-overview-grid thead th{
+  padding: 2px 5px 3px !important;
+  font-size: 10px !important;
+  line-height: 1.15;
+}
+table.preview-table tbody th,
+table.production-overview-grid tbody th{
+  font-size: 11px !important;
+  line-height: 1.25;
+  padding: 2px 8px 2px 10px !important;
+}
+table.preview-table tr.line-sep th{
+  padding: 3px 10px 3px 14px !important;
+  font-size: 11px !important;
+  letter-spacing: .06em !important;
+}
+table.preview-table th.rowlabel-corner{ min-width: 118px; }
+
+/* Tighter floating gaps between Line slabs — still a little air, not stacked flush */
+tr.is-slab-start th{
+  border-top-width: 5px !important;
+  border-top-color: var(--bg) !important;
+  border-radius: 8px 8px 0 0 !important;
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
+}
+tr.is-slab-start.l1 th{
+  border-top-width: 3px !important;
+}
+tr.is-totals-start th,
+tr.is-totals-start td,
+tr[class*="production-daily-"].is-totals-start th{
+  border-top-width: 8px !important;
+}
+tr.production-daily-eq25-total th,
+tr.production-daily-eq25-total td{
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  font-size: 11.5px !important;
+}
+tr.bd-row td{ padding: 1px 6px !important; }
+.bd-size{ font-size: 8px; line-height: 1.2; }
+.bd-count{ font-size: 11px; }
+.day-ctl{ margin-top: 0; gap: 2px; }
+thead .pv-add-btn, thead .pv-rm-btn{ width: 13px; height: 13px; font-size: 9px; }
+
+/* Short laptop (1280×800 and similar): one more notch tighter */
+@media (max-height: 850px){
+  header{ padding: 4px 12px 4px !important; }
+  h1{ font-size: 15px !important; }
+  h1 small{ display: none !important; }
+  .toolbar{ margin-top: 3px !important; }
+  .btn, header > button, .tab{ padding: 3px 8px !important; font-size: 11px !important; }
+  main#main, main{ padding: 4px 10px 12px !important; }
+  .tablewrap{ padding: 0 6px 8px !important; max-height: calc(100vh - var(--header-h, 96px) - 4px); }
+  table.preview-table,
+  table.production-overview-grid{ font-size: 10.5px !important; }
+  table.preview-table th,
+  table.preview-table td,
+  table.production-overview-grid th,
+  table.production-overview-grid td{ padding: 1px 5px !important; }
+  table.preview-table tbody th,
+  table.production-overview-grid tbody th{ padding: 1px 7px 1px 8px !important; }
+  table.preview-table tr.line-sep th,
+  tr.is-slab-start th{
+    padding: 3px 8px 3px 12px !important;
+  }
+  tr.is-slab-start th{ border-top-width: 2px !important; padding-top: 1px !important; padding-bottom: 1px !important; }
+  tr.is-slab-start.l1 th{ border-top-width: 2px !important; }
+  table.preview-table tr.line-sep th{ padding: 2px 8px 2px 10px !important; }
+  tr.bd-row td{ padding: 0 5px !important; }
+  .bd-size{ font-size: 7.5px; line-height: 1.05; }
+  tr.production-daily-eq25-total th,
+  tr.production-daily-eq25-total td{ padding-top: 3px !important; padding-bottom: 3px !important; }
+}
+@media (max-width: 1360px){
+  .toolbar{ gap: 4px !important; }
+  .btn, header > button, .tab{ padding: 3px 7px !important; font-size: 11px !important; }
+}
+
+/* ---- Actual vs target typography (beats line colors + input rules) ---- */
+table.preview-table tr.is-plan-row > th,
+table.production-overview-grid tr.is-plan-row > th,
+table.std-table tr.is-plan-row > th{
+  color: var(--target) !important;
+  font-style: italic;
+  font-weight: 500 !important;
+}
+table.preview-table tr.is-plan-row > td,
+table.preview-table tr.is-plan-row > td.l1,
+table.preview-table tr.is-plan-row > td.l2,
+table.preview-table tr.is-plan-row > td.l3,
+table.production-overview-grid tr.is-plan-row > td,
+table.preview-table tr.is-plan-row input,
+table.preview-table tr.is-plan-row select,
+table.production-overview-grid tr.is-plan-row input,
+.card.is-plan-card .value,
+.card.is-plan-card .value span{
+  color: var(--target) !important;
+  font-weight: 500 !important;
+  font-style: italic;
+}
+/* Keep key planned totals readable (still target color, not italic-heavy) */
+tr.production-daily-eq25-total.is-plan-row td,
+tr.production-daily-eq25-total.is-plan-row input{
+  font-style: normal !important;
+  font-weight: 700 !important;
+  color: var(--target) !important;
+}
+
+table.preview-table tr.is-actual-row > th,
+table.production-overview-grid tr.is-actual-row > th,
+table.std-table tr.is-actual-row > th{
+  color: var(--actual) !important;
+  font-style: normal !important;
+  font-weight: 700 !important;
+}
+table.preview-table tr.is-actual-row > td,
+table.preview-table tr.is-actual-row > td.l1,
+table.preview-table tr.is-actual-row > td.l2,
+table.preview-table tr.is-actual-row > td.l3,
+table.production-overview-grid tr.is-actual-row > td,
+table.preview-table tr.is-actual-row input,
+table.preview-table tr.is-actual-row select,
+table.production-overview-grid tr.is-actual-row input,
+td.is-actual-cell,
+td.is-actual-cell input,
+.card.is-actual-card .value,
+.card.is-actual-card .value span{
+  color: var(--actual) !important;
+  font-weight: 700 !important;
+  font-style: normal !important;
+}
+
+/* Zeros stay quiet but remain above AA on the light plates */
+td.is-zero-cell, th.is-zero-cell,
+td.is-zero-cell .bd-count, td.is-zero-cell .bd-size,
+td.is-zero-cell.l1, td.is-zero-cell.l2, td.is-zero-cell.l3,
+tr.is-plan-row td.is-zero-cell,
+tr.is-actual-row td.is-zero-cell{
+  color: #4A5C6B !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  opacity: 1 !important;
+}
+
+/* ---- Budget ปี 2570 (corner launch + lab) — force readable contrast ----
+   The launch control sits fixed at the bottom-right. Our light theme was
+   inheriting navy text onto a dark teal plate (or mint text onto a header
+   we restyled light). Set both fill and ink with !important. */
+.budget-launch,
+button.budget-launch,
+#budget-launch{
+  position: fixed !important;
+  bottom: 18px !important;
+  right: 18px !important;
+  z-index: 60 !important;
+  background-color: var(--budget-plate) !important;
+  background-image:
+    linear-gradient(180deg, #f7faf8 0%, var(--budget-plate) 55%, #dce8e0 100%) !important;
+  color: var(--budget-ink) !important;
+  border: 1px solid #8aa896 !important;
+  border-radius: 10px !important;
+  padding: 10px 16px !important;
+  font-family: var(--font) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: .02em;
+  line-height: 1.3 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.9),
+    0 6px 18px rgba(28,49,68,.14) !important;
+  cursor: pointer;
+  text-shadow: none !important;
+  -webkit-text-fill-color: var(--budget-ink) !important;
+}
+.budget-launch:hover,
+#budget-launch:hover{
+  color: #0f2c22 !important;
+  -webkit-text-fill-color: #0f2c22 !important;
+  border-color: #1A4D32 !important;
+}
+
+/* Isolate the budget lab from page header / h1 / button overrides */
+#budget-lab{
+  color: #153b3c !important;
+  background: #f4f8f7 !important;
+}
+#budget-lab header,
+#budget-lab .budget-header{
+  background: linear-gradient(180deg, #f7f8f6, #e7ece9) !important;
+  background-image: none !important;
+  color: var(--budget-ink) !important;
+  backdrop-filter: none !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 1px 0 rgba(20,56,44,.12) !important;
+  position: static !important;
+  border-bottom: 1px solid #c5d5cc !important;
+}
+#budget-lab h1,
+#budget-lab #budget-title{
+  color: #152536 !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  margin: 4px 0 !important;
+}
+#budget-lab .budget-eyebrow{
+  color: #1A4D32 !important;
+}
+#budget-lab .budget-header p,
+#budget-lab header p{
+  color: #355066 !important;
+}
+#budget-lab .budget-close,
+#budget-lab header .budget-close{
+  color: #152536 !important;
+  background: linear-gradient(180deg, #fbfbfc, #e4e7ea) !important;
+  border: 1px solid #8aa896 !important;
+  -webkit-text-fill-color: #152536 !important;
+}
+#budget-lab .budget-reference{
+  color: #355066 !important;
+  background: #eef3f1 !important;
+}
+#budget-lab .budget-card.target{
+  background: #e7f0ea !important;
+  border-color: #8aa896 !important;
+}
+#budget-lab .budget-card.target strong{
+  color: #1A4D32 !important;
+}
+#budget-lab .budget-card.target small,
+#budget-lab .budget-card.target span{
+  color: #355066 !important;
+}
+#budget-lab .budget-tabs button.selected{
+  background: #1A4D32 !important;
+  color: #f4f7f4 !important;
+  -webkit-text-fill-color: #f4f7f4 !important;
+}
+
+table.preview-table tbody th small,
+table.production-overview-grid tbody th small{
+  font-size: 9px !important;
+  font-weight: 400 !important;
+  display: inline;
+}
+table.preview-table tbody th,
+table.production-overview-grid tbody th{
+  line-height: 1.2 !important;
+}
+
+label.is-plan-label, .is-plan-label{
+  color: var(--target) !important;
+  font-style: italic;
+}
+label.is-actual-label, .is-actual-label{
+  color: var(--actual) !important;
+  font-weight: 700 !important;
+  font-style: normal !important;
+}
+
+tr.is-plan-emphasis > td,
+tr.is-plan-emphasis > td.l1,
+tr.is-plan-emphasis > td.l2,
+tr.is-plan-emphasis > td.l3,
+tr.is-plan-emphasis input{
+  font-style: normal !important;
+  font-weight: 700 !important;
+  color: var(--target) !important;
+}
+
+/* Cover cells that would otherwise peek left of the sticky row labels when the grid is scrolled. */
+table.preview-table tbody th,
+table.production-overview-grid tbody th,
+table.preview-table th.rowlabel-corner,
+table.preview-table thead th:first-child{
+  box-shadow:
+    inset 0 0 0 0 transparent,
+    8px 0 14px rgba(28,49,68,.05),
+    -20px 0 0 0 var(--panel) !important;
+}
+tr.in-line-1 th{
+  box-shadow: inset 3px 0 0 var(--line1), 8px 0 14px rgba(28,49,68,.05), -20px 0 0 0 var(--panel) !important;
+}
+tr.in-line-2 th{
+  box-shadow: inset 3px 0 0 var(--line2), 8px 0 14px rgba(28,49,68,.05), -20px 0 0 0 var(--panel) !important;
+}
+tr.in-line-3 th{
+  box-shadow: inset 3px 0 0 var(--line3), 8px 0 14px rgba(28,49,68,.05), -20px 0 0 0 var(--panel) !important;
+}
+tr.is-slab-start.l1 th{ box-shadow: inset 3px 0 0 var(--line1), -20px 0 0 0 var(--metal-2, #d9dce0) !important; }
+tr.is-slab-start.l2 th{ box-shadow: inset 3px 0 0 var(--line2), -20px 0 0 0 var(--metal-2, #d9dce0) !important; }
+tr.is-slab-start.l3 th{ box-shadow: inset 3px 0 0 var(--line3), -20px 0 0 0 var(--metal-2, #d9dce0) !important; }
+
+/* No left radius on sticky row labels — rounded corners were punching
+   transparent holes that let scrolled-off day cells peek through. */
+table.preview-table tbody th,
+table.production-overview-grid tbody th,
+table.preview-table tr.line-sep th,
+tr.is-slab-start th,
+tr.is-slab-end th,
+tr.is-totals-start th,
+tr.is-totals-end th{
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+}
+
+/* ========================================================================
+   E-glass — light iOS-style glassmorphism on top of approved D-fit.
+   Keeps Line 1–3 compact fit, actual #1A4D32 / target #355066 / budget
+   ink #14382C exactly. Glass on chrome, frames, headers and panels;
+   table number cells stay crisp (no backdrop-filter behind figures).
+   Light surfaces only — no black or near-black backgrounds.
+   ======================================================================== */
+
+:root{
+  --glass-fill: rgba(255,255,255,.62);
+  --glass-fill-strong: rgba(255,255,255,.82);
+  --glass-fill-soft: rgba(255,255,255,.48);
+  --glass-stroke: rgba(255,255,255,.86);
+  --glass-stroke-dim: rgba(28,49,68,.12);
+  --glass-spec: inset 0 1px 0 rgba(255,255,255,.94);
+  --glass-inset: inset 0 -1px 0 rgba(28,49,68,.06);
+  --glass-shadow: 0 1px 2px rgba(28,49,68,.05), 0 8px 22px rgba(28,49,68,.08);
+  --glass-shadow-sm: 0 1px 1px rgba(28,49,68,.04), 0 4px 12px rgba(28,49,68,.06);
+  --glass-blur: blur(20px) saturate(1.65);
+  --glass-blur-sm: blur(14px) saturate(1.45);
+  --glass-radius: 14px;
+  --glass-radius-lg: 16px;
+  --glass-pill: 999px;
+  --glass-sim: linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(247,249,251,.88) 48%, rgba(238,241,245,.9) 100%);
+}
+
+/* Soft pastel silver / navy / forest wash so frosted glass can be read */
+html, body{
+  background-color: #e6ebf0 !important;
+}
+body{
+  background-image:
+    radial-gradient(1000px 520px at 6% -8%, rgba(214,230,244,.7), transparent 62%),
+    radial-gradient(860px 460px at 96% 0%, rgba(214,234,222,.55), transparent 58%),
+    radial-gradient(720px 480px at 50% 120%, rgba(232,226,236,.4), transparent 54%),
+    linear-gradient(180deg, #eef2f6 0%, #e5eaef 42%, #e6ece8 100%) !important;
+  letter-spacing: -.005em;
+}
+
+/* ---- Header: iOS frosted nav bar (padding stays compact from D-fit) ---- */
+header{
+  background-color: rgba(255,255,255,.52) !important;
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,.78) 0%, rgba(255,255,255,.42) 100%) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-stroke) !important;
+  box-shadow:
+    var(--glass-spec),
+    var(--glass-inset),
+    0 8px 28px rgba(28,49,68,.08) !important;
+}
+h1{
+  letter-spacing: -.02em !important;
+  font-weight: 600 !important;
+}
+h1 small{
+  letter-spacing: .14em !important;
+}
+
+/* ---- Pill glass controls: buttons, tabs, line chips, inputs ---- */
+.btn, header > button, .tab,
+thead .pv-add-btn, thead .pv-rm-btn{
+  border-radius: var(--glass-pill) !important;
+  background-color: rgba(255,255,255,.55) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.88) 0%, rgba(255,255,255,.4) 100%) !important;
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border: 1px solid var(--glass-stroke) !important;
+  box-shadow:
+    var(--glass-spec),
+    0 1px 2px rgba(28,49,68,.05),
+    0 4px 10px rgba(28,49,68,.05) !important;
+  color: var(--ink) !important;
+  font-weight: 500 !important;
+  letter-spacing: .01em;
+  transition: transform .16s ease, box-shadow .16s ease, background-color .16s ease, border-color .16s ease;
+}
+.btn:hover, header > button:hover, .tab:hover{
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,.95) !important;
+  box-shadow:
+    var(--glass-spec),
+    0 2px 4px rgba(28,49,68,.06),
+    0 8px 18px rgba(28,49,68,.09) !important;
+}
+.btn:active, header > button:active, .tab:active{
+  transform: translateY(0) scale(.97);
+  box-shadow: var(--glass-spec), var(--glass-inset), 0 1px 2px rgba(28,49,68,.06) !important;
+}
+.btn.primary, .pagebtn.active, .btn.pagebtn.active, .tab.active{
+  background-color: rgba(255,250,240,.78) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.95) 0%, rgba(247,240,224,.72) 100%) !important;
+  border-color: rgba(255,255,255,.9) !important;
+  color: var(--ink-strong) !important;
+  box-shadow:
+    var(--glass-spec),
+    inset 0 -2px 0 rgba(154,112,24,.45),
+    0 4px 12px rgba(154,112,24,.1) !important;
+}
+.tab[data-line="Line 1"].active{ box-shadow: var(--glass-spec), inset 3px 0 0 var(--line1), 0 4px 12px rgba(181,106,44,.12) !important; }
+.tab[data-line="Line 2"].active{ box-shadow: var(--glass-spec), inset 3px 0 0 var(--line2), 0 4px 12px rgba(42,115,136,.12) !important; }
+.tab[data-line="Line 3"].active{ box-shadow: var(--glass-spec), inset 3px 0 0 var(--line3), 0 4px 12px rgba(58,122,74,.12) !important; }
+
+.badge, #revBadge, .aaf-value-legend{
+  border-radius: var(--glass-pill) !important;
+  background-color: rgba(255,255,255,.5) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.4)) !important;
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: var(--glass-spec), var(--glass-shadow-sm);
+}
+.aaf-value-legend{
+  padding: 3px 10px 3px 12px !important;
+  margin-left: auto;
+}
+.aaf-value-legend .lg-actual{ color: var(--actual) !important; font-weight: 700 !important; }
+.aaf-value-legend .lg-target{ color: var(--target) !important; font-weight: 500 !important; font-style: italic !important; }
+
+.toolbar input[type=month],
+.toolbar input[type=date],
+.toolbar select,
+label > input.std-input,
+.previewbox label input.std-input,
+.toolbar .std-input{
+  border-radius: var(--glass-pill) !important;
+  background-color: rgba(255,255,255,.62) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.5)) !important;
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border: 1px solid var(--glass-stroke) !important;
+  box-shadow: var(--glass-spec), inset 0 1px 2px rgba(28,49,68,.04) !important;
+  color: var(--ink-strong) !important;
+}
+
+/* ---- Cards, section frames, preview panels (every tab) ---- */
+.card, .previewbox, .daycard, .shipment-order-card, details,
+#main .previewbox{
+  background-color: rgba(255,255,255,.55) !important;
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,.78) 0%, rgba(255,255,255,.42) 55%, rgba(255,255,255,.5) 100%) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-stroke) !important;
+  border-radius: var(--glass-radius) !important;
+  box-shadow: var(--glass-spec), var(--glass-shadow) !important;
+}
+.previewbox{
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin-bottom: 16px !important;
+}
+.previewhead{
+  background: var(--glass-sim) !important;
+  border-bottom: 1px solid var(--glass-stroke) !important;
+  box-shadow: var(--glass-spec);
+  padding: 10px 16px !important;
+}
+.previewhead b, .previewbox > .previewhead b{
+  letter-spacing: .03em !important;
+  font-weight: 600 !important;
+  color: var(--ink-strong) !important;
+}
+.card{
+  padding: 14px 16px !important;
+  border-radius: var(--glass-radius) !important;
+}
+.card .label{ letter-spacing: .14em; }
+.card.is-plan-card .value, .card.is-plan-card .value span{ color: var(--target) !important; }
+.card.is-actual-card .value, .card.is-actual-card .value span{ color: var(--actual) !important; font-weight: 700 !important; }
+
+/* Glass tray around tables on std / eff / purchase — not the floating Line grid */
+.tablewrap{
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+#main .tablewrap:not(:has(table.production-overview-grid)){
+  background-color: rgba(255,255,255,.5) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.42)) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-stroke) !important;
+  border-radius: var(--glass-radius) !important;
+  box-shadow: var(--glass-spec), var(--glass-shadow-sm) !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+/* ---- Table chrome: simulated glass (no blur behind numbers) ---- */
+table.preview-table thead th,
+table.production-overview-grid thead th,
+table.std-table thead th,
+table.size-table thead th{
+  background: var(--glass-sim) !important;
+  background-color: #f3f5f7 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-bottom: 1px solid rgba(28,49,68,.10) !important;
+  box-shadow: var(--glass-spec), var(--glass-inset) !important;
+  color: var(--target) !important;
+  letter-spacing: .06em;
+}
+table.preview-table th.rowlabel-corner,
+table.preview-table thead th:first-child{
+  background: var(--glass-sim) !important;
+  background-color: #f3f5f7 !important;
+}
+
+/* Line section headers: frosted plate + line tint, still compact */
+table.preview-table tr.line-sep th,
+tr.is-slab-start th{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.9) 0%, rgba(245,247,250,.86) 100%) !important;
+  background-color: #f2f4f6 !important;
+  backdrop-filter: none !important;
+  letter-spacing: .1em !important;
+  box-shadow: var(--glass-spec) !important;
+}
+tr.is-slab-start.l1 th,
+table.preview-table tr.line-sep.l1 th{
+  background:
+    linear-gradient(180deg, rgba(255,248,240,.94), rgba(255,244,230,.86)) !important;
+}
+tr.is-slab-start.l2 th,
+table.preview-table tr.line-sep.l2 th{
+  background:
+    linear-gradient(180deg, rgba(240,249,252,.94), rgba(236,247,255,.86)) !important;
+}
+tr.is-slab-start.l3 th,
+table.preview-table tr.line-sep.l3 th{
+  background:
+    linear-gradient(180deg, rgba(240,250,243,.94), rgba(238,248,240,.86)) !important;
+}
+
+/* Data cells stay almost opaque and sharp */
+tr.in-line-1 td, tr.in-line-2 td, tr.in-line-3 td,
+tr.in-line-1 th, tr.in-line-2 th, tr.in-line-3 th{
+  background-color: rgba(252,252,250,.97) !important;
+  backdrop-filter: none !important;
+}
+/* Keep sticky label cover (solid, no holes) */
+table.preview-table tbody th,
+table.production-overview-grid tbody th{
+  background-color: #f4f5f4 !important;
+  backdrop-filter: none !important;
+}
+
+/* Totals / summary rows: elevated frosted plate */
+tr.production-daily-eq25-total th,
+tr.production-daily-eq25-total td,
+tr[class*="production-daily-"] th,
+tr[class*="production-daily-"] td,
+tr.is-totals-start th, tr.is-totals-start td,
+tr.is-totals-end th, tr.is-totals-end td{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.9), rgba(232,236,241,.92)) !important;
+  background-color: #e8ebef !important;
+  backdrop-filter: none !important;
+  box-shadow: var(--glass-spec) !important;
+}
+
+/* Std / size tables on มาตรฐาน */
+.std-table, .size-table{
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+.std-table th, .size-table th, .std-table td, .size-table td{
+  border-bottom: 1px solid rgba(28,49,68,.08) !important;
+}
+.std-table thead th, .size-table thead th{
+  color: var(--target) !important;
+}
+
+/* ---- Budget ปี 2570: glass chip, high-contrast ink kept ---- */
+.budget-launch,
+button.budget-launch,
+#budget-launch{
+  background-color: rgba(238,243,240,.88) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.9) 0%, rgba(238,243,240,.7) 55%, rgba(220,232,224,.8) 100%) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  color: var(--budget-ink) !important;
+  -webkit-text-fill-color: var(--budget-ink) !important;
+  border: 1px solid rgba(255,255,255,.9) !important;
+  border-radius: var(--glass-pill) !important;
+  box-shadow:
+    var(--glass-spec),
+    0 4px 8px rgba(20,56,44,.08),
+    0 12px 28px rgba(28,49,68,.12) !important;
+  letter-spacing: .02em;
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.budget-launch:hover, #budget-launch:hover{
+  transform: translateY(-1px);
+  color: #0f2c22 !important;
+  -webkit-text-fill-color: #0f2c22 !important;
+}
+.budget-launch:active, #budget-launch:active{ transform: scale(.97); }
+
+#budget-lab{
+  background-color: rgba(244,248,247,.86) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.75), rgba(244,248,247,.9)) !important;
+  backdrop-filter: blur(28px) saturate(1.5);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  border: 1px solid var(--glass-stroke) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--glass-spec), 0 24px 80px rgba(28,49,68,.18) !important;
+  color: #153b3c !important;
+}
+#budget-lab header,
+#budget-lab .budget-header{
+  background: var(--glass-sim) !important;
+  background-color: rgba(247,248,246,.92) !important;
+  color: var(--budget-ink) !important;
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border-bottom: 1px solid var(--glass-stroke) !important;
+  box-shadow: var(--glass-spec) !important;
+  border-radius: 18px 18px 0 0 !important;
+}
+#budget-lab h1, #budget-lab #budget-title{ color: #152536 !important; }
+#budget-lab .budget-eyebrow{ color: var(--actual) !important; }
+#budget-lab .budget-header p, #budget-lab header p{ color: var(--target) !important; }
+#budget-lab .budget-close,
+#budget-lab header .budget-close{
+  border-radius: var(--glass-pill) !important;
+  color: #152536 !important;
+  -webkit-text-fill-color: #152536 !important;
+  background: var(--glass-sim) !important;
+  border: 1px solid var(--glass-stroke) !important;
+}
+#budget-lab .budget-card{
+  border-radius: var(--glass-radius) !important;
+  background-color: rgba(255,255,255,.72) !important;
+  border: 1px solid var(--glass-stroke) !important;
+  box-shadow: var(--glass-spec), var(--glass-shadow-sm) !important;
+}
+#budget-lab .budget-card.target{
+  background: linear-gradient(180deg, rgba(231,240,234,.92), rgba(231,240,234,.75)) !important;
+}
+#budget-lab .budget-card.target strong{ color: var(--actual) !important; }
+#budget-lab .budget-tabs button.selected{
+  background: #1A4D32 !important;
+  color: #f4f7f4 !important;
+  -webkit-text-fill-color: #f4f7f4 !important;
+  border-radius: 10px 10px 0 0 !important;
+}
+
+footer{
+  background: transparent !important;
+  color: var(--target) !important;
+  border-top: 1px solid rgba(255,255,255,.7) !important;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .btn, header > button, .tab, .budget-launch, #budget-launch{
+    transition: none !important;
+  }
+  .btn:hover, header > button:hover, .tab:hover,
+  .budget-launch:hover, #budget-launch:hover,
+  .btn:active, header > button:active, .tab:active,
+  .budget-launch:active, #budget-launch:active{
+    transform: none !important;
+  }
+}
+
+/* Fallback when backdrop-filter is missing: denser light plates, still not dark */
+@supports not ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))){
+  header,
+  .btn, header > button, .tab,
+  .card, .previewbox, .daycard, .shipment-order-card, details,
+  .badge, .aaf-value-legend, #revBadge,
+  .toolbar input[type=month], .toolbar input[type=date], .toolbar select,
+  #budget-launch, .budget-launch, #budget-lab,
+  #main .tablewrap:not(:has(table.production-overview-grid)){
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: #f3f5f7 !important;
+    background-image: linear-gradient(180deg, #fbfcfd 0%, #eef1f4 100%) !important;
+  }
+  .pagebtn.active, .btn.pagebtn.active, .tab.active{
+    background-color: #f7f3e8 !important;
+    background-image: linear-gradient(180deg, #fffcf6, #f3ead4) !important;
+  }
+  #budget-launch, .budget-launch{
+    background-color: #EEF3F0 !important;
+    background-image: linear-gradient(180deg, #f7faf8, #e4efe8) !important;
+    color: #14382C !important;
+    -webkit-text-fill-color: #14382C !important;
+  }
+}
+
+/* Line-slab air gap should sit on the glass tray, not a flat grey */
+tr.is-slab-start th,
+tr.is-totals-start th,
+tr.is-totals-start td,
+tr[class*="production-daily-"].is-totals-start th{
+  border-top-color: rgba(230,235,239,.45) !important;
+}
+
+/* Keep the approved 3-line fit on 1280×800: glass chrome must not grow the header */
+@media (max-height: 850px){
+  header{ padding: 2px 12px 2px !important; }
+  h1{ font-size: 14px !important; line-height: 1.2 !important; }
+  .toolbar{ margin-top: 2px !important; gap: 3px !important; }
+  .btn, header > button, .tab{
+    padding: 2px 7px !important;
+    font-size: 10.5px !important;
+    line-height: 1.2 !important;
+  }
+  .aaf-value-legend{ padding: 1px 8px !important; font-size: 10px !important; }
+  .badge{ padding: 1px 6px !important; }
+}
+
+/* ========================================================================
+   F-luxe — visibly luxurious light glass, on top of E-glass / D-fit.
+   Atmosphere, floating header, obvious iOS pills, floating LINE cards.
+   Keeps actual #1A4D32, target #355066, budget ink #14382C, AA contrast,
+   crisp number cells, and the 3-line laptop fit. No dark surfaces.
+   ======================================================================== */
+
+:root{
+  --luxe-pearl: #f3efe6;
+  --luxe-champagne: #e8d7b5;
+  --luxe-navy-mist: #c9dae8;
+  --luxe-sage: #cfe0d4;
+  --luxe-gold: #b0893a;
+  --luxe-gold-soft: rgba(176,137,58,.38);
+  --luxe-ink: #152536;
+  --glass-fill: rgba(255,255,255,.42);
+  --glass-fill-strong: rgba(255,255,255,.58);
+  --glass-rim: rgba(255,255,255,.94);
+  --glass-stroke: rgba(28,49,68,.10);
+  --glass-blur: blur(28px) saturate(1.85);
+  --glass-blur-sm: blur(18px) saturate(1.7);
+}
+
+/* Rich atmospheric field — pearl, champagne, pale navy, sage, faint brush */
+html{
+  background-color: #e4e6ec !important;
+}
+html, body{
+  background-color: #e4e6ec !important;
+}
+body{
+  background-image:
+    radial-gradient(920px 540px at 8% -6%, rgba(243,239,230,.95), transparent 58%),
+    radial-gradient(780px 500px at 100% 2%, rgba(201,218,232,.75), transparent 56%),
+    radial-gradient(760px 520px at 72% 100%, rgba(207,224,212,.7), transparent 58%),
+    radial-gradient(640px 380px at 40% 48%, rgba(232,215,181,.4), transparent 62%),
+    radial-gradient(500px 300px at 18% 80%, rgba(201,218,232,.35), transparent 60%),
+    repeating-linear-gradient(
+      118deg,
+      rgba(255,255,255,.16) 0 1px,
+      transparent 1px 7px
+    ),
+    linear-gradient(165deg, #ece7dc 0%, #e3e8ef 42%, #dfe8e3 72%, #e8e6ee 100%) !important;
+  background-attachment: fixed !important;
+}
+
+/* ---- Floating frosted header bar ---- */
+header{
+  margin: 8px 12px 6px !important;
+  padding: 7px 16px 7px !important;
+  position: sticky !important;
+  top: 8px !important;
+  border-radius: 18px !important;
+  background-color: rgba(255,255,255,.38) !important;
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.28) 55%, rgba(255,255,255,.4) 100%) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  border: 1px solid var(--glass-rim) !important;
+  outline: 1px solid var(--luxe-gold-soft);
+  outline-offset: -2px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,1),
+    inset 0 -1px 0 rgba(176,137,58,.12),
+    0 1px 0 rgba(255,255,255,.55),
+    0 10px 28px rgba(28,49,68,.12),
+    0 28px 48px rgba(28,49,68,.08) !important;
+  z-index: 40;
+}
+h1{
+  font-size: 17px !important;
+  letter-spacing: -.025em !important;
+  font-weight: 600 !important;
+  color: var(--luxe-ink) !important;
+}
+h1 small{
+  letter-spacing: .18em !important;
+  font-size: 9.5px !important;
+  color: #5a6a78 !important;
+}
+
+/* ---- Obvious iOS glass pills ---- */
+.btn, header > button, .tab,
+thead .pv-add-btn, thead .pv-rm-btn{
+  border-radius: 999px !important;
+  background-color: rgba(255,255,255,.28) !important;
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,.86) 0%, rgba(255,255,255,.22) 42%, rgba(255,255,255,.4) 100%) !important;
+  backdrop-filter: var(--glass-blur-sm) !important;
+  -webkit-backdrop-filter: var(--glass-blur-sm) !important;
+  border: 1px solid var(--glass-rim) !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -8px 12px rgba(255,255,255,.2),
+    0 0 0 1px rgba(28,49,68,.08),
+    0 3px 8px rgba(28,49,68,.08) !important;
+  color: var(--luxe-ink) !important;
+  font-weight: 500 !important;
+  letter-spacing: .04em;
+}
+.btn:hover, header > button:hover, .tab:hover{
+  transform: translateY(-1px) scale(1.02);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 0 0 1px rgba(28,49,68,.1),
+    0 8px 18px rgba(28,49,68,.12) !important;
+}
+.btn:active, header > button:active, .tab:active{
+  transform: scale(.97);
+}
+.btn.primary, .pagebtn.active, .btn.pagebtn.active{
+  background-color: rgba(232,215,181,.45) !important;
+  background-image:
+    linear-gradient(180deg, rgba(255,252,244,.92) 0%, rgba(236,214,170,.45) 100%) !important;
+  border-color: rgba(255,255,255,.95) !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgba(176,137,58,.55),
+    0 0 0 1px rgba(176,137,58,.22),
+    0 6px 16px rgba(176,137,58,.16) !important;
+  color: var(--luxe-ink) !important;
+}
+.tab.active{
+  background-color: rgba(255,255,255,.5) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.35)) !important;
+  color: var(--luxe-ink) !important;
+}
+.tab[data-line="Line 1"].active{
+  background-image: linear-gradient(180deg, rgba(255,248,238,.9), rgba(232,196,160,.35)) !important;
+  box-shadow: inset 0 1px 0 #fff, inset 3px 0 0 var(--line1), 0 0 0 1px rgba(181,106,44,.2), 0 6px 14px rgba(181,106,44,.14) !important;
+}
+.tab[data-line="Line 2"].active{
+  background-image: linear-gradient(180deg, rgba(240,250,255,.9), rgba(170,208,222,.35)) !important;
+  box-shadow: inset 0 1px 0 #fff, inset 3px 0 0 var(--line2), 0 0 0 1px rgba(42,115,136,.2), 0 6px 14px rgba(42,115,136,.14) !important;
+}
+.tab[data-line="Line 3"].active{
+  background-image: linear-gradient(180deg, rgba(236,250,240,.9), rgba(180,214,190,.35)) !important;
+  box-shadow: inset 0 1px 0 #fff, inset 3px 0 0 var(--line3), 0 0 0 1px rgba(58,122,74,.2), 0 6px 14px rgba(58,122,74,.14) !important;
+}
+
+.badge, #revBadge, .aaf-value-legend{
+  border-radius: 999px !important;
+  background-color: rgba(255,255,255,.32) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.28)) !important;
+  backdrop-filter: var(--glass-blur-sm) !important;
+  -webkit-backdrop-filter: var(--glass-blur-sm) !important;
+  border: 1px solid var(--glass-rim) !important;
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgba(28,49,68,.06), 0 3px 10px rgba(28,49,68,.07) !important;
+  padding: 3px 10px !important;
+}
+.aaf-value-legend .lg-actual{ color: var(--actual) !important; font-weight: 700 !important; }
+.aaf-value-legend .lg-target{ color: var(--target) !important; font-weight: 500 !important; font-style: italic !important; }
+
+.toolbar input[type=month],
+.toolbar input[type=date],
+.toolbar select,
+label > input.std-input,
+.previewbox label input.std-input,
+.toolbar .std-input{
+  border-radius: 999px !important;
+  background-color: rgba(255,255,255,.34) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,.3)) !important;
+  backdrop-filter: var(--glass-blur-sm) !important;
+  -webkit-backdrop-filter: var(--glass-blur-sm) !important;
+  border: 1px solid var(--glass-rim) !important;
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgba(28,49,68,.07) !important;
+  color: var(--luxe-ink) !important;
+}
+
+/* Cards / panels / trays — more translucent so the atmosphere reads */
+.card, .previewbox, .daycard, .shipment-order-card, details,
+#main .previewbox,
+#main .tablewrap:not(:has(table.production-overview-grid)){
+  background-color: rgba(255,255,255,.4) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.66) 0%, rgba(255,255,255,.28) 100%) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  border: 1px solid var(--glass-rim) !important;
+  border-radius: 16px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    0 0 0 1px rgba(176,137,58,.10),
+    0 12px 32px rgba(28,49,68,.10) !important;
+}
+.previewhead{
+  background: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.3)) !important;
+  border-bottom: 1px solid rgba(255,255,255,.7) !important;
+  letter-spacing: .06em;
+}
+
+/* The Line overview stays open to the atmosphere (gaps must show the field) */
+#main .tablewrap:has(table.production-overview-grid),
+.previewbox:has(table.production-overview-grid){
+  background: transparent !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+/* ---- LINE blocks as floating rounded glass cards ---- */
+/* Visible atmosphere between cards (border is transparent, fill clipped) */
+tr.is-slab-start th,
+tr.is-slab-start td{
+  border-top: 10px solid transparent !important;
+  background-clip: padding-box !important;
+}
+tr.is-slab-start.l1 th,
+tr.is-slab-start.l1 td{ border-top-width: 8px !important; }
+
+/* Line titles — tracked, satin glass, champagne hairline */
+table.preview-table tr.line-sep th,
+tr.is-slab-start th{
+  font-size: 11.5px !important;
+  letter-spacing: .18em !important;
+  font-weight: 650 !important;
+  text-transform: uppercase;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,255,255,.5)) !important;
+  background-clip: padding-box !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    0 1px 0 rgba(176,137,58,.18) !important;
+}
+tr.is-slab-start.l1 th,
+table.preview-table tr.line-sep.l1 th{
+  background-image: linear-gradient(180deg, rgba(255,250,242,.88), rgba(255,236,214,.55)) !important;
+  background-color: rgba(255,244,230,.82) !important;
+}
+tr.is-slab-start.l2 th,
+table.preview-table tr.line-sep.l2 th{
+  background-image: linear-gradient(180deg, rgba(244,251,255,.88), rgba(214,234,244,.55)) !important;
+  background-color: rgba(236,247,255,.82) !important;
+}
+tr.is-slab-start.l3 th,
+table.preview-table tr.line-sep.l3 th{
+  background-image: linear-gradient(180deg, rgba(240,252,244,.88), rgba(214,236,220,.55)) !important;
+  background-color: rgba(238,248,240,.82) !important;
+}
+
+/* Crisp, almost-solid cells inside the glass cards */
+tr.in-line-1 td, tr.in-line-2 td, tr.in-line-3 td,
+tr.in-line-1 th, tr.in-line-2 th, tr.in-line-3 th{
+  background-color: rgba(255,255,253,.94) !important;
+  backdrop-filter: none !important;
+}
+table.preview-table tbody th,
+table.production-overview-grid tbody th{
+  background-color: #f3f4f3 !important;
+  letter-spacing: .04em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Elegant colored rail + soft edge glow (keep left radius 0 to avoid scroll leak) */
+tr.in-line-1 th, tr.is-slab-start.l1 th, tr.in-line-1.is-slab-end th{
+  box-shadow:
+    inset 4px 0 0 var(--line1),
+    inset 10px 0 14px rgba(181,106,44,.16),
+    8px 0 14px rgba(28,49,68,.04),
+    -20px 0 0 0 #f3f4f3 !important;
+}
+tr.in-line-2 th, tr.is-slab-start.l2 th, tr.in-line-2.is-slab-end th{
+  box-shadow:
+    inset 4px 0 0 var(--line2),
+    inset 10px 0 14px rgba(42,115,136,.16),
+    8px 0 14px rgba(28,49,68,.04),
+    -20px 0 0 0 #f3f4f3 !important;
+}
+tr.in-line-3 th, tr.is-slab-start.l3 th, tr.in-line-3.is-slab-end th{
+  box-shadow:
+    inset 4px 0 0 var(--line3),
+    inset 10px 0 14px rgba(58,122,74,.16),
+    8px 0 14px rgba(28,49,68,.04),
+    -20px 0 0 0 #f3f4f3 !important;
+}
+tr.is-slab-end td{
+  box-shadow: 0 14px 28px rgba(28,49,68,.10) !important;
+}
+tr.is-slab-end td:last-child{
+  border-bottom-right-radius: 14px !important;
+}
+tr.is-slab-start td:last-child{
+  border-top-right-radius: 14px !important;
+}
+
+/* Premium satin glass for day header + totals */
+table.preview-table thead th,
+table.production-overview-grid thead th,
+table.std-table thead th,
+table.size-table thead th{
+  background-color: #f0ece3 !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.88) 0%, rgba(240,232,214,.7) 100%) !important;
+  backdrop-filter: none !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase;
+  font-size: 9.5px !important;
+  color: #3a4a58 !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -1px 0 rgba(176,137,58,.22) !important;
+}
+table.preview-table th.rowlabel-corner,
+table.preview-table thead th:first-child{
+  background-color: #f0ece3 !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.88), rgba(240,232,214,.7)) !important;
+  letter-spacing: .1em;
+}
+
+tr.production-daily-eq25-total th,
+tr.production-daily-eq25-total td,
+tr[class*="production-daily-"] th,
+tr[class*="production-daily-"] td,
+tr.is-totals-start th, tr.is-totals-start td,
+tr.is-totals-end th, tr.is-totals-end td{
+  background-color: #ece7dc !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.86), rgba(228,222,210,.88)) !important;
+  backdrop-filter: none !important;
+  box-shadow: inset 0 1px 0 #fff, inset 0 1px 0 rgba(176,137,58,.15) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+tr.is-totals-start th,
+tr.is-totals-start td{
+  border-top: 10px solid transparent !important;
+  background-clip: padding-box !important;
+}
+
+/* Luxury numerals throughout the grids */
+table.preview-table,
+table.production-overview-grid,
+table.std-table,
+table.size-table{
+  font-variant-numeric: tabular-nums !important;
+  font-feature-settings: 'tnum' !important;
+}
+
+/* Budget chip — glass over the atmosphere, same ink */
+.budget-launch, button.budget-launch, #budget-launch{
+  background-color: rgba(238,243,240,.55) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.85) 0%, rgba(232,243,236,.4) 100%) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  color: var(--budget-ink) !important;
+  -webkit-text-fill-color: var(--budget-ink) !important;
+  border: 1px solid var(--glass-rim) !important;
+  outline: 1px solid var(--luxe-gold-soft);
+  outline-offset: -2px;
+  border-radius: 999px !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 0 0 1px rgba(20,56,44,.08),
+    0 8px 24px rgba(28,49,68,.14) !important;
+}
+#budget-lab{
+  background-color: rgba(250,247,240,.72) !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.7), rgba(244,248,247,.8)) !important;
+  backdrop-filter: blur(32px) saturate(1.6) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(1.6) !important;
+  border: 1px solid var(--glass-rim) !important;
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgba(176,137,58,.12), 0 28px 80px rgba(28,49,68,.18) !important;
+  border-radius: 20px !important;
+}
+
+main#main, main{
+  padding: 6px 14px 32px !important;
+}
+
+/* Compact short laptops so the 10px card gaps still fit all 3 Lines */
+@media (max-height: 850px){
+  header{ margin: 6px 8px 4px !important; padding: 4px 10px 4px !important; top: 6px !important; border-radius: 14px !important; }
+  h1{ font-size: 14px !important; }
+  .toolbar{ margin-top: 2px !important; gap: 3px !important; }
+  .btn, header > button, .tab{ padding: 2px 7px !important; font-size: 10.5px !important; }
+  .aaf-value-legend{ padding: 1px 8px !important; font-size: 10px !important; }
+  tr.is-slab-start th, tr.is-slab-start td{ border-top-width: 6px !important; }
+  tr.is-slab-start.l1 th, tr.is-slab-start.l1 td{ border-top-width: 5px !important; }
+  tr.is-totals-start th, tr.is-totals-start td{ border-top-width: 6px !important; }
+  main#main, main{ padding: 4px 8px 16px !important; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .btn, header > button, .tab, .budget-launch, #budget-launch{
+    transition: none !important;
+  }
+  .btn:hover, .tab:hover, .budget-launch:hover,
+  .btn:active, .tab:active, .budget-launch:active{
+    transform: none !important;
+  }
+}
+
+@supports not ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))){
+  header,
+  .btn, header > button, .tab,
+  .card, .previewbox, .daycard, details,
+  .badge, .aaf-value-legend, #budget-launch, .budget-launch, #budget-lab,
+  #main .tablewrap:not(:has(table.production-overview-grid)){
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: #f4f1ea !important;
+    background-image: linear-gradient(180deg, #fffcf7, #ebe6dc) !important;
+  }
+  header, #budget-launch, .budget-launch, .btn, .tab, .card, .previewbox{
+    border: 1px solid #fff !important;
+    box-shadow: inset 0 1px 0 #fff, 0 8px 24px rgba(28,49,68,.10) !important;
+  }
+}
+
+
+/* ========================================================================
+   F-luxe fix — denser floating header, atmospheric shield, budget clearance.
+   Nothing legible may show through the header. At rest, the strip behind
+   the bar is atmosphere, not data. Budget chip sits in a bottom safe area
+   so it no longer covers Line 3 หมายเหตุ. Light surfaces only; colors unchanged.
+   ======================================================================== */
+
+/* Denser frosted header: ~0.90 white, strong blur. Atmosphere may tint it;
+   page text behind it must not remain legible. */
+header{
+  background-color: rgba(255,255,255,.90) !important;
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,.96) 0%, rgba(255,252,247,.92) 42%, rgba(248,244,236,.88) 100%) !important;
+  backdrop-filter: blur(40px) saturate(1.45) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.45) !important;
+  z-index: 50 !important;
+}
+
+/* Full-bleed atmospheric shield behind the floating header (and in its
+   side / top insets). Hides any scrolled data in that strip. body::before
+   is reserved for the preview banner and is hidden in .shot, so use ::after. */
+body::after{
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-h, 168px);
+  z-index: 35;
+  pointer-events: none;
+  background-color: #e4e6ec;
+  background-image:
+    radial-gradient(920px 540px at 8% -6%, rgba(243,239,230,.95), transparent 58%),
+    radial-gradient(780px 500px at 100% 2%, rgba(201,218,232,.75), transparent 56%),
+    radial-gradient(760px 520px at 72% 100%, rgba(207,224,212,.7), transparent 58%),
+    radial-gradient(640px 380px at 40% 48%, rgba(232,215,181,.4), transparent 62%),
+    radial-gradient(500px 300px at 18% 80%, rgba(201,218,232,.35), transparent 60%),
+    repeating-linear-gradient(
+      118deg,
+      rgba(255,255,255,.16) 0 1px,
+      transparent 1px 7px
+    ),
+    linear-gradient(165deg, #ece7dc 0%, #e3e8ef 42%, #dfe8e3 72%, #e8e6ee 100%);
+  background-attachment: fixed;
+}
+html, body{
+  scroll-padding-top: var(--header-h, 168px);
+}
+
+/* Park สำรองร่างก่อนรีเฟรช on the title row so the header is two rows, not three.
+   Recovers height for the three Lines + the budget safe area. */
+header{
+  display: grid !important;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "title draft user"
+    "tool  tool  tool";
+  align-items: center;
+}
+header .top{
+  display: contents !important;
+}
+header h1{ grid-area: title; }
+header .top > div{
+  grid-area: user;
+  justify-self: end;
+  align-self: start;
+}
+header > button:not(.btn){
+  grid-area: draft;
+  justify-self: start;
+  align-self: center;
+  margin: 0 0 0 14px !important;
+  width: max-content;
+}
+header .toolbar{ grid-area: tool; }
+
+/* Bottom safe area so the fixed budget chip sits on atmosphere, not หมายเหตุ */
+main#main, main{
+  padding-bottom: 64px !important;
+}
+#main .tablewrap:has(table.production-overview-grid){
+  padding-bottom: 8px !important;
+}
+
+@media (max-height: 850px){
+  /* Slightly tighter card gaps to pay for the budget safe area */
+  tr.is-slab-start th, tr.is-slab-start td{ border-top-width: 4px !important; }
+  tr.is-slab-start.l1 th, tr.is-slab-start.l1 td{ border-top-width: 3px !important; }
+  tr.is-totals-start th, tr.is-totals-start td{ border-top-width: 4px !important; }
+  main#main, main{ padding-bottom: 56px !important; }
+  .budget-launch, button.budget-launch, #budget-launch{
+    bottom: 12px !important;
+    padding: 7px 14px !important;
+    font-size: 12px !important;
+  }
+}
+
+@supports not ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))){
+  header{
+    background-color: #f7f4ee !important;
+    background-image: linear-gradient(180deg, #fffcf7, #efe8dc) !important;
+  }
+}
+
+/* F-luxe fix 2 — restore day-column scroll, clear 1280 budget overlap */
+/* Overview wrap must be the horizontal scroller (overflow:visible made
+   scrollLeft a no-op and prevented the 7–13 frame). Previewbox clips the
+   wide table so the page itself does not grow sideways. */
+.previewbox:has(table.production-overview-grid){
+  overflow: hidden !important;
+}
+#main .tablewrap:has(table.production-overview-grid){
+  overflow: auto !important;
+  max-height: calc(100vh - var(--header-h, 168px) - 8px);
+}
+
+@media (max-height: 850px){
+  /* Do not reserve 52px inside the wrap — that clipped หมายเหตุ and left a
+     hole where later page cards showed through. Keep the wrap tall enough
+     for all 3 Lines; sit the compact chip in the few pixels under หมายเหตุ. */
+  #main .tablewrap:has(table.production-overview-grid){
+    max-height: calc(100vh - var(--header-h, 96px) - 8px) !important;
+    padding-bottom: 0 !important;
+  }
+  tr.is-slab-start th, tr.is-slab-start td{ border-top-width: 2px !important; }
+  tr.is-slab-start.l1 th, tr.is-slab-start.l1 td{ border-top-width: 2px !important; }
+  tr.is-totals-start th, tr.is-totals-start td{ border-top-width: 2px !important; }
+  table.preview-table tr.line-sep th,
+  tr.is-slab-start th{
+    padding-top: 1px !important;
+    padding-bottom: 1px !important;
+  }
+  table.preview-table tbody th,
+  table.preview-table tbody td,
+  table.production-overview-grid tbody th,
+  table.production-overview-grid tbody td{
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    line-height: 1.25 !important;
+  }
+  .budget-launch, button.budget-launch, #budget-launch{
+    bottom: 6px !important;
+    padding: 4px 12px !important;
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+  }
+}
