@@ -168,8 +168,9 @@
   }
 
   function enhanceEq25Cell(td, line, day) {
-    if (td.querySelector('.mail-metric-grid')) return;
-    var pair = td.querySelector('.mail-inline-pair');
+    var oldGrid = td.querySelector(':scope > .mail-metric-grid');
+    var pair = (oldGrid && td.querySelector(':scope > .mail-metric-source-wrap > .mail-inline-pair')) || td.querySelector('.mail-inline-pair');
+    if (!oldGrid && td.querySelector('.mail-metric-grid')) return;   // a grid we do not own (nested): leave it
     if (!pair) return;
     var goal = pair.querySelector('.mail-inline-goal');
     var slot = pair.querySelector('[data-mail-inline-metric], [data-mail-inline-line]');
@@ -179,9 +180,18 @@
     var rows = mergeThickness(planRows, actualRows);
     if (!rows.length && !goal) return;
 
+    // audit fix: rebuild when the underlying numbers changed since the grid was built (late / refreshed mail actuals)
+    var sig = '';
+    try { sig = JSON.stringify([goal ? goal.textContent.trim() : '', actualBtn ? actualBtn.textContent.trim() : '', actualBtn && actualBtn.getAttribute ? (actualBtn.getAttribute('title') || '') : '', rows]); } catch (eSig) { sig = String(Date.now()); }
+    if (oldGrid) {
+      if (oldGrid.getAttribute('data-gm-sig') === sig) return;
+      oldGrid.parentNode.removeChild(oldGrid);
+    }
+
     var grid = document.createElement('span');
     grid.className = 'mail-metric-grid';
     grid.setAttribute('data-mail-metric-enhanced', 'eq25');
+    grid.setAttribute('data-gm-sig', sig);
     grid.setAttribute('aria-label', 'เป้าตั้ง / เดินจริงได้');
     headRow().forEach(function (n) { grid.appendChild(n); });
 
@@ -198,13 +208,16 @@
 
     // Keep the original pair in the DOM but unshown, so refresh hooks and
     // dialogs that look up [data-mail-inline-line] still have a living node.
-    var wrap = document.createElement('span');
-    wrap.className = 'mail-metric-source-wrap';
-    wrap.hidden = true;
-    wrap.setAttribute('aria-hidden', 'true');
-    pair.setAttribute('data-mail-metric-source', 'true');
-    td.insertBefore(wrap, pair);
-    wrap.appendChild(pair);
+    var wrap = oldGrid ? pair.parentNode : null;
+    if (!wrap) {
+      wrap = document.createElement('span');
+      wrap.className = 'mail-metric-source-wrap';
+      wrap.hidden = true;
+      wrap.setAttribute('aria-hidden', 'true');
+      pair.setAttribute('data-mail-metric-source', 'true');
+      td.insertBefore(wrap, pair);
+      wrap.appendChild(pair);
+    }
     td.insertBefore(grid, wrap);
   }
 
