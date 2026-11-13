@@ -4279,3 +4279,44 @@ table.production-overview-grid td.gm3-cell .gm3-sub:not(.gm4-pair):not(.gm4-one)
   html body #main table.production-overview-grid td.gm3-cell .gm3-sub .mail-inline-actual,
   html body #main table.production-overview-grid td.gm3-cell .gm3-sub .mail-inline-actual b{ font-size: .68rem !important; padding-left: 1px !important; padding-right: 1px !important; letter-spacing: -.01em; }
 }
+
+/* ===== line-detail-v6 (appended; visual only) =====
+   Day separators: ONE dark navy 2px line between days, header row down through every row of every Line block,
+   on single-lane, multi-lane, weekend/holiday, stopped and today columns alike. Lane dividers inside a day stay thin + pale. */
+html body #main table.production-overview-grid{--aaf-day-line:#1f2a44;--aaf-lane-line:#cdd6e1;--gm3-line:#cdd6e1;--gm4-line:#cdd6e1;--g2-day:#1f2a44}
+html body #main table.production-overview-grid > thead > tr > th.day-end,
+html body #main table.production-overview-grid > tbody > tr > td.day-end,
+html body #main table.production-overview-grid > tfoot > tr > td.day-end,
+html body #floatingDayHeader th.day-end,
+html body #floatingDayHeader td.day-end{border-right:2px solid var(--aaf-day-line,#1f2a44) !important}
+html body #main table.production-overview-grid > thead > tr > th.day-start,
+html body #main table.production-overview-grid > tbody > tr > td.day-start,
+html body #floatingDayHeader .day-start{border-left:0 !important}
+/* the line in front of day 1 = the right edge of the frozen row-label column */
+html body #main table.production-overview-grid > thead > tr > th.rowlabel-corner,
+html body #main table.production-overview-grid > tbody > tr > th{border-right:2px solid var(--aaf-day-line,#1f2a44) !important}
+/* nothing may thicken, thin or tint the line: no side insets / glows on today, weekend, holiday, stopped cells */
+html body #main table.production-overview-grid > tbody > tr > td.is-today,
+html body #main table.production-overview-grid > tbody > tr > td.today-col,
+html body #main table.production-overview-grid > tbody > tr > td.is-today.day-start,
+html body #main table.production-overview-grid > tbody > tr > td.is-today.day-end,
+html body #main table.production-overview-grid > tbody > tr > td.is-today.day-start.day-end,
+html body #main table.production-overview-grid > tbody > tr > td.gm-weekend,
+html body #main table.production-overview-grid > tbody > tr > td.gm-holiday,
+html body #main table.production-overview-grid > tbody > tr > td.gm-stopped{box-shadow:none !important;outline:0 !important}
+html body #main table.production-overview-grid > thead > tr > th.is-today,
+html body #main table.production-overview-grid > thead > tr > th.today-col-header{box-shadow:inset 0 3px 0 var(--g-today-line,#2a5d6e) !important;outline:0 !important}
+/* lane dividers inside a day: thin and pale (never navy, never 2px) */
+html body #main table.production-overview-grid td.gm3-lane.gm3-notlast{border-right:1px solid var(--aaf-lane-line) !important}
+html body #main table.production-overview-grid td.gm3-cell .gm3-cols > .gm3-sub + .gm3-sub,
+html body #main table.production-overview-grid td.gm3-cell .gm4-var-cells > .gm4-one + .gm4-one{border-left:1px solid var(--aaf-lane-line)}
+html body #main table.production-overview-grid td.gm3-cell > * + *{border-top:1px solid var(--aaf-lane-line)}
+/* wood-estimate rows (ประมาณการใช้ไม้ยูคาลิปตัส...) carry no day-end class: give them the same day line */
+html body #main table.production-overview-grid > tbody > tr.is-plan-row:not([data-mail-plan-metric]) > td:not(.day-end){border-right:2px solid var(--aaf-day-line,#1f2a44) !important;border-left:0 !important}
+/* stopped / shutdown days: dim the CONTENT, never the cell - cell opacity washed the day line out to a pale grey */
+html body #main table.production-overview-grid td.gm-stopped,
+html body #main table.production-overview-grid th.gm-stopped{opacity:1 !important}
+html body #main table.production-overview-grid td.gm-stopped > *,
+html body #main table.production-overview-grid th.gm-stopped > *{opacity:.62}
+/* build tag (tiny, bottom of the page): tells a stale cached copy apart from this build */
+html[data-aaf-grid="v6"] #main::after{content:"ตาราง v6";display:block;text-align:right;font-size:10px;letter-spacing:.04em;color:#8da2b8;padding:4px 10px 10px}
