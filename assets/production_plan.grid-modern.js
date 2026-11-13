@@ -485,6 +485,22 @@
     if (keep.classList.contains('mail-metric-grid')) {
       for (c = keep.firstElementChild; c; c = c.nextElementSibling) if (!c.classList.contains('mail-metric-total')) c.setAttribute('data-gm5-hide', '1');
     }
+    gm6hideStacks(td, keep);
+  }
+  /* v6: markup-agnostic fallback. A per-thickness stack line is recognised by its "2.5 มม." label leaf; the whole line (or the
+     whole stack when it sits in its own wrapper) is hidden unless it holds the day-total slot or one of our own nodes. */
+  var GM6_LAB = /^\s*\d+(?:[.,]\d+)?\s*มม\.?\s*$/;
+  function gm6hideStacks(td, keep) {
+    var all = td.querySelectorAll('*'), i, el, n, p;
+    for (i = 0; i < all.length; i++) {
+      el = all[i];
+      if (el.children.length || !GM6_LAB.test(el.textContent || '')) continue;
+      if (el.closest('[data-gm5]') || el.closest('.mail-inline-actual')) continue;
+      n = el;
+      while ((p = n.parentElement) && p !== td && p !== keep && !p.querySelector('[data-mail-inline-line]')) n = p;
+      if (!n || n === td || n === keep || n.hasAttribute('data-gm5') || n.querySelector('[data-gm5]') || n.querySelector('[data-mail-inline-line]')) continue;
+      n.setAttribute('data-gm5-hide', '1');
+    }
   }
   function gm3sync(td, ref, build) {
     gm5clean(td);
@@ -1334,6 +1350,7 @@
     finally { gmBusy = false; try { gmAttach(); } catch (e2) { /* ignore */ } }
   }
 
+  try { document.documentElement.setAttribute('data-aaf-grid', 'v6'); } catch (e0) { /* ignore */ }
   window.enhancePlanGridModern = enhance;
 
   function hook() {
