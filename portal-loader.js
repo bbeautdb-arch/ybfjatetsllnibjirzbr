@@ -16,7 +16,7 @@
    let html=await response.text();
    if(page==='production_plan'){
      const root=new URL('.', location.href);
-     const cssHref=new URL('assets/production_plan.premium.css?v=f5ce13a5aaf2', root).href;
+     const cssHref=new URL('assets/production_plan.premium.css?v=672bbb42be53', root).href;
      const hookSrc=new URL('assets/production_plan.visual-hooks.js', root).href;
      const fcSrc=new URL('assets/production_plan.forecast.js?v=16b95b91aa60', root).href;
      const fcTag='<script src="'+fcSrc+'" data-aaf-forecast="js"></script>';
@@ -24,7 +24,7 @@
      const clarityTag='<script src="'+claritySrc+'" data-aaf-grid="clarity"></script>';
      const modernSrc=new URL('assets/production_plan.grid-modern.js?v=752fc32ee9e7', root).href;
      const modernTag='<script src="'+modernSrc+'" data-aaf-grid="modern"></script>';
-     const mixedSrc=new URL('assets/production_plan.mixed-layout.js?v=bef1b4652ac5', root).href;
+     const mixedSrc=new URL('assets/production_plan.mixed-layout.js?v=57efd5d380a5', root).href;
      const mixedTag='<script src="'+mixedSrc+'" data-aaf-grid="mixed-layout"></script>';
      const loadingSrc=new URL('assets/production_plan.loading-layout.js?v=c41a2edebcd0', root).href;
      const loadingTag='<script src="'+loadingSrc+'" data-aaf-grid="loading-layout"></script>';

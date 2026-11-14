@@ -4406,3 +4406,11 @@ html body #main table.production-overview-grid span[data-mail-opening] > small.m
 html body #main table.production-overview-grid th > span[data-mail-opening]:has(> small.mail-stock-legend){
   display:none !important;
 }
+
+/* Owner Nov15: today uses the same 2px date frame, without a second inset rim.
+   Keep the existing today fill, date colors, bold weekday and body cells intact. */
+html body #main table.production-overview-grid > thead > tr.dayheader > th:is(.today-col-header,.is-today,.gm-today),
+html body #floatingDayHeader th:is(.today-col-header,.is-today,.gm-today){
+  box-shadow:none !important;
+  outline:0 !important;
+}
