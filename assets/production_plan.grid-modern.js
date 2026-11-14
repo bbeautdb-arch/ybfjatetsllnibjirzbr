@@ -332,6 +332,8 @@
   function buildHoursStack(group) {
     var first = group[0];
     if (!first || first.getAttribute('data-gm2-hours')) return;
+    // Keep canonical companions, grouped repeats, extra thicknesses and refresh targets intact.
+    if (group.some(function (td) { return td.querySelector('[data-mail-inline-metric="hours-run"]'); })) return;
     var lanes = group.map(function (td) {
       return {
         td: td,
@@ -481,7 +483,7 @@
       c.setAttribute('data-gm5-hide', '1');
     }
     var inner = keep.querySelectorAll('.mail-inline-metric-stack > :not(.mail-inline-actual), small:not(.mail-hours-day-total)');
-    for (i = 0; i < inner.length; i++) if (!inner[i].closest('.mail-inline-actual')) inner[i].setAttribute('data-gm5-hide', '1');
+    for (i = 0; i < inner.length; i++) if (!inner[i].closest('.mail-inline-actual, .mail-quantity-total')) inner[i].setAttribute('data-gm5-hide', '1');
     if (keep.classList.contains('mail-metric-grid')) {
       for (c = keep.firstElementChild; c; c = c.nextElementSibling) if (!c.classList.contains('mail-metric-total')) c.setAttribute('data-gm5-hide', '1');
     }
@@ -497,8 +499,8 @@
       if (el.children.length || !GM6_LAB.test(el.textContent || '')) continue;
       if (el.closest('[data-gm5]') || el.closest('.mail-inline-actual')) continue;
       n = el;
-      while ((p = n.parentElement) && p !== td && p !== keep && !p.querySelector('[data-mail-inline-line]')) n = p;
-      if (!n || n === td || n === keep || n.hasAttribute('data-gm5') || n.querySelector('[data-gm5]') || n.querySelector('[data-mail-inline-line]')) continue;
+      while ((p = n.parentElement) && p !== td && p !== keep && !p.querySelector('[data-mail-inline-line], .mail-quantity-total, .mail-hours-day-total')) n = p;
+      if (!n || n === td || n === keep || n.hasAttribute('data-gm5') || n.querySelector('[data-gm5]') || n.querySelector('[data-mail-inline-line], .mail-quantity-total, .mail-hours-day-total') || n.matches('.mail-quantity-total, .mail-hours-day-total')) continue;
       n.setAttribute('data-gm5-hide', '1');
     }
   }
@@ -577,7 +579,24 @@
     } catch (e) { /* none */ }
     return m;
   }
+  // Keep the canonical cell if the plain v6 lane copies cannot represent all
+  // exact-thickness groups, uncertainty or grouped repeated runs faithfully.
+  function gm7keepCanonical(td, thk) {
+    var root = td.querySelector('[data-mail-inline-metric="qty-pairs"], .mail-phr-groups');
+    if (!root) return false; // Retain the old-markup path.
+    var groups = Array.prototype.slice.call(root.querySelectorAll('[data-mail-thickness-metric="qty"], .mail-phr-group'));
+    var keys = thk.filter(function (t) { return typeof t === 'number' && isFinite(t) && t > 0; }).map(String);
+    if (!groups.length || groups.length !== keys.length || new Set(keys).size !== keys.length || root.querySelector('sup')) return true;
+    var groupKeys = groups.map(function (g) { return String(Number(g.getAttribute('data-mail-thickness') || g.getAttribute('data-mail-phr-thickness'))); });
+    if (new Set(groupKeys).size !== keys.length) return true;
+    return groups.some(function (g) {
+      var key = g.getAttribute('data-mail-thickness') || g.getAttribute('data-mail-phr-thickness');
+      var actual = g.querySelector('.mail-inline-actual'), goal = g.querySelector('.mail-inline-goal');
+      return !key || keys.indexOf(String(Number(key))) < 0 || !actual || parseNum(actual.textContent) == null || !goal || parseNum(goal.textContent) == null;
+    });
+  }
   function gm4qty(td, n, thk, ctx) {
+    if (gm7keepCanonical(td, thk)) return;
     var slot = td.querySelector('[data-mail-inline-line][data-mail-inline-metric]');
     var pair = (slot && gm5top(td, slot)) || td.querySelector('.mail-inline-pair');
     if (!pair || !ctx) return;
@@ -656,6 +675,7 @@
     gm3mark(td, n);
   }
   function gm3phr(td, n, thk, ctx) {
+    if (gm7keepCanonical(td, thk)) return;
     var slot = td.querySelector('[data-mail-inline-line][data-mail-inline-metric]');
     var pair = (slot && gm5top(td, slot)) || td.querySelector('.mail-inline-pair');
     if (!pair) return;
@@ -744,6 +764,8 @@
   function buildHoursCols(group, row, di) {
     var first = group[0], n = group.length;
     if (!first || first.getAttribute('data-gm2-hours')) return;
+    // Keep canonical companions, grouped repeats, extra thicknesses and refresh targets intact.
+    if (group.some(function (td) { return td.querySelector('[data-mail-inline-metric="hours-run"]'); })) return;
     var inputs = group.map(function (td) { return td.querySelector('input.pv-hr'); });
     if (!inputs.some(function (x) { return x; })) return;
     var totalEl = null, slot = null;

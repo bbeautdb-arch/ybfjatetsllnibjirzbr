@@ -224,7 +224,10 @@
   function enhanceHoursDayTotal(small) {
     if (!small || small.getAttribute('data-mail-metric-enhanced') === 'hours-total') return;
     if (small.querySelector('.mail-metric-label')) return;
+    // Canonical hours-run owns its per-thickness values and daily total.
+    if (small.closest('[data-mail-inline-metric="hours-run"]')) return;
     var slot = small.querySelector('[data-mail-inline-line], [data-mail-inline-metric]');
+    if (!slot) return; // Unknown markup must never lose its actual-value node.
     var text = '';
     small.childNodes.forEach(function (n) {
       if (n === slot) return;
