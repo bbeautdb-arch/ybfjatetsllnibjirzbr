@@ -22,7 +22,7 @@
      const fcTag='<script src="'+fcSrc+'" data-aaf-forecast="js"></script>';
      const claritySrc=new URL('assets/production_plan.grid-clarity.js?v=a2b578da0efd', root).href;
      const clarityTag='<script src="'+claritySrc+'" data-aaf-grid="clarity"></script>';
-     const modernSrc=new URL('assets/production_plan.grid-modern.js?v=752fc32ee9e7', root).href;
+     const modernSrc=new URL('assets/production_plan.grid-modern.js?v=d5f15bb052ce', root).href;
      const modernTag='<script src="'+modernSrc+'" data-aaf-grid="modern"></script>';
      const mixedSrc=new URL('assets/production_plan.mixed-layout.js?v=57efd5d380a5', root).href;
      const mixedTag='<script src="'+mixedSrc+'" data-aaf-grid="mixed-layout"></script>';

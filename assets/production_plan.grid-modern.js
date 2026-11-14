@@ -913,11 +913,29 @@
     try { a = svNum(procurementActual[day] && procurementActual[day][cat + 'ActualReceived']); } catch (e2) { /* none */ }
     return { plan: m, act: a };
   }
+  function svWriteActual(cat, day, value) {
+    var before = procurementActual[day];
+    var after = Object.assign({}, before || {});
+    after[cat + 'ActualReceived'] = value;
+    procurementActual[day] = after;
+    // Our own sibling-category write preserves provenance only for untouched fields.
+    // Manual handlers/reloads do not pass here, so their replacement still invalidates it.
+    Object.keys(svLast).forEach(function (key) {
+      var t = svLast[key], field = t.cat + 'ActualReceived';
+      if (t.day === day && t.ledger === procurementActual && t.record === before && before && before[field] === t.act && after[field] === t.act) t.record = after;
+    });
+  }
   function svSyncDay(cat, day) {
     var s = svSums(cat, day);
-    if (!s.n) return false;                                   // no supplier entries -> manual รับเข้า stays
-    var changed = false, cur = svTopNow(cat, day), key = cat + day;
-    svLast[key] = svLast[key] || {};
+    if (!s.n || !svCan()) return false;                       // no entries / stale permission -> no draft writes
+    var month = typeof currentMonth !== 'undefined' ? currentMonth : '';
+    var changed = false, cur = svTopNow(cat, day), key = month + '|' + cat + '|' + day;
+    var tracked = svLast[key];
+    // Only a write made by this sync to this exact loaded draft can authorize clearing.
+    // Same-number manual receipts, reloads and the page's manual edits are not our writes.
+    if (tracked && (tracked.ledger !== procurementActual || tracked.record !== procurementActual[day] || cur.act !== tracked.act)) {
+      delete svLast[key]; tracked = null;
+    }
     var isFuture = (typeof currentMonth !== 'undefined' ? currentMonth + '-' + svPad(day) : '') > svToday();
     try {
       if (typeof IS_ADMIN !== 'undefined' && IS_ADMIN && s.planHas && (cur.plan == null || Math.abs(cur.plan - s.plan) > 0.0049)) {
@@ -925,16 +943,16 @@
         materialData[day][cat + 'Received'] = s.plan;         // replace (same write as updateMaterial, without the re-render)
         markDirtyMaterial(day); changed = true;
       }
-      if (s.planHas) svLast[key].plan = s.plan;
       if (SV_SYNC_ACTUAL && svCan() && !isFuture) {
         if (s.actHas && (cur.act == null || Math.abs(cur.act - s.act) > 0.0049)) {
-          procurementActual[day] = Object.assign({}, procurementActual[day] || {}, (function () { var o = {}; o[cat + 'ActualReceived'] = s.act; return o; })());
+          svWriteActual(cat, day, s.act);
+          svLast[key] = { act: s.act, cat: cat, day: day, ledger: procurementActual, record: procurementActual[day] };
           markDirtyPurchase(day); changed = true;             // replace (same write as updateMaterialsActual)
-        } else if (!s.actHas && cur.act != null && svLast[key].act != null && Math.abs(cur.act - svLast[key].act) < 0.0049) {
-          procurementActual[day] = Object.assign({}, procurementActual[day] || {}, (function () { var o = {}; o[cat + 'ActualReceived'] = null; return o; })());
+        } else if (!s.actHas && cur.act != null && tracked && cur.act === tracked.act) {
+          svWriteActual(cat, day, null);
           markDirtyPurchase(day); changed = true;             // supplier actuals were cleared -> clear only what we had written
         }
-        if (s.actHas) svLast[key].act = s.act; else svLast[key].act = null;
+        if (!s.actHas) delete svLast[key];
       }
     } catch (e3) { if (console && console.warn) console.warn('supplier->รับเข้า sync skipped', e3); }
     return changed;
@@ -1240,7 +1258,7 @@
     svBusy = true;
     try {
       var cm = typeof currentMonth !== 'undefined' ? currentMonth : '';
-      if (svMonth !== cm) { svMonth = cm; svPending = { yuca: [], fuel: [] }; svAddOpen = {}; force = true; }
+      if (svMonth !== cm) { svMonth = cm; svLast = {}; svPending = { yuca: [], fuel: [] }; svAddOpen = {}; force = true; }
       var nd = typeof daysInMonth === 'function' ? daysInMonth(cm) : 31;
       try { svLockTop(nd); } catch (e0) { /* display only */ }
       var first = SV_CATS[0], p0 = table.querySelector('tr[data-material-inline-row="' + first.row + '"]');
