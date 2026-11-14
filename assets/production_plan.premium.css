@@ -4320,3 +4320,29 @@ html body #main table.production-overview-grid td.gm-stopped > *,
 html body #main table.production-overview-grid th.gm-stopped > *{opacity:.62}
 /* build tag (tiny, bottom of the page): tells a stale cached copy apart from this build */
 html[data-aaf-grid="v6"] #main::after{content:"ตาราง v6";display:block;text-align:right;font-size:10px;letter-spacing:.04em;color:#8da2b8;padding:4px 10px 10px}
+
+/* Owner Nov15: finish date-header frames; calendar emphasis never changes plans. */
+html body #main table.production-overview-grid > thead > tr > th,
+html body #floatingDayHeader th{
+  border-top:2px solid var(--aaf-day-line,#1f2a44) !important;
+  border-bottom:2px solid var(--aaf-day-line,#1f2a44) !important;
+  border-right:2px solid var(--aaf-day-line,#1f2a44) !important;
+}
+html body #main table.production-overview-grid > thead > tr > th:first-child,
+html body #floatingDayHeader th:first-child{
+  border-left:2px solid var(--aaf-day-line,#1f2a44) !important;
+}
+html body #main table.production-overview-grid > thead > tr > th::before,
+html body #floatingDayHeader th::before{content:none !important}
+html body #main table.production-overview-grid .production-calendar-weekday,
+html body #floatingDayHeader .production-calendar-weekday{
+  font-weight:800 !important;
+}
+/* A festival on a weekend retains its ordinary label; only date/day is red. */
+html body #main table.production-overview-grid .production-calendar-day .production-calendar-festival,
+html body #floatingDayHeader .production-calendar-day .production-calendar-festival{
+  color:var(--g2-sub,#506959) !important;
+  background:#f3f6f5 !important;
+  border-color:#d1dfd4 !important;
+}
+

@@ -16,9 +16,9 @@
    let html=await response.text();
    if(page==='production_plan'){
      const root=new URL('.', location.href);
-     const cssHref=new URL('assets/production_plan.premium.css', root).href;
+     const cssHref=new URL('assets/production_plan.premium.css?v=8d0f4fd96c69', root).href;
      const hookSrc=new URL('assets/production_plan.visual-hooks.js', root).href;
-     const fcSrc=new URL('assets/production_plan.forecast.js', root).href;
+     const fcSrc=new URL('assets/production_plan.forecast.js?v=261c4ebe695c', root).href;
      const fcTag='<script src="'+fcSrc+'" data-aaf-forecast="js"></script>';
      const claritySrc=new URL('assets/production_plan.grid-clarity.js?v=2248d467f69e', root).href;
      const clarityTag='<script src="'+claritySrc+'" data-aaf-grid="clarity"></script>';
