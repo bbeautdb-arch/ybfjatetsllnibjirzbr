@@ -168,10 +168,15 @@
   }
 
   function enhanceEq25Cell(td, line, day) {
+    // Canonical exact-thickness slots are owned by the shared lane presentation.
+    // Their total pair is nested, not a direct child suitable for legacy swaps.
+    if (td.querySelector('[data-mail-inline-metric="eq25-pairs"]')) return;
     var oldGrid = td.querySelector(':scope > .mail-metric-grid');
     var pair = (oldGrid && td.querySelector(':scope > .mail-metric-source-wrap > .mail-inline-pair')) || td.querySelector('.mail-inline-pair');
     if (!oldGrid && td.querySelector('.mail-metric-grid')) return;   // a grid we do not own (nested): leave it
     if (!pair) return;
+    // Fail closed for unsupported nesting: insertBefore requires a direct child.
+    if (oldGrid ? (!pair.parentNode || pair.parentNode.parentNode !== td || !pair.parentNode.classList.contains('mail-metric-source-wrap')) : pair.parentNode !== td) return;
     var goal = pair.querySelector('.mail-inline-goal');
     var slot = pair.querySelector('[data-mail-inline-metric], [data-mail-inline-line]');
     var actualBtn = slot ? (slot.querySelector('button, .mail-inline-actual, b') || slot) : null;

@@ -596,6 +596,7 @@
     });
   }
   function gm4qty(td, n, thk, ctx) {
+    if (td.querySelector('[data-mail-inline-metric="qty-pairs"]')) return;
     if (gm7keepCanonical(td, thk)) return;
     var slot = td.querySelector('[data-mail-inline-line][data-mail-inline-metric]');
     var pair = (slot && gm5top(td, slot)) || td.querySelector('.mail-inline-pair');
@@ -644,6 +645,7 @@
     return box;
   }
   function gm3eq25(td, n, thk, ctx) {
+    if (td.querySelector('[data-mail-inline-metric="eq25-pairs"]')) return;
     var grid = td.querySelector('.mail-metric-grid');
     if (!grid) return;
     var kids = Array.prototype.slice.call(grid.children), rows = [], i = 0;
@@ -675,6 +677,7 @@
     gm3mark(td, n);
   }
   function gm3phr(td, n, thk, ctx) {
+    if (td.querySelector('.mail-phr-groups')) return;
     if (gm7keepCanonical(td, thk)) return;
     var slot = td.querySelector('[data-mail-inline-line][data-mail-inline-metric]');
     var pair = (slot && gm5top(td, slot)) || td.querySelector('.mail-inline-pair');

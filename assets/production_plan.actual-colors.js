@@ -62,7 +62,33 @@
     }
     states.forEach(function(s,a){if(a.getAttribute('data-aaf-actual-state')!==s)a.setAttribute('data-aaf-actual-state',s);});
   }
-  function paint(){document.querySelectorAll('tr[data-mail-plan-metric]').forEach(paintRow);}
+  function paintTotals(){
+    document.querySelectorAll('table.production-overview-grid').forEach(function(table){
+      var goals=new Map();
+      var goalRow=table.querySelector('.production-daily-adjusted'),actualRow=table.querySelector('.actual-production-row');
+      if(!actualRow)return;
+      if(goalRow)goalRow.querySelectorAll('[data-adjusted-day]').forEach(function(td){
+        goals.set(td.getAttribute('data-adjusted-day'),number(td));
+      });
+      actualRow.querySelectorAll('[data-mail-actual-total-day]').forEach(function(td){
+        var actual=td.querySelector('strong'),day=td.getAttribute('data-mail-actual-total-day');
+        if(!actual)return;
+        var s=state(goals.has(day)?goals.get(day):null,number(actual));
+        if(actual.getAttribute('data-aaf-actual-state')!==s)actual.setAttribute('data-aaf-actual-state',s);
+      });
+    });
+  }
+  function paintCapacity(){
+    document.querySelectorAll('table.production-overview-grid').forEach(function(table){
+      table.querySelectorAll('[data-balance-day]').forEach(function(td){
+        var box=td.querySelector('.mail-stock-value'),actual=box&&box.querySelector('strong');
+        if(!actual)return;
+        var n=number(actual),s=n===null?'unknown':n>650000?'over':'normal';
+        if(actual.getAttribute('data-aaf-stock-capacity')!==s)actual.setAttribute('data-aaf-stock-capacity',s);
+      });
+    });
+  }
+  function paint(){document.querySelectorAll('tr[data-mail-plan-metric]').forEach(paintRow);paintTotals();paintCapacity();}
   var scheduled=false;
   function schedule(){
     if(scheduled)return;scheduled=true;
