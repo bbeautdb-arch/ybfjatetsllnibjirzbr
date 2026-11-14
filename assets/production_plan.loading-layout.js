@@ -6,7 +6,7 @@
   var rememberedOpen=false,scheduled=false,observer=null;
   function compactSummary(text){
     var match=String(text||'').replace(/\s+/g,' ').match(/เทียบ\s*2\.5\s+[^·]*?แผ่น/);
-    return 'รอกำหนดโหลด'+(match?' · '+match[0].trim():'');
+    return 'รอกำหนดโหลด'+(match?' · '+match[0].trim().replace(/^(เทียบ\s*2\.5)\s+(?:ยอด\s*)?/,'$1 ยอด '):'');
   }
   function ownChild(parent,tag,attribute){
     return Array.prototype.find.call(parent.children,function(node){return String(node.tagName).toLowerCase()===tag&&(!attribute||node.getAttribute(attribute)!==null);})||null;

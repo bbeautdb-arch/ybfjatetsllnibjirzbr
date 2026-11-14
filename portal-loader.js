@@ -26,7 +26,7 @@
      const modernTag='<script src="'+modernSrc+'" data-aaf-grid="modern"></script>';
      const mixedSrc=new URL('assets/production_plan.mixed-layout.js?v=57efd5d380a5', root).href;
      const mixedTag='<script src="'+mixedSrc+'" data-aaf-grid="mixed-layout"></script>';
-     const loadingSrc=new URL('assets/production_plan.loading-layout.js?v=c41a2edebcd0', root).href;
+     const loadingSrc=new URL('assets/production_plan.loading-layout.js?v=ec619321903a', root).href;
      const loadingTag='<script src="'+loadingSrc+'" data-aaf-grid="loading-layout"></script>';
      const colorSrc=new URL('assets/production_plan.actual-colors.js?v=428506d057ec', root).href;
      const colorTag='<script src="'+colorSrc+'" data-aaf-grid="actual-colors"></script>';
