@@ -24,7 +24,7 @@
      const clarityTag='<script src="'+claritySrc+'" data-aaf-grid="clarity"></script>';
      const modernSrc=new URL('assets/production_plan.grid-modern.js?v=752fc32ee9e7', root).href;
      const modernTag='<script src="'+modernSrc+'" data-aaf-grid="modern"></script>';
-     const mixedSrc=new URL('assets/production_plan.mixed-layout.js?v=4d174d65a076', root).href;
+     const mixedSrc=new URL('assets/production_plan.mixed-layout.js?v=bef1b4652ac5', root).href;
      const mixedTag='<script src="'+mixedSrc+'" data-aaf-grid="mixed-layout"></script>';
      const loadingSrc=new URL('assets/production_plan.loading-layout.js?v=c41a2edebcd0', root).href;
      const loadingTag='<script src="'+loadingSrc+'" data-aaf-grid="loading-layout"></script>';
