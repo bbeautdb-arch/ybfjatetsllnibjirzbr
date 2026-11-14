@@ -18,7 +18,7 @@
      const root=new URL('.', location.href);
      const cssHref=new URL('assets/production_plan.premium.css?v=f5ce13a5aaf2', root).href;
      const hookSrc=new URL('assets/production_plan.visual-hooks.js', root).href;
-     const fcSrc=new URL('assets/production_plan.forecast.js?v=261c4ebe695c', root).href;
+     const fcSrc=new URL('assets/production_plan.forecast.js?v=16b95b91aa60', root).href;
      const fcTag='<script src="'+fcSrc+'" data-aaf-forecast="js"></script>';
      const claritySrc=new URL('assets/production_plan.grid-clarity.js?v=a2b578da0efd', root).href;
      const clarityTag='<script src="'+claritySrc+'" data-aaf-grid="clarity"></script>';
