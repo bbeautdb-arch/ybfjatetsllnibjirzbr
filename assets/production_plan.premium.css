@@ -4321,9 +4321,11 @@ html body #main table.production-overview-grid th.gm-stopped > *{opacity:.62}
 /* build tag (tiny, bottom of the page): tells a stale cached copy apart from this build */
 html[data-aaf-grid="v6"] #main::after{content:"ตาราง v6";display:block;text-align:right;font-size:10px;letter-spacing:.04em;color:#8da2b8;padding:4px 10px 10px}
 
-/* Owner Nov15: finish date-header frames; calendar emphasis never changes plans. */
-html body #main table.production-overview-grid > thead > tr > th,
-html body #floatingDayHeader th{
+/* Owner Nov15: finish date-header frames; calendar emphasis never changes plans.
+   The dayheader class matches the older :not(.rowlabel-corner) specificity. */
+html body #main table.production-overview-grid > thead > tr.dayheader > th,
+html body #floatingDayHeader th,
+html body #floatingDayHeader th:not(.rowlabel-corner){
   border-top:2px solid var(--aaf-day-line,#1f2a44) !important;
   border-bottom:2px solid var(--aaf-day-line,#1f2a44) !important;
   border-right:2px solid var(--aaf-day-line,#1f2a44) !important;
@@ -4344,5 +4346,42 @@ html body #floatingDayHeader .production-calendar-day .production-calendar-festi
   color:var(--g2-sub,#506959) !important;
   background:#f3f6f5 !important;
   border-color:#d1dfd4 !important;
+}
+
+/* Owner Nov15: comparable daily actuals use their verified matching target.
+   States come from the visual adapter; no target or unknown value stays neutral. */
+html body #main table.production-overview-grid tr[data-mail-plan-metric] [data-aaf-actual-state="below"]{
+  --aaf-actual-color:#b3261e;--aaf-actual-fill:#fff0ee;--aaf-actual-outline:rgba(179,38,30,.24);
+}
+html body #main table.production-overview-grid tr[data-mail-plan-metric] [data-aaf-actual-state="above"],
+html body #main table.production-overview-grid tr[data-mail-plan-metric] [data-aaf-actual-state="hours"]{
+  --aaf-actual-color:#087b4c;--aaf-actual-fill:#edf8f1;--aaf-actual-outline:rgba(47,106,69,.28);
+}
+html body #main table.production-overview-grid tr[data-mail-plan-metric] [data-aaf-actual-state="equal"],
+html body #main table.production-overview-grid tr[data-mail-plan-metric] [data-aaf-actual-state="unknown"]{
+  --aaf-actual-color:#53697a;--aaf-actual-fill:#f3f6f8;--aaf-actual-outline:rgba(83,105,122,.16);
+}
+html body #main table.production-overview-grid tr[data-mail-plan-metric] [data-aaf-actual-state]{
+  color:var(--aaf-actual-color,#53697a) !important;
+  background:var(--aaf-actual-fill,#f3f6f8) !important;
+  box-shadow:inset 0 0 0 1px var(--aaf-actual-outline,rgba(83,105,122,.16)) !important;
+}
+html body #main table.production-overview-grid tr[data-mail-plan-metric] [data-aaf-actual-state] *{
+  color:var(--aaf-actual-color,#53697a) !important;
+  background:transparent !important;
+  box-shadow:none !important;
+}
+/* Press totals have no matching target; keep their evidence color, not a comparison. */
+html body #main table.production-overview-grid tr[data-mail-plan-metric="phr"] .mail-inline-presses,
+html body #main table.production-overview-grid tr[data-mail-plan-metric="phr"] .mail-inline-presses b,
+html body #main table.production-overview-grid tr[data-mail-plan-metric="phr"] .gm2-pv{
+  color:#2f6a45 !important;
+}
+
+/* Owner Nov15: actual HOURS identify evidence, not target achievement.
+   Only numeric hour evidence gets state=hours; an unknown dash stays neutral. */
+html body #main table.production-overview-grid tr[data-mail-plan-metric="hours"] [data-aaf-actual-state="hours"],
+html body #main table.production-overview-grid tr[data-mail-plan-metric="hours"] [data-aaf-actual-state="hours"] *{
+  color:#087b4c !important;
 }
 
