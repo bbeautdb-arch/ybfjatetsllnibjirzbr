@@ -30,7 +30,7 @@
      const loadingTag='<script src="'+loadingSrc+'" data-aaf-grid="loading-layout"></script>';
      const colorSrc=new URL('assets/production_plan.actual-colors.js?v=428506d057ec', root).href;
      const colorTag='<script src="'+colorSrc+'" data-aaf-grid="actual-colors"></script>';
-     const viewportSrc=new URL('assets/production_plan.viewport.js?v=6e77c244087c', root).href;
+     const viewportSrc=new URL('assets/production_plan.viewport.js?v=0b7513de16da', root).href;
      const viewportTag='<script src="'+viewportSrc+'" data-aaf-grid="viewport"></script>';
      const cssTag='<link rel="stylesheet" href="'+cssHref+'" data-aaf-premium-c-depth="css">';
      const hookTag='<script src="'+hookSrc+'" data-aaf-premium-c-depth="hooks"></script>';
