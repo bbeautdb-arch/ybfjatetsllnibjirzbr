@@ -24,17 +24,19 @@
      const clarityTag='<script src="'+claritySrc+'" data-aaf-grid="clarity"></script>';
      const modernSrc=new URL('assets/production_plan.grid-modern.js?v=752fc32ee9e7', root).href;
      const modernTag='<script src="'+modernSrc+'" data-aaf-grid="modern"></script>';
-     const mixedSrc=new URL('assets/production_plan.mixed-layout.js?v=27a1b10492bf', root).href;
+     const mixedSrc=new URL('assets/production_plan.mixed-layout.js?v=4d174d65a076', root).href;
      const mixedTag='<script src="'+mixedSrc+'" data-aaf-grid="mixed-layout"></script>';
      const loadingSrc=new URL('assets/production_plan.loading-layout.js?v=c41a2edebcd0', root).href;
      const loadingTag='<script src="'+loadingSrc+'" data-aaf-grid="loading-layout"></script>';
      const colorSrc=new URL('assets/production_plan.actual-colors.js?v=428506d057ec', root).href;
      const colorTag='<script src="'+colorSrc+'" data-aaf-grid="actual-colors"></script>';
+     const viewportSrc=new URL('assets/production_plan.viewport.js?v=6e77c244087c', root).href;
+     const viewportTag='<script src="'+viewportSrc+'" data-aaf-grid="viewport"></script>';
      const cssTag='<link rel="stylesheet" href="'+cssHref+'" data-aaf-premium-c-depth="css">';
      const hookTag='<script src="'+hookSrc+'" data-aaf-premium-c-depth="hooks"></script>';
      if(html.indexOf('data-aaf-premium-c-depth')===-1){
        if(/<\/head>/i.test(html)) html=html.replace(/<\/head>/i, cssTag+'\n</head>');
-       if(/<\/body>/i.test(html)) html=html.replace(/<\/body>/i, hookTag+'\n'+fcTag+'\n'+clarityTag+'\n'+modernTag+'\n'+mixedTag+'\n'+loadingTag+'\n'+colorTag+'\n</body>');
+       if(/<\/body>/i.test(html)) html=html.replace(/<\/body>/i, hookTag+'\n'+fcTag+'\n'+clarityTag+'\n'+modernTag+'\n'+mixedTag+'\n'+loadingTag+'\n'+colorTag+'\n'+viewportTag+'\n</body>');
      }
    }
    document.open();document.write(html);document.close();
