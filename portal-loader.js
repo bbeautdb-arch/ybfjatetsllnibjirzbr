@@ -20,9 +20,9 @@
      const hookSrc=new URL('assets/production_plan.visual-hooks.js', root).href;
      const fcSrc=new URL('assets/production_plan.forecast.js', root).href;
      const fcTag='<script src="'+fcSrc+'" data-aaf-forecast="js"></script>';
-     const claritySrc=new URL('assets/production_plan.grid-clarity.js', root).href;
+     const claritySrc=new URL('assets/production_plan.grid-clarity.js?v=2248d467f69e', root).href;
      const clarityTag='<script src="'+claritySrc+'" data-aaf-grid="clarity"></script>';
-     const modernSrc=new URL('assets/production_plan.grid-modern.js', root).href;
+     const modernSrc=new URL('assets/production_plan.grid-modern.js?v=8868b626ba6e', root).href;
      const modernTag='<script src="'+modernSrc+'" data-aaf-grid="modern"></script>';
      const cssTag='<link rel="stylesheet" href="'+cssHref+'" data-aaf-premium-c-depth="css">';
      const hookTag='<script src="'+hookSrc+'" data-aaf-premium-c-depth="hooks"></script>';
