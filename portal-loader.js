@@ -14,7 +14,7 @@
    const response=await fetch(base+'/page?name='+encodeURIComponent(page),{...options,signal:AbortSignal.timeout(30000)});
    if(!response.ok){const e=await response.json();throw Error(e.error||'โหลดข้อมูลไม่สำเร็จ');}
    let html=await response.text();
-   if(page==='production_plan'){
+   if(page==='production_plan'&&identity.user.role!=='purchase_material'){
      const root=new URL('.', location.href);
      const cssHref=new URL('assets/production_plan.premium.css?v=672bbb42be53', root).href;
      const hookSrc=new URL('assets/production_plan.visual-hooks.js', root).href;
