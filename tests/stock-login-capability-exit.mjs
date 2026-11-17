@@ -50,9 +50,15 @@ test('page load, reauth, cached profile and absent credentials do not clear capa
     assert.equal(r.values.get(capabilityKey),capability);assert.equal(r.fetches.length,0);
     assert.equal(r.events.some(event=>event[1]===capabilityKey),false);
   }
-  for(const [username,password] of [['','x'],['admin',''],['unknown','synthetic-password']]){
+  for(const [username,password] of [['','x'],['admin','']]){
     const r=harness();await r.login(username,password);assert.equal(r.values.get(capabilityKey),capability);assert.equal(r.fetches.length,0);assert.equal(r.values.has('aaf_user'),false);
   }
+  // New purchasing usernames now deliberately probe the purchasing server.
+  // An unverified/mismatched response still must not clear capability or log in.
+  const unknown=harness();await unknown.login('unknown','synthetic-password');
+  assert.equal(unknown.fetches.length,1);assert.equal(unknown.fetches[0].url,'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/portal/login');
+  assert.equal(unknown.values.get(capabilityKey),capability);assert.equal(unknown.values.has('aaf_user'),false);
+  assert.equal(unknown.events.some(event=>event[0]==='remove'),false);assert.equal(unknown.nodes.get('error-msg').style.display,'block');
 });
 
 test('capability remains until authentication completes and a failed session write never clears it',async()=>{
@@ -65,8 +71,19 @@ test('capability remains until authentication completes and a failed session wri
 
 test('fixed existing return routes are unchanged and never accept an external destination',()=>{
   const route=html.slice(html.indexOf('const stockSalesDestination'),html.indexOf('async function doLogin'))+'\nresult=loginDestination(role);';
-  for(const [role,ordinary] of [['admin','dashboard_home.html'],['sales','dashboard_home.html'],['stock_viewer','stock_manager.html'],['stock_sales','dashboard_home.html'],['purchase_material','production_plan.html'],['hr','dashboard_home.html']]){
+  for(const [role,ordinary] of [['admin','dashboard_home.html'],['sales','dashboard_home.html'],['stock_viewer','stock_manager.html'],['stock_sales','dashboard_home.html'],['purchase_material','purchase_material.html'],['hr','dashboard_home.html']]){
     for(const search of ['', '?next=https://invalid.example/', '?next=//invalid.example/']){const c={location:{search},URLSearchParams,role};vm.runInNewContext(route,c);assert.equal(c.result,ordinary);}
     const c={location:{search:'?next=stock-sales'},URLSearchParams,role};vm.runInNewContext(route,c);assert.equal(c.result,['admin','sales','stock_viewer','stock_sales'].includes(role)?'stock_manager.html?view=sales':ordinary);
   }
+});
+
+test('new purchasing username clears capability only after verified purchaser session and cannot acquire another role',async()=>{
+  const username='synthetic-new-purchaser';
+  const accepted=harness({reply:validReply(username,'purchase_material')});await accepted.login(username);
+  assert.equal(accepted.fetches.length,1);assert.equal(accepted.fetches[0].url,'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/portal/login');
+  assert.deepEqual(accepted.events,[['write','aaf_user'],['remove',capabilityKey]]);assert.equal(accepted.values.get('unrelated'),'keep');
+  const user=JSON.parse(accepted.values.get('aaf_user'));assert.equal(user.username,username);assert.equal(user.role,'purchase_material');assert.equal(user.bridgeSessionToken,'SYNTHETIC-NAMED-SESSION');assert.equal(user.authSource,'portal');
+  accepted.timers.forEach(fn=>fn());assert.equal(accepted.location.href,'purchase_material.html');assert.equal(accepted.location.href.includes('SESSION'),false);
+  const invalid=[...['admin','sales','production','stock_viewer','grade_admin'].map(role=>({reply:validReply(username,role)})),...[null,'','   ',123].map(token=>({reply:{...validReply(username,'purchase_material'),bridgeSessionToken:token}})),{reply:validReply('different-purchaser','purchase_material')},{httpOk:false,reply:validReply(username,'purchase_material')}];
+  for(const options of invalid){const denied=harness(options);await denied.login(username);assert.equal(denied.fetches.length,1);assert.equal(denied.values.get(capabilityKey),capability);assert.equal(denied.values.get('unrelated'),'keep');assert.equal(denied.values.has('aaf_user'),false);assert.equal(denied.events.some(event=>event[0]==='write'||event[0]==='remove'),false);assert.equal(denied.nodes.get('error-msg').style.display,'block');}
 });
