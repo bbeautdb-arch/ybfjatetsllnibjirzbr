@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site https://kabin-close.bbeautybbsoraai.chatgpt.site; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>AAF Company Portal — หน้าหลัก</title>
+<script>
+// Presentation-only redirect; protected data endpoints independently verify roles.
+try { if(JSON.parse(sessionStorage.getItem('aaf_user')||'null')?.role==='purchase_material') {
+  document.documentElement.style.visibility='hidden';
+  location.replace('purchase_material.html');
+} } catch (_) {}
+</script>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; min-height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
@@ -154,6 +161,10 @@ const sess = sessionStorage.getItem('aaf_user');
 if(!sess) { window.location.href = 'login.html'; }
 let user = null;
 try { user = JSON.parse(sess); } catch (error) { user = null; }
+if(user?.role==='purchase_material') {
+  window.location.replace('purchase_material.html');
+  throw new Error('purchasing_only_destination');
+}
 if(!user || !PAGES[user.role]) {
   sessionStorage.clear();
   window.location.replace('login.html');
@@ -214,3 +225,4 @@ function doLogout() {
 </script>
 </body>
 </html>
+

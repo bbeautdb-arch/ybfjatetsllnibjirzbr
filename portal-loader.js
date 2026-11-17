@@ -10,6 +10,7 @@
    const check=await fetch(base+'/session',options);const identity=await check.json();
    if(!check.ok||!identity.ok){if(check.status===401){sessionStorage.removeItem('aaf_user');location.replace('login.html?reauth=1');return;}throw Error(identity.error||'ตรวจสิทธิ์ไม่สำเร็จ');}
    sessionStorage.setItem('aaf_user',JSON.stringify({...session,...identity.user}));
+   if(identity.user.role==='purchase_material'&&page!=='purchase_material'){location.replace('purchase_material.html');return;}
    if(page==='history_database'&&identity.user.role==='sales'){location.replace('sales_analytics.html');return;}
    const response=await fetch(base+'/page?name='+encodeURIComponent(page),{...options,signal:AbortSignal.timeout(30000)});
    if(!response.ok){const e=await response.json();throw Error(e.error||'โหลดข้อมูลไม่สำเร็จ');}
@@ -42,3 +43,4 @@
    document.open();document.write(html);document.close();
  }catch(error){status.textContent=error.message+' · ลองรีเฟรชหน้านี้อีกครั้ง';}
 })();
+

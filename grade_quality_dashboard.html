@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AAF — %เกรดและปัญหาประจำวัน</title>
+<script src="purchasing-only-guard.js?v=20261118-purchase-only-r1"></script>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; min-height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
@@ -67,7 +68,7 @@ async function launchGradeDashboard() {
   }
   if (!['admin', 'production', 'grade_admin'].includes(session.role)) {
     const fallback = session.role === 'purchase_material'
-      ? 'production_plan.html'
+      ? 'purchase_material.html'
       : 'dashboard_home.html';
     window.location.replace(fallback);
     return;
@@ -100,3 +101,4 @@ async function launchGradeDashboard() {
 </script>
 </body>
 </html>
+

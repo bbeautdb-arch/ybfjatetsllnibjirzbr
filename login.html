@@ -124,6 +124,7 @@ const STOCK_AUTH_API = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.s
 const HR_AUTH_API = 'https://aaf-hr-attendance.bbeautybbsoraai.chatgpt.site/api/aaf/login';
 const MAINTENANCE_AUTH_API = 'https://hardboard-maintenance-hb1.bbeautybbsoraai.chatgpt.site/api/aaf/login';
 const CLOSING_AUTH_API = 'https://kabin-close.bbeautybbsoraai.chatgpt.site/api/aaf/login';
+const PURCHASE_AUTH_API = 'https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site/api/aaf/portal/login';
 
 const USERS = {
   'vee': { serverAuth: true, authApi: STOCK_AUTH_API, authSource: 'stock', role: 'stock_viewer', name: 'วี', salesman: null },
@@ -177,7 +178,7 @@ function logAttempt() {}
 const stockSalesDestination = new URLSearchParams(location.search).get('next') === 'stock-sales';
 const loginDestination = role => stockSalesDestination && ['admin','sales','stock_viewer','stock_sales'].includes(role)
   ? 'stock_manager.html?view=sales'
-  : role === 'stock_viewer' ? 'stock_manager.html' : role === 'purchase_material' ? 'production_plan.html' : 'dashboard_home.html';
+  : role === 'stock_viewer' ? 'stock_manager.html' : role === 'purchase_material' ? 'purchase_material.html' : 'dashboard_home.html';
 
 async function doLogin() {
   if(document.getElementById('btn-login').disabled)return;
@@ -188,7 +189,12 @@ async function doLogin() {
 
   if(!user || !pass) { errEl.style.display = 'block'; return; }
 
-  const configured = USERS[user];
+  // Additional purchasing accounts are resolved only by the purchasing server.
+  // No password or permission is trusted from this public routing map.
+  const configured = Object.prototype.hasOwnProperty.call(USERS,user) ? USERS[user] : {
+    serverAuth:true, authApi:PURCHASE_AUTH_API, authSource:'portal',
+    role:'purchase_material', salesman:null
+  };
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
 
@@ -267,3 +273,4 @@ document.getElementById('username').focus();
 </script>
 </body>
 </html>
+

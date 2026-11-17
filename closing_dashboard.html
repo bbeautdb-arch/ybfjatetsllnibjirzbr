@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://kabin-close.bbeautybbsoraai.chatgpt.site https://aaf-grade-insight-2569.bbeautybbsoraai.chatgpt.site; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>AAF — ระบบปิดตู้ขาย</title>
+<script src="purchasing-only-guard.js?v=20261118-purchase-only-r1"></script>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; min-height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
@@ -39,7 +40,7 @@ launchClosingDashboard();
 
 async function launchClosingDashboard() {
   if (!session) { window.location.replace('login.html'); return; }
-  if (!['admin', 'accounting'].includes(session.role)) { window.location.replace('dashboard_home.html'); return; }
+  if (!['admin', 'accounting'].includes(session.role)) { window.location.replace(session.role === 'purchase_material' ? 'purchase_material.html' : 'dashboard_home.html'); return; }
   const bridgeSessionToken = session.bridgeSessionToken || session.gradeBridgeSessionToken;
   if (!bridgeSessionToken || (session.role === 'accounting' && session.authSource !== 'closing')) {
     sessionStorage.removeItem('aaf_user');
@@ -68,3 +69,4 @@ async function launchClosingDashboard() {
 </script>
 </body>
 </html>
+

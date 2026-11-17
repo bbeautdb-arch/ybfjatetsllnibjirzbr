@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AAF — ระบบ HR</title>
+<script src="purchasing-only-guard.js?v=20261118-purchase-only-r1"></script>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; min-height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
@@ -38,7 +39,7 @@ launchHrDashboard();
 
 async function launchHrDashboard() {
   if (!session) { window.location.replace('login.html'); return; }
-  if (!['admin', 'hr'].includes(session.role)) { window.location.replace('dashboard_home.html'); return; }
+  if (!['admin', 'hr'].includes(session.role)) { window.location.replace(session.role === 'purchase_material' ? 'purchase_material.html' : 'dashboard_home.html'); return; }
   const bridgeSessionToken = session.bridgeSessionToken || session.gradeBridgeSessionToken;
   if (!bridgeSessionToken) {
     sessionStorage.removeItem('aaf_user');
@@ -66,3 +67,4 @@ async function launchHrDashboard() {
 </script>
 </body>
 </html>
+

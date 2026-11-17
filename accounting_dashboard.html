@@ -6,6 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>AAF — แผนบัญชี</title>
+<script src="purchasing-only-guard.js?v=20261118-purchase-only-r1"></script>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; min-height: 100%; font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
@@ -105,7 +106,7 @@ const rawSession = sessionStorage.getItem('aaf_user');
 let currentUser = null;
 try { currentUser = rawSession ? JSON.parse(rawSession) : null; } catch (error) { currentUser = null; }
 if (!currentUser || !['admin', 'accounting'].includes(currentUser.role)) {
-  window.location.replace(rawSession ? 'dashboard_home.html' : 'login.html');
+  window.location.replace(currentUser?.role === 'purchase_material' ? 'purchase_material.html' : rawSession ? 'dashboard_home.html' : 'login.html');
 } else {
   document.getElementById('welcome-text').textContent = `สวัสดี, ${currentUser.name} · AAF Company Portal`;
   document.getElementById('accounting-role').textContent = currentUser.role === 'admin' ? 'ผู้บริหาร' : 'ฝ่ายบัญชี';

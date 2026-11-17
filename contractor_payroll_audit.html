@@ -8,13 +8,14 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="description" content="ตรวจสอบไฟล์ค่าแรงผู้รับเหมาในเบราว์เซอร์ โดยข้อมูลอยู่ในอุปกรณ์ของผู้ใช้">
 <title>ระบบตรวจสอบค่าแรงผู้รับเหมา — AAF Audit 2.1</title>
+<script src="purchasing-only-guard.js?v=20261118-purchase-only-r1"></script>
 <script>
 (function enforceAccountingAccess(){
   const raw=sessionStorage.getItem('aaf_user');
   let user=null;
   try{user=raw?JSON.parse(raw):null;}catch(error){user=null;}
   if(!user||!['admin','accounting'].includes(user.role)){
-    window.location.replace(raw?'dashboard_home.html':'login.html');
+    window.location.replace(user?.role==='purchase_material'?'purchase_material.html':raw?'dashboard_home.html':'login.html');
   }
 })();
 </script>
@@ -1719,3 +1720,4 @@ function exportReport(){
 </script>
 </body>
 </html>
+
