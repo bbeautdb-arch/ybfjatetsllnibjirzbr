@@ -4319,7 +4319,7 @@ html body #main table.production-overview-grid th.gm-stopped{opacity:1 !importan
 html body #main table.production-overview-grid td.gm-stopped > *,
 html body #main table.production-overview-grid th.gm-stopped > *{opacity:.62}
 /* build tag (tiny, bottom of the page): tells a stale cached copy apart from this build */
-html[data-aaf-grid="v6"] #main::after{content:"ตาราง v6";display:block;text-align:right;font-size:10px;letter-spacing:.04em;color:#8da2b8;padding:4px 10px 10px}
+html[data-aaf-grid="v8"] #main::after{content:"ตาราง v8";display:block;text-align:right;font-size:10px;letter-spacing:.04em;color:#8da2b8;padding:4px 10px 10px}
 
 /* Owner Nov15: finish date-header frames; calendar emphasis never changes plans.
    The dayheader class matches the older :not(.rowlabel-corner) specificity. */
