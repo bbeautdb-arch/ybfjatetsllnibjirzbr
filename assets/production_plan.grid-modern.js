@@ -1393,7 +1393,7 @@
     finally { gmBusy = false; try { gmAttach(); } catch (e2) { /* ignore */ } }
   }
 
-  try { document.documentElement.setAttribute('data-aaf-grid', 'v6'); } catch (e0) { /* ignore */ }
+  try { document.documentElement.setAttribute('data-aaf-grid', 'v8'); } catch (e0) { /* ignore */ }
   window.enhancePlanGridModern = enhance;
 
   function hook() {

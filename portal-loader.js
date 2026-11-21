@@ -17,13 +17,13 @@
    let html=await response.text();
    if(page==='production_plan'&&identity.user.role!=='purchase_material'){
      const root=new URL('.', location.href);
-     const cssHref=new URL('assets/production_plan.premium.css?v=672bbb42be53', root).href;
+     const cssHref=new URL('assets/production_plan.premium.css?v=81d3c7e534e8', root).href;
      const hookSrc=new URL('assets/production_plan.visual-hooks.js', root).href;
      const fcSrc=new URL('assets/production_plan.forecast.js?v=16b95b91aa60', root).href;
      const fcTag='<script src="'+fcSrc+'" data-aaf-forecast="js"></script>';
-     const claritySrc=new URL('assets/production_plan.grid-clarity.js?v=a2b578da0efd', root).href;
+     const claritySrc=new URL('assets/production_plan.grid-clarity.js?v=f876716929e9', root).href;
      const clarityTag='<script src="'+claritySrc+'" data-aaf-grid="clarity"></script>';
-     const modernSrc=new URL('assets/production_plan.grid-modern.js?v=d5f15bb052ce', root).href;
+     const modernSrc=new URL('assets/production_plan.grid-modern.js?v=dfd22411eb71', root).href;
      const modernTag='<script src="'+modernSrc+'" data-aaf-grid="modern"></script>';
      const mixedSrc=new URL('assets/production_plan.mixed-layout.js?v=57efd5d380a5', root).href;
      const mixedTag='<script src="'+mixedSrc+'" data-aaf-grid="mixed-layout"></script>';
@@ -31,13 +31,15 @@
      const loadingTag='<script src="'+loadingSrc+'" data-aaf-grid="loading-layout"></script>';
      const colorSrc=new URL('assets/production_plan.actual-colors.js?v=428506d057ec', root).href;
      const colorTag='<script src="'+colorSrc+'" data-aaf-grid="actual-colors"></script>';
-     const viewportSrc=new URL('assets/production_plan.viewport.js?v=0b7513de16da', root).href;
+     const eq25Src=new URL('assets/production_plan.eq25-size.js?v=b720ce382d38', root).href;
+     const eq25Tag='<script src="'+eq25Src+'" data-aaf-grid="eq25-size"></script>';
+     const viewportSrc=new URL('assets/production_plan.viewport.js?v=46099c5af1c1', root).href;
      const viewportTag='<script src="'+viewportSrc+'" data-aaf-grid="viewport"></script>';
      const cssTag='<link rel="stylesheet" href="'+cssHref+'" data-aaf-premium-c-depth="css">';
      const hookTag='<script src="'+hookSrc+'" data-aaf-premium-c-depth="hooks"></script>';
      if(html.indexOf('data-aaf-premium-c-depth')===-1){
        if(/<\/head>/i.test(html)) html=html.replace(/<\/head>/i, cssTag+'\n</head>');
-       if(/<\/body>/i.test(html)) html=html.replace(/<\/body>/i, hookTag+'\n'+fcTag+'\n'+clarityTag+'\n'+modernTag+'\n'+mixedTag+'\n'+loadingTag+'\n'+colorTag+'\n'+viewportTag+'\n</body>');
+       if(/<\/body>/i.test(html)) html=html.replace(/<\/body>/i, hookTag+'\n'+fcTag+'\n'+clarityTag+'\n'+modernTag+'\n'+mixedTag+'\n'+loadingTag+'\n'+colorTag+'\n'+eq25Tag+'\n'+viewportTag+'\n</body>');
      }
    }
    document.open();document.write(html);document.close();

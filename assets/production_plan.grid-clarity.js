@@ -71,10 +71,18 @@
     catch (e) { return []; }
     var list = rec && Array.isArray(rec.byThickness) ? rec.byThickness : [];
     return list.map(function (t) {
+      var qty = t && typeof t.qty === 'number' ? t.qty : null;
+      var thickness = t && t.thickness != null && t.thickness !== '' ? Number(t.thickness) : null;
+      var eq = t && typeof t.eq25 === 'number' ? t.eq25 : null;
+      try {
+        if (qty != null && window.__AAF_EQ25_SIZE__ && typeof window.__AAF_EQ25_SIZE__.convertActual === 'function') {
+          eq = window.__AAF_EQ25_SIZE__.convertActual(line, day, qty, thickness);
+        }
+      } catch (eEq) {}
       return {
-        thickness: t && t.thickness != null && t.thickness !== '' ? Number(t.thickness) : null,
-        eq25: t && typeof t.eq25 === 'number' ? t.eq25 : null,
-        qty: t && typeof t.qty === 'number' ? t.qty : null,
+        thickness: thickness,
+        eq25: eq,
+        qty: qty,
         hours: t && typeof t.hours === 'number' ? t.hours : (t && typeof t.runningHours === 'number' ? t.runningHours : null)
       };
     });
