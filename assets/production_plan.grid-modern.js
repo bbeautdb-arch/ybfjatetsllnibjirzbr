@@ -1212,7 +1212,7 @@
           svAddOpen[cat] = false; svRun(true);
           var t = document.querySelector('table.production-overview-grid');
           var target = t && t.querySelector('tr.sv-row[data-sv-cat="' + cat + '"][data-sv-key="' + k.replace(/"/g, '') + '"] input.sv-plan:not([disabled])');
-          if (target) { target.scrollIntoView({ block: 'nearest' }); target.focus(); }
+          if (target) { try { target.focus({ preventScroll: true }); } catch (eF) { try { target.focus(); } catch (_f) {} } try { target.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (_s) {} }
         }
         ok.addEventListener('click', go); no.addEventListener('click', function () { svAddOpen[cat] = false; paintAdd(); });
         inp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); go(); } else if (ev.key === 'Escape') { svAddOpen[cat] = false; paintAdd(); } });
@@ -1393,7 +1393,7 @@
     finally { gmBusy = false; try { gmAttach(); } catch (e2) { /* ignore */ } }
   }
 
-  try { document.documentElement.setAttribute('data-aaf-grid', 'v8'); } catch (e0) { /* ignore */ }
+  try { document.documentElement.setAttribute('data-aaf-grid', 'v8.1'); } catch (e0) { /* ignore */ }
   window.enhancePlanGridModern = enhance;
 
   function hook() {

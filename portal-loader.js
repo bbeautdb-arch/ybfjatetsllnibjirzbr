@@ -17,32 +17,40 @@
    let html=await response.text();
    if(page==='production_plan'&&identity.user.role!=='purchase_material'){
      const root=new URL('.', location.href);
-     const cssHref=new URL('assets/production_plan.premium.css?v=81d3c7e534e8', root).href;
-     const hookSrc=new URL('assets/production_plan.visual-hooks.js', root).href;
-     const fcSrc=new URL('assets/production_plan.forecast.js?v=16b95b91aa60', root).href;
-     const fcTag='<script src="'+fcSrc+'" data-aaf-forecast="js"></script>';
-     const claritySrc=new URL('assets/production_plan.grid-clarity.js?v=f876716929e9', root).href;
-     const clarityTag='<script src="'+claritySrc+'" data-aaf-grid="clarity"></script>';
-     const modernSrc=new URL('assets/production_plan.grid-modern.js?v=dfd22411eb71', root).href;
-     const modernTag='<script src="'+modernSrc+'" data-aaf-grid="modern"></script>';
-     const mixedSrc=new URL('assets/production_plan.mixed-layout.js?v=57efd5d380a5', root).href;
-     const mixedTag='<script src="'+mixedSrc+'" data-aaf-grid="mixed-layout"></script>';
-     const loadingSrc=new URL('assets/production_plan.loading-layout.js?v=ec619321903a', root).href;
-     const loadingTag='<script src="'+loadingSrc+'" data-aaf-grid="loading-layout"></script>';
-     const colorSrc=new URL('assets/production_plan.actual-colors.js?v=428506d057ec', root).href;
-     const colorTag='<script src="'+colorSrc+'" data-aaf-grid="actual-colors"></script>';
-     const eq25Src=new URL('assets/production_plan.eq25-size.js?v=b720ce382d38', root).href;
-     const eq25Tag='<script src="'+eq25Src+'" data-aaf-grid="eq25-size"></script>';
-     const viewportSrc=new URL('assets/production_plan.viewport.js?v=46099c5af1c1', root).href;
-     const viewportTag='<script src="'+viewportSrc+'" data-aaf-grid="viewport"></script>';
-     const cssTag='<link rel="stylesheet" href="'+cssHref+'" data-aaf-premium-c-depth="css">';
-     const hookTag='<script src="'+hookSrc+'" data-aaf-premium-c-depth="hooks"></script>';
-     if(html.indexOf('data-aaf-premium-c-depth')===-1){
-       if(/<\/head>/i.test(html)) html=html.replace(/<\/head>/i, cssTag+'\n</head>');
-       if(/<\/body>/i.test(html)) html=html.replace(/<\/body>/i, hookTag+'\n'+fcTag+'\n'+clarityTag+'\n'+modernTag+'\n'+mixedTag+'\n'+loadingTag+'\n'+colorTag+'\n'+eq25Tag+'\n'+viewportTag+'\n</body>');
+     const assets=[
+       {file:'assets/production_plan.premium.css',v:'e1a3e3d4ed2a',attr:'data-aaf-premium-c-depth="css"',kind:'link'},
+       {file:'assets/production_plan.visual-hooks.js',v:'',attr:'data-aaf-premium-c-depth="hooks"',kind:'script'},
+       {file:'assets/production_plan.forecast.js',v:'16b95b91aa60',attr:'data-aaf-forecast="js"',kind:'script'},
+       {file:'assets/production_plan.grid-clarity.js',v:'f876716929e9',attr:'data-aaf-grid="clarity"',kind:'script'},
+       {file:'assets/production_plan.grid-modern.js',v:'41598060f543',attr:'data-aaf-grid="modern"',kind:'script'},
+       {file:'assets/production_plan.mixed-layout.js',v:'57efd5d380a5',attr:'data-aaf-grid="mixed-layout"',kind:'script'},
+       {file:'assets/production_plan.loading-layout.js',v:'ec619321903a',attr:'data-aaf-grid="loading-layout"',kind:'script'},
+       {file:'assets/production_plan.actual-colors.js',v:'428506d057ec',attr:'data-aaf-grid="actual-colors"',kind:'script'},
+       {file:'assets/production_plan.eq25-size.js',v:'9d3321c4a598',attr:'data-aaf-grid="eq25-size"',kind:'script'},
+       {file:'assets/production_plan.viewport.js',v:'b720ae93eed6',attr:'data-aaf-grid="viewport"',kind:'script'}
+     ];
+     const pathOf=a=>a.file+(a.v?('?v='+a.v):'');
+     const hrefOf=a=>new URL(pathOf(a), root).href;
+     const tagOf=a=>a.kind==='link'
+       ? '<link rel="stylesheet" href="'+hrefOf(a)+'" '+a.attr+'>'
+       : '<script src="'+hrefOf(a)+'" '+a.attr+'></script>';
+     // Refresh any already-baked add-on ?v= tokens to the current files.
+     assets.forEach(a=>{
+       if(!a.v)return;
+       const esc=a.file.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+       const re=new RegExp('('+esc+'\\?v=)[^"\\' + "'&#\\s]+",'g');
+       html=html.replace(re,'$1'+a.v);
+     });
+     const missing=assets.filter(a=>html.indexOf(a.file)===-1);
+     const cssMissing=missing.filter(a=>a.kind==='link');
+     const jsMissing=missing.filter(a=>a.kind==='script');
+     if(cssMissing.length&&/<\/head>/i.test(html)) html=html.replace(/<\/head>/i, cssMissing.map(tagOf).join('\n')+'\n</head>');
+     if(jsMissing.length){
+       const block=jsMissing.map(tagOf).join('\n')+'\n';
+       if(/<\/body>/i.test(html)) html=html.replace(/<\/body>/i, block+'</body>');
+       else html+=block;
      }
    }
    document.open();document.write(html);document.close();
  }catch(error){status.textContent=error.message+' · ลองรีเฟรชหน้านี้อีกครั้ง';}
 })();
-
