@@ -4,8 +4,7 @@
  * achievement comparison: known actual hours stay green. */
 (function(){
   'use strict';
-  if(window.__AAF_ACTUAL_COLORS__)return;
-  window.__AAF_ACTUAL_COLORS__=true;
+  if(window.__AAF_ACTUAL_COLORS__&&window.__AAF_ACTUAL_COLORS__.paint)return;
   var actualSelector='.mail-inline-actual, .mail-metric-actual, .gm4-a, .gm2-ha, .gm3-ha';
   function number(el){
     if(!el)return null;
@@ -89,15 +88,32 @@
     });
   }
   function paint(){document.querySelectorAll('tr[data-mail-plan-metric]').forEach(paintRow);paintTotals();paintCapacity();}
-  var scheduled=false;
+  var scheduled=false,obs=null;
+  function runPaint(){
+    if(obs){try{obs.disconnect();}catch(_){}}
+    try{paint();}
+    finally{
+      var host=document.getElementById('main')||document.body;
+      if(obs&&host)obs.observe(host,{childList:true,subtree:true});
+    }
+  }
   function schedule(){
+    if(window.__AAF_PAINT__){window.__AAF_PAINT__.enqueue('colors',runPaint);return;}
     if(scheduled)return;scheduled=true;
-    requestAnimationFrame(function(){scheduled=false;paint();});
+    requestAnimationFrame(function(){scheduled=false;runPaint();});
   }
   function boot(){
     var host=document.getElementById('main')||document.body;
-    if(host&&typeof MutationObserver!=='undefined')new MutationObserver(schedule).observe(host,{childList:true,subtree:true,characterData:true});
+    if(host&&typeof MutationObserver!=='undefined'){
+      obs=new MutationObserver(function(records){
+        if(window.__AAF_PAINT__&&window.__AAF_PAINT__.busy())return;
+        if(window.__AAF_PAINT__&&!window.__AAF_PAINT__.isRebuild(records))return;
+        schedule();
+      });
+      obs.observe(host,{childList:true,subtree:true});
+    }
     schedule();
   }
+  window.__AAF_COLORS__={paint:function(){paint();}};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();

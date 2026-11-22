@@ -202,10 +202,12 @@
     var actual = parseNum(actualEl.textContent);
     if (goal == null || actual == null) return null;
     var cls = actual + 1e-9 >= goal ? 'gm-met' : 'gm-behind';
+    var other = cls === 'gm-met' ? 'gm-behind' : 'gm-met';
+    actualEl.classList.remove(other);
     actualEl.classList.add(cls);
-    if (host) host.classList.add(cls);
+    if (host) { host.classList.remove(other); host.classList.add(cls); }
     var drill = actualEl.querySelector && actualEl.querySelector('.mail-inline-drilldown, b, button');
-    if (drill) drill.classList.add(cls);
+    if (drill) { drill.classList.remove(other); drill.classList.add(cls); }
     return { goal: goal, actual: actual, cls: cls, ratio: goal > 0 ? Math.max(0, Math.min(1, actual / goal)) : null };
   }
 
@@ -832,8 +834,65 @@
   function svPad(d) { return (d < 10 ? '0' : '') + d; }
   function svToday() { try { return typeof bangkokDate === 'function' ? bangkokDate() : ''; } catch (e) { return ''; } }
   function svCan() { try { return typeof materialsCanActual === 'function' && !!materialsCanActual(); } catch (e) { return false; } }
-  function svList(day, cat) {
+  /* Names come back from the page's runtime evidence (productionMaterialsReference),
+     never from hard-coded names. The ledger (supplierEntries) stays the truth: when it
+     already has rows for that day+category, those rows are shown. When it is empty,
+     a read-only copy of valid reference records is shown; the first typed edit copies
+     them into the ledger DRAFT (svMaterialize) and marks the day dirty the page's way.
+     Nothing is saved by itself. */
+  var SV_REF_FALLBACK = true;
+  var svVirtSrc = null, svVirtKey = '', svVirtMap = null, svOrd = {};
+  function svRef() {
+    try {
+      if (!SV_REF_FALLBACK || typeof productionMaterialsReference === 'undefined') return null;
+      var p = productionMaterialsReference;
+      if (!p || !p.available || !Array.isArray(p.suppliers) || !Array.isArray(p.records)) return null;
+      if (typeof currentMonth === 'undefined' || p.month !== currentMonth) return null;
+      return p;
+    } catch (e) { return null; }
+  }
+  function svVirtual() {
+    var p = svRef();
+    if (!p) { svVirtSrc = null; svVirtMap = null; svOrd = {}; return null; }
+    var today = svToday(), key = p.month + '|' + today + '|' + p.records.length + '|' + p.suppliers.length;
+    if (svVirtSrc === p && svVirtKey === key && svVirtMap) return svVirtMap;
+    var byId = {}, map = { yuca: {}, fuel: {} }, seen = {}, ord = {};
+    p.suppliers.forEach(function (s) { if (s && s.id != null) byId[s.id] = s; });
+    p.records.forEach(function (r) {
+      if (!r || (r.category !== 'yuca' && r.category !== 'fuel') || (r.issues && r.issues.length) || typeof r.date !== 'string') return;
+      if (r.date.slice(0, 7) !== p.month) return;
+      var day = Number(r.date.slice(8, 10)); if (!(day > 0)) return;
+      var s = byId[r.supplierId], nm = s && typeof s.name === 'string' ? s.name.replace(/\s+/g, ' ').trim() : '';
+      if (!nm || nm.length > 300 || /[<>\u0000-\u001f]/.test(nm)) return;
+      var pt = svNum(r.plannedTons), at = r.date <= today ? svNum(r.actualTons) : null;
+      if (pt == null && at == null) return;
+      var dk = r.category + '|' + day + '|' + r.supplierId; if (seen[dk]) return; seen[dk] = true;
+      (map[r.category][day] = map[r.category][day] || []).push({ name: nm, planTons: pt, planPrice: null, status: at != null ? 'arrived' : 'plan', actualTons: at, actualPrice: null });
+      var k = svNorm(nm), so = typeof s.sourceRow === 'number' ? s.sourceRow : 1e8;
+      if (ord[k] == null || so < ord[k]) ord[k] = so;
+    });
+    svVirtSrc = p; svVirtKey = key; svVirtMap = map; svOrd = ord;
+    return map;
+  }
+  function svLedgerList(day, cat) {
     try { var d = supplierEntries[day]; return d && Array.isArray(d[cat]) ? d[cat] : []; } catch (e) { return []; }
+  }
+  function svList(day, cat) {
+    var l = svLedgerList(day, cat);
+    if (l.length) return l;
+    try {
+      if (typeof dirtySupplier !== 'undefined' && dirtySupplier && dirtySupplier.has && dirtySupplier.has(day)) return l;
+      var v = svVirtual(), vl = v && v[cat] && v[cat][day];
+      if (vl && vl.length) return vl;
+    } catch (e2) { /* ledger only */ }
+    return l;
+  }
+  function svIsVirtual(day, cat) { return !svLedgerList(day, cat).length && svList(day, cat).length > 0; }
+  function svMaterialize(day, cat) {
+    if (!svIsVirtual(day, cat)) return;
+    var vl = svList(day, cat);
+    supplierEntries[day] = supplierEntries[day] || { yuca: [], fuel: [] };
+    supplierEntries[day][cat] = vl.map(function (e) { return Object.assign({}, e); });
   }
   // Which ledger price field the single ราคา input edits for one supplier-day (explicit rule, shown in the title):
   //   day <= today AND the entry already has รับจริง (or is marked arrived)  -> actualPrice
@@ -850,6 +909,13 @@
       if (!k) { blank = true; return; }
       if (!seen[k]) { seen[k] = { key: k, name: String(e.name).replace(/\s+/g, ' ').trim() }; keys.push(seen[k]); }
     });
+    try {
+      var vv = svVirtual();
+      if (vv && vv[cat] && Object.keys(vv[cat]).length) {
+        keys.forEach(function (r, i) { r.i = i; });
+        keys.sort(function (a, b) { var x = svOrd[a.key] != null ? svOrd[a.key] : 1e9, y = svOrd[b.key] != null ? svOrd[b.key] : 1e9; return x - y || a.i - b.i; });
+      }
+    } catch (e3) { /* first-seen order */ }
     svPending[cat].forEach(function (nm) { var k = svNorm(nm); if (k && !seen[k]) { seen[k] = { key: k, name: nm }; keys.push(seen[k]); } });
     if (blank) keys.push({ key: '', name: '(ไม่ระบุชื่อ)', blank: true });
     return keys;
@@ -960,11 +1026,24 @@
   function svTopCell(cat, day) {
     return document.querySelector('table.production-overview-grid tr[data-material-inline-row="' + cat + '-received"] td[data-material-inline-day="' + day + '"]');
   }
+  function svDisplayTop(cat, day) {
+    /* The visible รับเข้า row equals the supplier sub-row sum (replace, never add on top).
+       Stored materialData / procurementActual are not written here — only the display. */
+    var s = svSums(cat, day), cur = svTopNow(cat, day);
+    if (!s.n) return cur;
+    return { plan: s.planHas ? s.plan : cur.plan, act: s.actHas ? s.act : (s.n ? null : cur.act) };
+  }
   function svPatchTop(cat, day) {
     var td = svTopCell(cat, day); if (!td) return;
-    var cur = svTopNow(cat, day), inp = td.querySelector('input.materials-inline-input'), act = td.querySelector('span.materials-inline-actual');
-    if (inp && document.activeElement !== inp) inp.value = cur.plan == null ? '' : cur.plan;
-    if (act && cur.act != null) act.textContent = svFmt(cur.act);
+    var cur = svDisplayTop(cat, day), inp = td.querySelector('input.materials-inline-input'), act = td.querySelector('span.materials-inline-actual');
+    if (inp && document.activeElement !== inp) {
+      var pv = cur.plan == null ? '' : String(cur.plan);
+      if (inp.value !== pv) inp.value = cur.plan == null ? '' : cur.plan;
+    }
+    if (act) {
+      var av = cur.act == null ? '—' : svFmt(cur.act);
+      if (act.textContent !== av) act.textContent = av;
+    }
   }
   function svLockTop(nd) {
     SV_CATS.forEach(function (c) {
@@ -1009,6 +1088,7 @@
         if (!svCan()) { input.classList.add('sv-bad'); input.title = 'ยังบันทึกร่างไม่ได้ในขณะนี้ (รอโหลด/กำลังบันทึก)'; return; }
         var isFuture = (typeof currentMonth !== 'undefined' ? currentMonth + '-' + svPad(ctx.day) : '') > svToday();
         var target = field;
+        svMaterialize(ctx.day, ctx.cat);
         var list = svList(ctx.day, ctx.cat);
         var matches = svRowEntries(ctx.cat, ctx.day, ctx.key);
         if (matches.length > 1) return;
@@ -1120,11 +1200,16 @@
     var btn = svEl('button', 'rm-toggle', (svOpen ? '▾ ' : '▸ ') + 'ผู้ส่ง ' + rows.filter(function (r) { return !r.blank; }).length + ' ราย');
     btn.type = 'button'; btn.setAttribute('aria-expanded', svOpen ? 'true' : 'false');
     btn.title = 'แยกตามผู้ส่งจากบัญชีนัดรับ (ledger SUPPLIER) · ' + c.label;
-    hth.appendChild(btn); hth.appendChild(svEl('small', null, c.label + ' · ตามบัญชีนัดรับ'));
+    hth.appendChild(btn); hth.appendChild(svEl('small', null, c.label + ' · ตามบัญชีนัดรับหรือหลักฐานในหน้า'));
     head.appendChild(hth);
     var span = 0; for (var q = 0; q < tds.length; q++) span += Number(tds[q].getAttribute('colspan')) || 1;
     var hn = svEl('td', 'rm-sup-note'); hn.setAttribute('colspan', String(Math.max(1, span)));
-    hn.textContent = 'แก้ได้: เป้า (ตัน) · รับจริง (ตัน) · ราคา (บาท/ตัน) ต่อวัน → เป็นร่าง กด “บันทึกข้อมูล” เอง · ไม่เปลี่ยนยอดรับเข้า/สต๊อก';
+    var anyVirt = false;
+    for (var qv = 0; qv < tds.length; qv++) {
+      var dv = Number(tds[qv].getAttribute('data-material-inline-day'));
+      if (svIsVirtual(dv, cat)) anyVirt = true;
+    }
+    hn.textContent = 'ยอดรับเข้าด้านบน = ผลรวมผู้ส่ง (แทนที่ ไม่บวกซ้ำ · แสดงบนหน้านี้) · แก้ได้: เป้า (ตัน) · รับจริง (ตัน) · ราคา (บาท/ตัน) → เป็นร่าง กด “บันทึกข้อมูล” เอง' + (anyVirt ? ' · ชื่อที่เห็นมาจากหลักฐานในหน้า (ยังไม่เข้าบัญชีนัดรับ จนกว่าจะแก้และบันทึก)' : '');
     var mmDays = []; for (var q2 = 0; q2 < tds.length; q2++) { var dq = Number(tds[q2].getAttribute('data-material-inline-day')); if (svMismatch(cat, dq)) mmDays.push(dq); }
     if (mmDays.length && can) {
       var sb = svEl('button', 'sv-syncall', 'ปรับรับเข้าตามผู้ส่ง ' + mmDays.length + ' วัน'); sb.type = 'button';
@@ -1181,6 +1266,10 @@
         box.appendChild(pIn); box.appendChild(aIn); box.appendChild(prIn);
         if (dup) { td.classList.add('sv-dup'); td.title = 'ชื่อนี้ซ้ำ ' + ms.length + ' รายการในวันเดียวกัน · แสดงอย่างเดียว ไม่รวม/ไม่แก้ (ตรวจในร่างนัดรับ)'; }
         if (!can && ms.length) td.classList.add('sv-ro');
+        if (ms.length && svIsVirtual(day, cat)) {
+          td.classList.add('sv-ref');
+          if (!td.title) td.title = 'ข้อมูลจากหลักฐานในหน้า · ยังไม่อยู่ในบัญชีนัดรับ · แก้ตัวเลขแล้วกด “บันทึกข้อมูล” จะเก็บเข้าบัญชี';
+        }
         td.appendChild(box); tr.appendChild(td);
       })(j0);
       frag.appendChild(tr);
@@ -1258,7 +1347,7 @@
     svBusy = true;
     try {
       var cm = typeof currentMonth !== 'undefined' ? currentMonth : '';
-      if (svMonth !== cm) { svMonth = cm; svLast = {}; svPending = { yuca: [], fuel: [] }; svAddOpen = {}; force = true; }
+      if (svMonth !== cm) { svMonth = cm; svLast = {}; svVirtSrc = null; svVirtMap = null; svVirtKey = ''; svPending = { yuca: [], fuel: [] }; svAddOpen = {}; force = true; }
       var nd = typeof daysInMonth === 'function' ? daysInMonth(cm) : 31;
       try { svLockTop(nd); } catch (e0) { /* display only */ }
       var first = SV_CATS[0], p0 = table.querySelector('tr[data-material-inline-row="' + first.row + '"]');
@@ -1267,7 +1356,11 @@
       var ae = document.activeElement;
       if (!force && ae && ae.closest && ae.closest('tr.sv-row')) return;
       var sig = svSig(nd), head = table.querySelector('tr.rm-sup-head');
-      if (!force && head && head.getAttribute('data-rm-sig') === sig && table.querySelectorAll('tr.rm-sup-head').length === SV_CATS.length) return;
+      if (!force && head && head.getAttribute('data-rm-sig') === sig && table.querySelectorAll('tr.rm-sup-head').length === SV_CATS.length) {
+        SV_CATS.forEach(function (c) { for (var d = 1; d <= nd; d++) svPatchTop(c.cat, d); });
+        try { svLockTop(nd); } catch (e00) {}
+        return;
+      }
       if (force && ae && ae.closest && ae.closest('tr.sv-row') && ae.tagName === 'INPUT' && !ae.classList.contains('sv-name')) ae.blur();
       svClear(table);
       SV_CATS.slice().reverse().forEach(function (c) {
@@ -1277,9 +1370,24 @@
         if (!tds.length) return;
         svBuild(table, c, parent, tds, nd);
       });
+      SV_CATS.forEach(function (c) {
+        for (var d = 1; d <= nd; d++) svPatchTop(c.cat, d);
+      });
+      try { svLockTop(nd); } catch (e1) { /* display only */ }
     } finally { svBusy = false; }
   }
-  function enhanceRawMaterial() { svRun(false); }
+  var svWatchIv = null, svWatchN = 0;
+  function svWatchRef() {
+    if (svWatchIv) return;
+    try { if (svRef()) return; } catch (_) {}
+    svWatchIv = setInterval(function () {
+      svWatchN += 1;
+      var got = false;
+      try { got = !!svRef(); svRun(false); } catch (_) {}
+      if (got || svWatchN > 40) { clearInterval(svWatchIv); svWatchIv = null; }
+    }, 250);
+  }
+  function enhanceRawMaterial() { svWatchRef(); svRun(false); }
 
   /* ---- wood-used-actual-v1: "ใช้ไป ตามแผนผลิต  <แผน> / <จริง>" — fill the right-hand (actual) value ----
      Display only. Same formula the page uses for the planned wood used (productionMaterialsPlannedUse), fed with the
@@ -1393,8 +1501,9 @@
     finally { gmBusy = false; try { gmAttach(); } catch (e2) { /* ignore */ } }
   }
 
-  try { document.documentElement.setAttribute('data-aaf-grid', 'v8.1'); } catch (e0) { /* ignore */ }
+  try { document.documentElement.setAttribute('data-aaf-grid', 'v8.3'); } catch (e0) { /* ignore */ }
   window.enhancePlanGridModern = enhance;
+  window.__AAF_MODERN_METRICS__ = enhanceMetrics;
 
   function hook() {
     try {
@@ -1414,7 +1523,7 @@
 
   /* Re-apply after any re-render of #main (edit, +/- lane, data refresh). Disconnects while
      working so our own DOM changes never retrigger it. */
-  var gmObs = null, gmTimer = null;
+  var gmObs = null;
   function gmRun() {
     try {
       if (gmObs) gmObs.disconnect();
@@ -1423,13 +1532,19 @@
     } catch (e) {}
     gmAttach();
   }
+  function gmSchedule() {
+    if (window.__AAF_PAINT__) { window.__AAF_PAINT__.enqueue('modern', gmRun); return; }
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(gmRun);
+    else gmRun();
+  }
   function gmAttach() {
     try {
       var main = document.getElementById('main');
       if (!main || typeof MutationObserver === 'undefined') return;
-      if (!gmObs) gmObs = new MutationObserver(function () {
-        clearTimeout(gmTimer);
-        gmTimer = setTimeout(gmRun, 60);
+      if (!gmObs) gmObs = new MutationObserver(function (records) {
+        if (window.__AAF_PAINT__ && window.__AAF_PAINT__.busy()) return;
+        if (window.__AAF_PAINT__ && !window.__AAF_PAINT__.isRebuild(records)) return;
+        gmSchedule();
       });
       gmObs.observe(main, { childList: true, subtree: true });
     } catch (e) {}
@@ -1446,9 +1561,8 @@
     var n = 0;
     var t = setInterval(function () {
       hook();
-      enhance();
       n += 1;
-      if (n >= 40) { clearInterval(t); setInterval(function () { hook(); gmAttach(); }, 3000); }
+      if (n >= 40) clearInterval(t);
     }, 250);
   }
 

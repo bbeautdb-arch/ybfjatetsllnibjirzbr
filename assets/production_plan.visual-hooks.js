@@ -177,13 +177,17 @@
   }
 
   let scheduled = false;
+  function runPaint() {
+    tagAll();
+    pinLineLabels();
+  }
   function schedule() {
+    if (window.__AAF_PAINT__) { window.__AAF_PAINT__.enqueue('hooks', runPaint); return; }
     if (scheduled) return;
     scheduled = true;
     requestAnimationFrame(function () {
       scheduled = false;
-      tagAll();
-      pinLineLabels();
+      runPaint();
     });
   }
 
@@ -193,8 +197,12 @@
     schedule();
   }
   const main = document.getElementById('main');
-  if (main) {
-    new MutationObserver(schedule).observe(main, { childList: true, subtree: true });
+  if (main && typeof MutationObserver !== 'undefined') {
+    new MutationObserver(function (records) {
+      if (window.__AAF_PAINT__ && window.__AAF_PAINT__.busy()) return;
+      if (window.__AAF_PAINT__ && !window.__AAF_PAINT__.isRebuild(records)) return;
+      schedule();
+    }).observe(main, { childList: true, subtree: true });
   }
   function pinLineLabels() {
     document.querySelectorAll('table.preview-table, table.production-overview-grid').forEach(function (table) {
@@ -217,15 +225,13 @@
         el.style.setProperty('padding-right', rightPad + 'px', 'important');
       });
     });
+    syncFloatingHeader();
   }
 
   document.querySelectorAll('.tablewrap').forEach(function (wrap) {
     wrap.addEventListener('scroll', pinLineLabels, { passive: true });
   });
-  // keep pin in sync after rerenders
-  setInterval(pinLineLabels, 400);
-
-  setInterval(function () {
+  function syncFloatingHeader() {
     const bar = document.getElementById('floatingDayHeader');
     if (!bar) return;
     const src = document.querySelector('table.preview-table thead tr');
@@ -237,5 +243,6 @@
         cloneThs[i].classList.toggle(c, realThs[i].classList.contains(c));
       });
     }
-  }, 500);
+  }
+  window.addEventListener('resize', pinLineLabels, { passive: true });
 })();

@@ -18,16 +18,17 @@
    if(page==='production_plan'&&identity.user.role!=='purchase_material'){
      const root=new URL('.', location.href);
      const assets=[
-       {file:'assets/production_plan.premium.css',v:'e1a3e3d4ed2a',attr:'data-aaf-premium-c-depth="css"',kind:'link'},
-       {file:'assets/production_plan.visual-hooks.js',v:'',attr:'data-aaf-premium-c-depth="hooks"',kind:'script'},
+       {file:'assets/production_plan.premium.css',v:'972ba3ea1164',attr:'data-aaf-premium-c-depth="css"',kind:'link'},
+       {file:'assets/production_plan.paint.js',v:'c62acef3ffd3',attr:'data-aaf-grid="paint"',kind:'script'},
+       {file:'assets/production_plan.visual-hooks.js',v:'93caa23de6ee',attr:'data-aaf-premium-c-depth="hooks"',kind:'script'},
        {file:'assets/production_plan.forecast.js',v:'16b95b91aa60',attr:'data-aaf-forecast="js"',kind:'script'},
-       {file:'assets/production_plan.grid-clarity.js',v:'f876716929e9',attr:'data-aaf-grid="clarity"',kind:'script'},
-       {file:'assets/production_plan.grid-modern.js',v:'41598060f543',attr:'data-aaf-grid="modern"',kind:'script'},
-       {file:'assets/production_plan.mixed-layout.js',v:'57efd5d380a5',attr:'data-aaf-grid="mixed-layout"',kind:'script'},
-       {file:'assets/production_plan.loading-layout.js',v:'ec619321903a',attr:'data-aaf-grid="loading-layout"',kind:'script'},
-       {file:'assets/production_plan.actual-colors.js',v:'428506d057ec',attr:'data-aaf-grid="actual-colors"',kind:'script'},
-       {file:'assets/production_plan.eq25-size.js',v:'9d3321c4a598',attr:'data-aaf-grid="eq25-size"',kind:'script'},
-       {file:'assets/production_plan.viewport.js',v:'b720ae93eed6',attr:'data-aaf-grid="viewport"',kind:'script'}
+       {file:'assets/production_plan.grid-clarity.js',v:'1bfff063a7b8',attr:'data-aaf-grid="clarity"',kind:'script'},
+       {file:'assets/production_plan.grid-modern.js',v:'12be29247b82',attr:'data-aaf-grid="modern"',kind:'script'},
+       {file:'assets/production_plan.mixed-layout.js',v:'fc3bbf60c4ce',attr:'data-aaf-grid="mixed-layout"',kind:'script'},
+       {file:'assets/production_plan.loading-layout.js',v:'e4b9b7f96597',attr:'data-aaf-grid="loading-layout"',kind:'script'},
+       {file:'assets/production_plan.actual-colors.js',v:'69e5e7025df4',attr:'data-aaf-grid="actual-colors"',kind:'script'},
+       {file:'assets/production_plan.eq25-size.js',v:'f0c8a3123f06',attr:'data-aaf-grid="eq25-size"',kind:'script'},
+       {file:'assets/production_plan.viewport.js',v:'285cc851df7a',attr:'data-aaf-grid="viewport"',kind:'script'}
      ];
      const pathOf=a=>a.file+(a.v?('?v='+a.v):'');
      const hrefOf=a=>new URL(pathOf(a), root).href;

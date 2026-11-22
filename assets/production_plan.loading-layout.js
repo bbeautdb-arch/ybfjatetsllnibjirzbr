@@ -38,13 +38,13 @@
       panel(row);
     });
   }
-  function attach(){var host=document.getElementById('main')||document.body;if(observer&&host)observer.observe(host,{childList:true,subtree:true,characterData:true});}
-  function schedule(){if(scheduled)return;scheduled=true;requestAnimationFrame(function(){scheduled=false;if(observer)observer.disconnect();try{paint();}finally{attach();}});}
+  function attach(){var host=document.getElementById('main')||document.body;if(observer&&host)observer.observe(host,{childList:true,subtree:true});}
+  function runPaint(){if(observer)observer.disconnect();try{paint();}finally{attach();} }function schedule(){if(window.__AAF_PAINT__){window.__AAF_PAINT__.enqueue('loading',runPaint);return;}if(scheduled)return;scheduled=true;requestAnimationFrame(function(){scheduled=false;runPaint();});}
   function boot(){
     var style=document.createElement('style');style.setAttribute('data-aaf-loading-layout','css');
     style.textContent='html body #main table.production-overview-grid tr.production-shipment-pending>td{padding:0!important}html body #main table.production-overview-grid [data-aaf-loading-collapse]{margin:0!important;border:0!important;border-radius:0!important;background:#fffaf0!important}html body #main table.production-overview-grid [data-aaf-loading-collapse]>summary{display:list-item!important;list-style:disclosure-closed inside!important;cursor:pointer;margin:0!important;padding:5px 10px!important;color:#86501d!important;font-size:11px!important;font-weight:700!important;line-height:1.45!important;white-space:normal!important;text-align:left!important}html body #main table.production-overview-grid [data-aaf-loading-collapse][open]>summary{list-style-type:disclosure-open!important;border-bottom:1px solid #e4d7bd}html body #main table.production-overview-grid [data-aaf-loading-collapse]:not([open])>[data-aaf-loading-body]{display:none!important}html body #main table.production-overview-grid [data-aaf-loading-body]{padding:8px!important;min-width:0;max-width:100%;box-sizing:border-box}';
     (document.head||document.documentElement).appendChild(style);
-    observer=typeof MutationObserver==='undefined'?null:new MutationObserver(schedule);attach();schedule();
+    observer=typeof MutationObserver==='undefined'?null:new MutationObserver(function(records){if(window.__AAF_PAINT__&&window.__AAF_PAINT__.busy())return;if(window.__AAF_PAINT__&&!window.__AAF_PAINT__.isRebuild(records))return;schedule();});attach();schedule();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
