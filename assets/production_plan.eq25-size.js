@@ -16,7 +16,66 @@
   var STD_W_M = 1.22;
   var STD_L_M = 2.44;
   var DASH = '—';
-  var MARK = 'v8';
+  var MARK = 'v8.1';
+  /* Official 16 cut types (factory-knowledge §2.5 / SEED_SIZE_DATA). Used only
+   * when the live size catalog is missing or not yet loaded. Sheet units: metres. */
+  var BUILTIN_SIZES = {
+    'Normal': [{ w: 1.22, l: 2.44 }, { w: 1.22, l: 2.44 }],
+    'UT': [{ w: 1.27, l: 2.44 }, { w: 1.27, l: 2.44 }],
+    'UT 9ฟุต': [{ w: 1.27, l: 2.75 }, { w: 1.27, l: 2.44 }],
+    '9 ฟุต': [{ w: 1.22, l: 2.75 }, { w: 1.22, l: 2.44 }],
+    '3050+1570': [{ w: 1.22, l: 3.05 }, { w: 1.22, l: 0.785 }, { w: 1.22, l: 0.785 }],
+    '3050+2000': [{ w: 1.22, l: 3.05 }, { w: 1.22, l: 2 }],
+    '3050+2440': [{ w: 1.22, l: 3.05 }, { w: 1.22, l: 2.44 }],
+    '2000': [{ w: 1.22, l: 2 }, { w: 1.22, l: 2 }],
+    '2000+1000': [{ w: 1.22, l: 2 }, { w: 1.22, l: 1 }, { w: 1.22, l: 1 }, { w: 1.22, l: 1 }],
+    '3050+1000+': [{ w: 1.22, l: 3.05 }, { w: 1.22, l: 1 }, { w: 1.22, l: 0.785 }],
+    '1700+1700+': [{ w: 1.22, l: 1.7 }, { w: 1.22, l: 1.7 }, { w: 1.22, l: 1.5 }],
+    '1500+1500+': [{ w: 1.22, l: 1.5 }, { w: 1.22, l: 1.5 }, { w: 1.22, l: 1.7 }],
+    '1700+1700+ (ข)': [{ w: 1.22, l: 1.7 }, { w: 1.22, l: 1.7 }, { w: 1.22, l: 1 }],
+    '2440+2000': [{ w: 1.22, l: 2.44 }, { w: 1.22, l: 2 }],
+    '1180+2300': [{ w: 1.18, l: 2.3 }, { w: 1.18, l: 2.3 }],
+    '2010+2010+': [{ w: 1.22, l: 2.01 }, { w: 1.22, l: 2.01 }, { w: 1.22, l: 1 }]
+  };
+  function normName(s) {
+    return String(s || '').replace(/\s+/g, ' ').trim();
+  }
+  function sheetsFromName(sizeName) {
+    var trimmed = normName(sizeName);
+    if (!trimmed) return [];
+    var key;
+    for (key in BUILTIN_SIZES) {
+      if (Object.prototype.hasOwnProperty.call(BUILTIN_SIZES, key) && normName(key) === trimmed) return BUILTIN_SIZES[key];
+    }
+    /* 1220x2000 / 1220×2000 / 2000x1220 (axes swap is the same size). */
+    var m = trimmed.match(/^(\d{2,4})\s*[x×]\s*(\d{3,4})$/i);
+    if (m) {
+      var a = Number(m[1]), b = Number(m[2]);
+      if (a > 0 && b > 0) return [{ w: a, l: b }];
+    }
+    /* Plan headers often store just the length ("2000", "2440") with width 1220. */
+    if (/^\d{3,4}$/.test(trimmed)) {
+      var len = Number(trimmed);
+      if (len > 0) return [{ w: 1220, l: len }];
+    }
+    return [];
+  }
+  function factorFromSheets(sheets, thickness) {
+    var t = toNum(thickness);
+    if (!pos(t) || !sheets || !sheets.length) return null;
+    var fSum = 0, i, e;
+    for (i = 0; i < sheets.length; i++) {
+      e = eq25(1, Number(sheets[i].w), Number(sheets[i].l), t);
+      if (e == null) return null;
+      fSum += e;
+    }
+    return fSum / sheets.length;
+  }
+  function factorFromPlanPair(planEq, planQty) {
+    if (!pos(planQty) || !nonneg(planEq)) return null;
+    var f = planEq / planQty;
+    return pos(f) ? f : null;
+  }
 
   function finite(n) {
     return typeof n === 'number' && Number.isFinite(n);
@@ -107,7 +166,7 @@
         }
       }
     } catch (e3) {}
-    return [];
+    return sheetsFromName(sizeName);
   }
 
   /* Factor for one plan run: same math as the target (calcRunSizeBreakdown). */
@@ -191,13 +250,29 @@
     return null;
   }
 
-  function convertActual(line, day, qty, thickness, sizeName) {
+  function convertActual(line, day, qty, thickness, sizeName, planEq, planQty) {
     if (!nonneg(qty)) return null;
     var f = null;
     if (sizeName != null && String(sizeName).trim() !== '') {
       f = factorFromHeader(sizeName, thickness);
     }
     if (f == null) f = factorForThickness(line, day, thickness);
+    if (f == null) f = factorFromPlanPair(planEq, planQty);
+    if (f == null) {
+      try {
+        if (typeof productionActualLinePlan === 'function') {
+          var runs = planRuns(line, day);
+          var dayPlan = productionActualLinePlan(line, day);
+          var dayQty = null;
+          if (runs.length === 1 && typeof calcRun === 'function') {
+            var c = calcRun(line, runs[0]);
+            if (c && nonneg(Number(c.boards))) dayQty = Number(c.boards);
+          }
+          if (dayQty == null && arguments.length >= 7) dayQty = arguments[6];
+          f = factorFromPlanPair(dayPlan, dayQty);
+        }
+      } catch (eCa) {}
+    }
     if (f == null) return null;
     var n = qty * f;
     return finite(n) ? n : null;
@@ -523,15 +598,37 @@
     return toNum(laneValue(thkRow, day, lane, 'input.pv-thk'));
   }
 
+  function pairGoal(pair, cls) {
+    if (!pair) return null;
+    var g = pair.querySelector('.mail-inline-goal, .mail-metric-goal, .gm4-p');
+    return parseDisplay(g && g.textContent);
+  }
   function correctPair(table, line, day, lane, pair) {
     var actual = pair.querySelector('.mail-inline-actual, .mail-metric-actual, .gm4-a');
     if (!actual) return false;
     var thk = thicknessFromLane(table, line, day, lane, pair);
     var qty = qtyFromPairOrRow(table, line, day, lane, pair);
     var size = sizeFromLane(table, line, day, lane, thk);
+    var planEq = pairGoal(pair);
+    var qtyRow = findRow(table, line, function (r) { return r.getAttribute('data-mail-plan-metric') === 'qty'; });
+    var planQty = null;
+    if (qtyRow) {
+      var group = dayGroups(qtyRow)[day - 1];
+      var cell = group && (group[Math.min(lane, group.length - 1)] || group[0]);
+      var goalNode = null;
+      if (cell && thk != null) {
+        goalNode = cell.querySelector('.mail-thickness-pair[data-mail-thickness="' + thk + '"] .mail-inline-goal, .mail-thickness-pair[data-mail-thickness="' + thk + '"] .mail-metric-goal, .mail-thickness-pair[data-mail-thickness="' + thk + '"] .gm4-p');
+      }
+      if (!goalNode && cell) {
+        var goals = cell.querySelectorAll('.mail-inline-goal, .mail-metric-goal, .gm4-p');
+        goalNode = goals[Math.min(lane, Math.max(0, goals.length - 1))] || goals[0];
+      }
+      planQty = parseDisplay(goalNode && goalNode.textContent);
+    }
     var value = null;
     if (qty != null) {
-      value = convertActual(line, day, qty, thk, size);
+      value = convertActual(line, day, qty, thk, size, planEq, planQty);
+      if (value == null) value = convertActual(line, day, qty, thk, size);
       if (value == null) value = convertActual(line, day, qty, thk);
     }
     return correctActualNode(actual, value);
@@ -556,11 +653,14 @@
           return;
         }
         var actuals = cell.querySelectorAll('.mail-inline-actual, .mail-metric-actual, .gm4-a, .gm2-ha, .gm3-ha');
+        var goals = cell.querySelectorAll('.mail-inline-goal, .mail-metric-goal, .gm4-p');
         Array.prototype.forEach.call(actuals, function (actual, lane) {
-          var thk = thicknessFromLane(table, line, day, Math.max(lane, laneFromCell));
-          var qty = qtyFromPairOrRow(table, line, day, Math.max(lane, laneFromCell), null);
-          var size = sizeFromLane(table, line, day, Math.max(lane, laneFromCell), thk);
-          var value = qty == null ? null : convertActual(line, day, qty, thk, size);
+          var idx = Math.max(lane, laneFromCell);
+          var thk = thicknessFromLane(table, line, day, idx);
+          var qty = qtyFromPairOrRow(table, line, day, idx, null);
+          var size = sizeFromLane(table, line, day, idx, thk);
+          var planEq = parseDisplay(goals[Math.min(lane, Math.max(0, goals.length - 1))] && goals[Math.min(lane, Math.max(0, goals.length - 1))].textContent);
+          var value = qty == null ? null : convertActual(line, day, qty, thk, size, planEq, null);
           correctActualNode(actual, value);
         });
       });
@@ -626,6 +726,7 @@
     hookDisplayHelpers();
     var iv = setInterval(function () {
       hookDisplayHelpers();
+      schedule();
       if (++hookTries > 40) clearInterval(iv);
     }, 250);
     try {
@@ -633,9 +734,13 @@
         window.refreshProductionSummaryActualCards();
       }
     } catch (e14) {}
-    var host = document.getElementById('main') || document.body;
-    if (host && typeof MutationObserver !== 'undefined') {
-      new MutationObserver(function () { schedule(); }).observe(host, { childList: true, subtree: true, characterData: true });
+    if (typeof MutationObserver !== 'undefined') {
+      var obs = new MutationObserver(function () { schedule(); });
+      try { obs.observe(document.documentElement || document.body, { childList: true, subtree: true, characterData: true }); }
+      catch (eObs) {
+        var host = document.getElementById('main') || document.body;
+        if (host) obs.observe(host, { childList: true, subtree: true, characterData: true });
+      }
     }
     schedule();
   }
@@ -650,6 +755,8 @@
     factorFromRun: factorFromRun,
     factorFromHeader: factorFromHeader,
     factorForThickness: factorForThickness,
+    factorFromPlanPair: factorFromPlanPair,
+    sheetsFromName: sheetsFromName,
     convertActual: convertActual,
     convertRecord: convertRecord,
     displayPayload: displayPayload,

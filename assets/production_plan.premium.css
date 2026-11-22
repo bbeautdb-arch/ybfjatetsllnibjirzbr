@@ -4319,7 +4319,7 @@ html body #main table.production-overview-grid th.gm-stopped{opacity:1 !importan
 html body #main table.production-overview-grid td.gm-stopped > *,
 html body #main table.production-overview-grid th.gm-stopped > *{opacity:.62}
 /* build tag (tiny, bottom of the page): tells a stale cached copy apart from this build */
-html[data-aaf-grid="v8"] #main::after{content:"ตาราง v8";display:block;text-align:right;font-size:10px;letter-spacing:.04em;color:#8da2b8;padding:4px 10px 10px}
+html[data-aaf-grid="v8.1"] #main::after{content:"ตาราง v8.1";display:block;text-align:right;font-size:10px;letter-spacing:.04em;color:#8da2b8;padding:4px 10px 10px}
 
 /* Owner Nov15: finish date-header frames; calendar emphasis never changes plans.
    The dayheader class matches the older :not(.rowlabel-corner) specificity. */
@@ -4413,4 +4413,59 @@ html body #main table.production-overview-grid > thead > tr.dayheader > th:is(.t
 html body #floatingDayHeader th:is(.today-col-header,.is-today,.gm-today){
   box-shadow:none !important;
   outline:0 !important;
+}
+
+/* v8.1: keep plan-table place; stop iOS auto-zoom jitter */
+html, body, #main, #main .tablewrap{
+  overflow-anchor: auto;
+}
+
+/* iOS Safari auto-zooms a focused field whose computed font-size is under 16px,
+   which jumps and jitters the page after typing. Keep the compact size on
+   fine-pointer desktops; use 16px on touch and narrow viewports only.
+   Selectors must beat later 11px / 10.5px !important compact rules
+   (td.gm3-lane input.pv-input, td.sv-td input.sv-in). */
+@media (hover: none) and (pointer: coarse){
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid td.gm3-lane input.pv-input,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid td input.pv-input,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.pv-input,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.pv-note,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.pv-thk,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.pv-size,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.pv-hr,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.hr-input,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.note-input,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid td.gm3-lane input.pv-size,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid td.sv-td input.sv-in,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input[type="number"],
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input[type="text"],
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid select,
+  html[data-aaf-grid="v8.1"] body #main table.preview-table input.pv-input,
+  html[data-aaf-grid="v8.1"] body #main table.preview-table input[type="number"],
+  html[data-aaf-grid="v8.1"] body #main table.preview-table input[type="text"],
+  html[data-aaf-grid="v8.1"] body #main table.preview-table select{
+    font-size: 16px !important;
+  }
+}
+@media (max-width: 480px){
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid td.gm3-lane input.pv-input,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid td input.pv-input,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.pv-input,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.pv-note,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.pv-thk,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.pv-size,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.pv-hr,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.hr-input,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input.note-input,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid td.gm3-lane input.pv-size,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid td.sv-td input.sv-in,
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input[type="number"],
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid input[type="text"],
+  html[data-aaf-grid="v8.1"] body #main table.production-overview-grid select,
+  html[data-aaf-grid="v8.1"] body #main table.preview-table input.pv-input,
+  html[data-aaf-grid="v8.1"] body #main table.preview-table input[type="number"],
+  html[data-aaf-grid="v8.1"] body #main table.preview-table input[type="text"],
+  html[data-aaf-grid="v8.1"] body #main table.preview-table select{
+    font-size: 16px !important;
+  }
 }

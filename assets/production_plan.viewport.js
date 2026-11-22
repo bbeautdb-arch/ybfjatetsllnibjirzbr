@@ -1,12 +1,19 @@
-/* Restore the viewport lost by a synchronous production-grid edit render.
- * Vertical scroll lives on the window (.tablewrap is overflow-y: clip).
+/* Keep the plan table in place after an edit render.
+ * Root cause: renderAll / renderEntryPage replace #main.innerHTML, so the
+ * document height collapses and window.scrollY falls to 0 (the plan table's
+ * .tablewrap is overflow:visible, so the window is the vertical scroller).
+ * v8 then hammered scrollTo for ~450ms (interval + MutationObserver + timeouts),
+ * which fought later add-on paints, iOS keyboard resize, and Safari auto-zoom
+ * on inputs under 16px — that is the jump-and-jitter.
+ * Fix: pin #main min-height across the rebuild, restore scroll once (sync +
+ * one animation frame), and put focus back with preventScroll. No hold loop.
  * Original handlers, values, validation, dirty tracking and saves are untouched.
  * Enter may move to the next cell when that is already the page's behaviour,
  * but must not jump the page to the top. */
 (function(){
   'use strict';
   if(window.__AAF_PLAN_VIEWPORT__)return;window.__AAF_PLAN_VIEWPORT__=true;
-  var epoch=0,navigation=null,buttonSeed=null,holdTimer=null,holdObserver=null;
+  var epoch=0,navigation=null,buttonSeed=null,pinCount=0,pendingUnpin=null;
   function controls(){return Array.prototype.slice.call(document.querySelectorAll('input,select,textarea,button,a[href],[tabindex]'));}
   function isControl(node){return !!(node&&node.matches&&node.matches('input,select,textarea'));}
   function inPlanGrid(node){return !!(node&&node.closest&&node.closest('table.production-overview-grid, table.preview-table, #main'));}
@@ -20,7 +27,6 @@
       var id={handler:handlers[i],call:call,tag:node.tagName,aria:node.getAttribute('aria-label'),title:node.getAttribute('title')};
       if(controls().filter(function(n){return matchesKey(n,id);}).length===1)return id;
     }
-    /* Position fallback so a rebuilt identical onchange can still be found. */
     var table=node.closest&&node.closest('table.production-overview-grid, table.preview-table');
     if(table){
       var row=node.closest('tr'),rows=Array.prototype.indexOf.call(table.rows||[],row);
@@ -74,30 +80,54 @@
       try{document.documentElement.scrollTop=y;document.documentElement.scrollLeft=x;if(document.body){document.body.scrollTop=y;document.body.scrollLeft=x;}}catch(_){}
     }
   }
-  var userEdit=false;
-  function markUserEdit(){userEdit=true;setTimeout(function(){userEdit=false;},600);}
-  function holdScroll(x,y){
-    var until=Date.now()+450;
-    function tick(){if(Date.now()>until){releaseHold();return;}scrollWindow(x,y);}
-    releaseHold();
-    holdTimer=setInterval(tick,50);
-    var host=document.getElementById('main')||document.body;
-    if(host&&typeof MutationObserver!=='undefined'){
-      holdObserver=new MutationObserver(function(){scrollWindow(x,y);});
-      holdObserver.observe(host,{childList:true,subtree:true});
+  function allWraps(){return Array.prototype.slice.call(document.querySelectorAll('#main .tablewrap, .tablewrap'));}
+  function snapshotScrolls(){
+    return {x:window.scrollX,y:window.scrollY,wraps:allWraps().map(function(node){return {left:node.scrollLeft,top:node.scrollTop};})};
+  }
+  function restoreScrolls(snap){
+    if(!snap)return;
+    var nodes=allWraps();
+    snap.wraps.forEach(function(saved,i){
+      var node=nodes[i];if(!node||!saved)return;
+      if(node.scrollLeft!==saved.left)node.scrollLeft=saved.left;
+      if(node.scrollTop!==saved.top)node.scrollTop=saved.top;
+    });
+    scrollWindow(snap.x,snap.y);
+  }
+  function focusQuiet(node){
+    if(!node||!node.focus)return;
+    try{node.focus({preventScroll:true});}catch(_){try{node.focus();}catch(__){}}
+  }
+  function pinMain(){
+    var main=document.getElementById('main');
+    if(!main)return null;
+    var h=Math.max(main.offsetHeight||0, main.scrollHeight||0);
+    if(h>0){
+      var cur=parseFloat(main.style.minHeight)||0;
+      if(h>cur)main.style.minHeight=h+'px';
     }
-    requestAnimationFrame(function(){scrollWindow(x,y);requestAnimationFrame(function(){scrollWindow(x,y);});});
-    setTimeout(function(){scrollWindow(x,y);},0);
-    setTimeout(function(){scrollWindow(x,y);},120);
-    setTimeout(function(){scrollWindow(x,y);releaseHold();},400);
+    pinCount++;
+    if(pendingUnpin){clearTimeout(pendingUnpin);pendingUnpin=null;}
+    return main;
   }
-  function releaseHold(){
-    if(holdTimer){clearInterval(holdTimer);holdTimer=null;}
-    if(holdObserver){try{holdObserver.disconnect();}catch(_){}holdObserver=null;}
+  function scheduleUnpin(main,snap){
+    function finish(){
+      pinCount=Math.max(0,pinCount-1);
+      restoreScrolls(snap);
+      if(pinCount===0&&main&&main.style&&main.style.minHeight){
+        main.style.minHeight='';
+        restoreScrolls(snap);
+      }
+    }
+    if(typeof requestAnimationFrame==='function'){
+      requestAnimationFrame(function(){
+        restoreScrolls(snap);
+        requestAnimationFrame(finish);
+      });
+    }else{
+      finish();
+    }
   }
-  /* User-initiated page scroll cancels a pending restore. Pointer/keys must not,
-     because they are what start the edit that we need to restore after. */
-  function cancel(){epoch++;navigation=null;buttonSeed=null;releaseHold();}
   function pointer(event){
     var active=document.activeElement,target=event.target&&event.target.closest&&event.target.closest('input,select,textarea,button,a[href],[tabindex]');
     if(isControl(active)&&active!==target)navigation={from:active,to:key(target),kind:'pointer'};
@@ -144,17 +174,15 @@
     var move=!action&&navigation&&navigation.from===input?navigation:null;
     var state={epoch:++epoch,month:view.month,table:view.table,input:input,scrolls:view.scrolls,x:view.x,y:view.y,action:action,expanded:view.expanded,focus:action?key(input):(move?move.to:(document.activeElement===input||(lastSnap&&lastSnap.input===input)?(move?move.to:key(input)):null)),navigation:move?move.kind:null,keepPage:true,focused:false,caret:null};
     if(!move&&document.activeElement===input){try{if(typeof input.selectionStart==='number')state.caret=[input.selectionStart,input.selectionEnd,input.selectionDirection];}catch(_){}}
-    navigation=null;markUserEdit();
+    navigation=null;
     function valid(){return state.epoch===epoch&&state.month===month();}
-    function revealNavigation(target,now){
-      if(!state.navigation||!target||!target.getBoundingClientRect)return;
-      now.forEach(function(node,index){
+    function revealHorizontal(target,now){
+      if(!target||!target.getBoundingClientRect)return;
+      now.forEach(function(node){
         if(!node.getBoundingClientRect)return;
-        var rect=target.getBoundingClientRect(),bounds=node.getBoundingClientRect(),top=bounds.top;
-        var targetTable=target.closest('table.production-overview-grid, table.preview-table'),header=targetTable&&targetTable.tHead;if(header&&header.isConnected&&header.getBoundingClientRect)top=Math.max(top,header.getBoundingClientRect().bottom);
-        if(rect.left<bounds.left)node.scrollLeft-=bounds.left-rect.left;else if(rect.right>bounds.right)node.scrollLeft+=rect.right-bounds.right;
-        if(rect.top<top)node.scrollTop-=top-rect.top;else if(rect.bottom>bounds.bottom)node.scrollTop+=rect.bottom-bounds.bottom;
-        if(state.scrolls[index]){state.scrolls[index].left=node.scrollLeft;state.scrolls[index].top=node.scrollTop;}
+        var rect=target.getBoundingClientRect(),bounds=node.getBoundingClientRect();
+        if(rect.left<bounds.left)node.scrollLeft-=bounds.left-rect.left;
+        else if(rect.right>bounds.right)node.scrollLeft+=rect.right-bounds.right;
       });
     }
     function restore(focus){
@@ -169,39 +197,42 @@
       }
       if(focus&&(state.focus||state.action)){
         if(target&&(active===document.body||active===document.documentElement||active===state.input||!active||!active.isConnected||(state.navigation==='tab'&&!activeOutside))){
-          try{target.focus({preventScroll:true});if(state.caret&&typeof target.setSelectionRange==='function')target.setSelectionRange(state.caret[0],state.caret[1],state.caret[2]);}catch(_){}
+          focusQuiet(target);
+          try{if(state.caret&&typeof target.setSelectionRange==='function')target.setSelectionRange(state.caret[0],state.caret[1],state.caret[2]);}catch(_){}
         }
-        if(!intendedOutside&&document.activeElement===target)revealNavigation(target,now);
+        if(!intendedOutside&&document.activeElement===target)revealHorizontal(target,now);
       }
       if(state.keepPage)scrollWindow(state.x,state.y);
     }
     function attempt(){
-      if(!valid())return;
+      if(!valid()||state.focused)return;
       var tableNow=tables()[state.table],now=wraps(tableNow);
       var replaced=!state.input||state.input.isConnected===false||now.some(function(node,index){return !state.scrolls[index]||node!==state.scrolls[index].node;});
       var drifted=window.scrollX!==state.x||window.scrollY!==state.y;
       var detail=state.action&&state.action.kind==='detail'?actionButton(state.action,tableNow):null;
       var toggled=detail&&detail.getAttribute('aria-expanded')!==state.expanded;
       if(!replaced&&!toggled&&!drifted)return;
-      restore(!state.focused);state.focused=true;
-      if(state.keepPage)holdScroll(state.x,state.y);
+      restore(true);state.focused=true;
     }
-    queueMicrotask(attempt);
-    requestAnimationFrame(function(){attempt();if(valid())requestAnimationFrame(attempt);});
-    setTimeout(attempt,0);
-    setTimeout(attempt,60);
-    setTimeout(attempt,200);
+    if(typeof requestAnimationFrame==='function'){
+      requestAnimationFrame(function(){attempt();});
+    }else{
+      attempt();
+    }
   }
   function hookRender(name){
     try{
       var orig=window[name];
       if(typeof orig!=='function'||orig.__aafViewportHook)return false;
       var wrapped=function(){
-        var x=window.scrollX,y=window.scrollY;
-        var ret=orig.apply(this,arguments);
-        scrollWindow(x,y);
-        if(userEdit)holdScroll(x,y);
-        else requestAnimationFrame(function(){scrollWindow(x,y);});
+        var snap=snapshotScrolls();
+        var main=pinMain();
+        var ret;
+        try{ret=orig.apply(this,arguments);}
+        finally{
+          restoreScrolls(snap);
+          scheduleUnpin(main,snap);
+        }
         return ret;
       };
       wrapped.__aafViewportHook=true;
@@ -215,9 +246,6 @@
   document.addEventListener('pointerdown',pointer,true);
   document.addEventListener('keydown',keyboard,true);
   document.addEventListener('focusin',onFocus,true);
-  document.addEventListener('wheel',cancel,{capture:true,passive:true});
-  document.addEventListener('touchmove',cancel,{capture:true,passive:true});
-  document.addEventListener('pointermove',function(event){if(event.buttons)cancel();},{capture:true,passive:true});
   document.addEventListener('change',capture,true);
   document.addEventListener('click',click,true);
   hookAll();
