@@ -710,14 +710,27 @@
 
   var scheduled = false;
   var paused = false;
+  var obs = null;
+  function runCorrect() {
+    paused = true;
+    if (obs) { try { obs.disconnect(); } catch (_) {} }
+    try { hookDisplayHelpers(); correctAll(); }
+    finally {
+      paused = false;
+      try {
+        var host = document.getElementById('main') || document.body;
+        if (obs && host) obs.observe(host, { childList: true, subtree: true });
+      } catch (_) {}
+    }
+  }
   function schedule() {
-    if (scheduled || paused) return;
+    if (paused) return;
+    if (window.__AAF_PAINT__) { window.__AAF_PAINT__.enqueue('eq25', runCorrect); return; }
+    if (scheduled) return;
     scheduled = true;
     requestAnimationFrame(function () {
       scheduled = false;
-      paused = true;
-      try { hookDisplayHelpers(); correctAll(); }
-      finally { paused = false; }
+      runCorrect();
     });
   }
 
@@ -726,7 +739,6 @@
     hookDisplayHelpers();
     var iv = setInterval(function () {
       hookDisplayHelpers();
-      schedule();
       if (++hookTries > 40) clearInterval(iv);
     }, 250);
     try {
@@ -735,12 +747,13 @@
       }
     } catch (e14) {}
     if (typeof MutationObserver !== 'undefined') {
-      var obs = new MutationObserver(function () { schedule(); });
-      try { obs.observe(document.documentElement || document.body, { childList: true, subtree: true, characterData: true }); }
-      catch (eObs) {
-        var host = document.getElementById('main') || document.body;
-        if (host) obs.observe(host, { childList: true, subtree: true, characterData: true });
-      }
+      obs = new MutationObserver(function (records) {
+        if (window.__AAF_PAINT__ && window.__AAF_PAINT__.busy()) return;
+        if (window.__AAF_PAINT__ && !window.__AAF_PAINT__.isRebuild(records)) return;
+        schedule();
+      });
+      var host = document.getElementById('main') || document.body;
+      if (host) obs.observe(host, { childList: true, subtree: true });
     }
     schedule();
   }

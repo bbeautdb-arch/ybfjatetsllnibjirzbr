@@ -330,7 +330,6 @@
     var n = 0;
     var t = setInterval(function () {
       hookRefresh();
-      enhance();
       n += 1;
       if (n >= 40) clearInterval(t);
     }, 250);

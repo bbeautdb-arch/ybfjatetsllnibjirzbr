@@ -220,16 +220,40 @@
       attempt();
     }
   }
+  var skipRebuild=0;
+  function isSafeInplace(el){
+    if(!el||!el.matches)return false;
+    if(!el.closest||!el.closest('table.production-overview-grid, table.preview-table'))return false;
+    if(el.matches('button,select,input.pv-thk,input.pv-size'))return false;
+    return !!el.matches('input,textarea');
+  }
+  function inplaceRefresh(){
+    try{if(window.enhancePlanGridMetricRows)window.enhancePlanGridMetricRows();}catch(_){}
+    try{if(window.__AAF_EQ25_SIZE__)window.__AAF_EQ25_SIZE__.correctAll();}catch(_){}
+    try{if(window.__AAF_COLORS__&&typeof window.__AAF_COLORS__.paint==='function')window.__AAF_COLORS__.paint();}catch(_){}
+    try{if(window.__AAF_MODERN_METRICS__)window.__AAF_MODERN_METRICS__();}catch(_){}
+    try{if(typeof refreshProductionSummaryActualCards==='function')refreshProductionSummaryActualCards();}catch(_){}
+  }
+  function beginInplace(){
+    skipRebuild++;
+    queueMicrotask(function(){
+      try{inplaceRefresh();}
+      finally{skipRebuild=Math.max(0,skipRebuild-1);}
+    });
+  }
   function hookRender(name){
     try{
       var orig=window[name];
       if(typeof orig!=='function'||orig.__aafViewportHook)return false;
       var wrapped=function(){
+        if(skipRebuild>0&&(name==='renderAll'||name==='renderEntryPage'))return;
         var snap=snapshotScrolls();
         var main=pinMain();
         var ret;
         try{ret=orig.apply(this,arguments);}
         finally{
+          restoreScrolls(snap);
+          try{if(window.__AAF_PAINT__&&typeof window.__AAF_PAINT__.flush==='function')window.__AAF_PAINT__.flush();}catch(_){}
           restoreScrolls(snap);
           scheduleUnpin(main,snap);
         }
@@ -246,6 +270,12 @@
   document.addEventListener('pointerdown',pointer,true);
   document.addEventListener('keydown',keyboard,true);
   document.addEventListener('focusin',onFocus,true);
+  document.addEventListener('change',function(ev){if(isSafeInplace(ev.target))beginInplace();},true);
+  document.addEventListener('input',function(ev){
+    var el=ev.target;if(!isSafeInplace(el))return;
+    var h=el.getAttribute('oninput')||'';
+    if(/updateRun|updatePlan|renderAll|renderEntryPage/.test(h))beginInplace();
+  },true);
   document.addEventListener('change',capture,true);
   document.addEventListener('click',click,true);
   hookAll();
